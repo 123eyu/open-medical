@@ -42,16 +42,14 @@ test("桌面 · 项目任务一次发送：首页发送后自动开始运行", {
     ].join("\n") + "\n",
     { mode: 0o600 },
   );
+  const desktopEnv = { ...process.env, MEDICAL_DESKTOP_TEST_DIR: directory };
+  delete desktopEnv.ELECTRON_RUN_AS_NODE;
   const app = await _electron.launch({
     executablePath: electronPath,
     args: [MAIN, "--e2e"],
     cwd: process.cwd(),
     timeout: 60000,
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: "",
-      MEDICAL_DESKTOP_TEST_DIR: directory,
-    },
+    env: desktopEnv,
   });
   t.after(async () => {
     try {
@@ -67,7 +65,7 @@ test("桌面 · 项目任务一次发送：首页发送后自动开始运行", {
   });
   await page.waitForSelector(".app-navigation", { timeout: 30000 });
   const origin = new URL(page.url()).origin;
-  const bootstrap = await (await fetch(`${origin}/api/bootstrap`)).json();
+  const bootstrap = await page.evaluate(() => fetch("/api/bootstrap").then(r => r.json()));
   const request = (path, method = "GET", data) =>
     fetch(origin + path, {
       method,

@@ -4,9 +4,9 @@
 
 # Open Medical
 
-### 让患者资料、医学知识和你的经验，接上每一次诊疗。
+### 希望做医生最友好的桌面管理 Agent。
 
-开源的本地医学 AI 工作台 · 患者管理 · 知识积累 · 持续随访
+开源桌面管理 Agent · 患者与资料 · 知识与任务
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-28735b?style=flat-square)](LICENSE)
 [![Desktop](https://img.shields.io/badge/Desktop-macOS%20%7C%20Windows-334155?style=flat-square)](docs/DESKTOP.md)
@@ -20,7 +20,7 @@
 
 ---
 
-Open Medical 是面向医生的本地患者管理智能助手。把分散的病历、检验、随访记录整理到同一位患者下，把常用指南、模板和案例留在自己的知识库里；需要时，通过对话查找、整理和继续跟进。
+Open Medical 是面向医生的开源桌面管理 Agent，运行于 macOS / Windows。从医生的日常工作出发，通过自然语言管理患者、资料、知识与任务，把病历整理、文献检索、文书准备和持续随访连接起来。
 
 **资料在本机积累，模型按需连接，结果由医生复核。** 支持本地 Ollama / vLLM，以及 DeepSeek、OpenAI、Anthropic、OpenRouter 和 OpenAI 兼容服务。
 
@@ -54,7 +54,9 @@ Open Medical 是面向医生的本地患者管理智能助手。把分散的病�
 
 ## 快速开始
 
-需要 **Node.js ≥ 22.18** 和 npm。先在本机运行，再按需配置模型。
+已有桌面包时，macOS 打开 `Open Medical.app`，Windows 从完整便携目录运行 `Open Medical.exe`。应用会自动启动本地运行时，无需打开浏览器或手动启动服务。
+
+从源码启动需要 **Node.js ≥ 22.18** 和 npm：
 
 ```bash
 git clone https://github.com/JuneYaooo/open-medical-workbench.git
@@ -64,11 +66,11 @@ npm run build
 npm start
 ```
 
-打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)。页面与 API 由同一个本地进程提供，默认仅监听本机。
+`npm start` 会直接打开桌面应用；`npm run desktop`、`npm run agent` 和 `npm run harness` 使用同一入口。
 
 **首次使用：** 点击“示例体验 → 准备全部示例”浏览现成资料；或新建患者 → 添加资料 → 选择模型 → 发起整理任务。无需配置模型，也能管理患者档案、登记临床资料和随访记录。
 
-### 桌面版
+### 构建桌面包
 
 在对应系统中构建便携桌面包：
 
@@ -77,11 +79,11 @@ npm run package:mac    # macOS
 npm run package:win    # Windows：在 Windows 上构建
 ```
 
-输出位于 `release/`。macOS 打开 `.app`，Windows 从完整便携目录运行 `Open Medical.exe`。桌面版有独立数据目录；关闭窗口后可继续在后台运行，退出应用会停止运行。安装、平台验证与签名限制见 [桌面版说明](docs/DESKTOP.md)。
+输出位于 `release/`。macOS 打开 `.app`，Windows 从完整便携目录运行 `Open Medical.exe`。源码启动与安装包共用桌面数据目录；关闭窗口后可继续在后台运行，退出应用会停止任务。安装、平台验证与签名限制见 [桌面版说明](docs/DESKTOP.md)。
 
 ### 连接模型
 
-在 **设置 → 模型与运行 → 选择模型** 中查看并切换可用连接。服务地址与密钥可通过连接配置管理，也可复制 `.env.example` 为 `.env`，配置 `AI_PROVIDER` 与对应密钥后重启。
+在 **设置 → 模型与运行 → 选择模型** 中查看并切换可用连接。服务地址与密钥可通过连接配置管理，也可在 **设置 → 桌面应用 → 应用维护 → 打开配置目录** 中编辑 `model.env`，填写 `AI_PROVIDER` 与对应密钥后重启应用。
 
 | 方式 | 适用场景 |
 | :--- | :--- |
@@ -462,6 +464,15 @@ npm run package:win    # Windows：在 Windows 上构建
 
 </details>
 
+<details>
+<summary><strong>桌面应用与后台运行</strong></summary>
+
+在设置中管理登录启动、到期系统提醒与应用维护。可以分别打开患者数据目录和模型配置目录；关闭或隐藏工作窗口后继续执行后台任务，再从 Dock 或托盘返回。PDF 导出通过系统保存对话框选择位置。
+
+![桌面应用设置](docs/assets/features/desktop-settings.png)
+
+</details>
+
 ## 本地数据与使用边界
 
 - **本地保存。** 患者、消息、随访和会话保存在本机 SQLite。模型连接密钥通过本地凭据保险库加密保存，**患者数据库本身未加密**。
@@ -472,13 +483,13 @@ npm run package:win    # Windows：在 Windows 上构建
 <details>
 <summary><strong>数据位置、备份与恢复</strong></summary>
 
-源码运行的数据默认位于 `server/data/medical.sqlite`，可用 `MEDICAL_DATABASE` 指定路径。桌面版使用独立的系统应用数据目录，详见 [桌面版说明](docs/DESKTOP.md)。
+患者数据库位于 `~/.open-medical-workbench/medical.sqlite`。通过 **设置 → 桌面应用 → 应用维护 → 打开数据目录** 查看；模型配置保存在独立的配置目录。源码环境可运行下面的命令创建数据库一致性备份：
 
 ```bash
 npm run backup
 ```
 
-恢复前停止服务，将 `MEDICAL_DATABASE` 指向备份副本再启动。备份同样包含医疗资料，应按原库标准保管。删除患者会同时删除其工作区及相关记录，不会删除已经导出的文件或备份。
+恢复前完全退出应用，按 [备份与恢复步骤](docs/DESKTOP.md#备份与恢复) 保留现有文件并还原数据库。备份同样包含医疗资料，应按原库标准保管。删除患者会同时删除其工作区及相关记录，不会删除已经导出的文件或备份。
 
 </details>
 
@@ -486,14 +497,16 @@ npm run backup
 
 医疗工作台建立在通用 Agent 运行时上：模型与工具循环、文件工作区、历史分支、计划任务、上下文管理和后台执行共用同一套底座。可按需接入 Skills、MCP、插件，以及浏览器、终端和办公文件工具。
 
-通用模式可独立运行，不加载医疗运行时或患者表：
+通用运行时也提供无界面的 CLI 与后台 API，供扩展开发和任务执行使用：
 
 ```bash
-npm run build
-npm run platform        # http://127.0.0.1:8788
+npm run workspace --   # CLI 用法
+npm run platform       # 本机后台 API，不提供工作台页面
 ```
 
-开发前端使用 `npm run dev`；独立工作区 CLI 使用 `npm run workspace --`。Docker 为可选依赖，用于容器化终端与部分办公工具。具体支持范围见 [验证说明](docs/VALIDATION.md) 与 [运行时兼容说明](RUNTIME_COMPATIBILITY.md)。
+开发调试使用 `npm run dev:server` 启动使用独立数据库的医疗开发服务，再用 `npm run dev:ui` 启动 Vite 界面；通用界面调试使用 `npm run dev:platform`。这些入口仅供开发，桌面应用的内部端口不向外部浏览器提供界面或会话凭据。详细命令见 [开发调试](docs/DESKTOP.md#开发调试)。
+
+Docker 为可选依赖，用于容器化终端与部分办公工具。具体支持范围见 [验证说明](docs/VALIDATION.md) 与 [运行时兼容说明](RUNTIME_COMPATIBILITY.md)。
 
 ## 文档导航
 
@@ -522,3 +535,7 @@ npm run verify:model    # 真实模型流式输出、工具调用与续轮
 ## 许可证
 
 [MIT](LICENSE)
+
+## 社区
+
+[LINUX DO](https://linux.do/)

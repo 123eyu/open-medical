@@ -836,11 +836,12 @@ export function createServer(options = {}) {
           secret,
         ),
         "UNAUTHORIZED",
-        "本地会话认证失效，请刷新页面",
+        "本地会话认证失效，请重新加载工作台",
         401,
       );
   }
   const server = http.createServer(async (req, res) => {
+    if (options.desktopAccessToken) res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "no-referrer");
     res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
@@ -869,6 +870,35 @@ export function createServer(options = {}) {
         return res.end(response);
       }
       guard(req, false);
+      // Message ingest for local CLI bridges: guarded by its own secret, not
+      // the browser token, so external tools never need the UI credential.
+      if (path === "/api/ingest/messages" && req.method === "POST") {
+        check(
+          Boolean(ingestSecret),
+          "INGEST_DISABLED",
+          "未配置 MEDICAL_INGEST_SECRET，消息接入已关闭",
+          503,
+        );
+        check(
+          sameSecret(req.headers["x-ingest-secret"] || "", ingestSecret),
+          "UNAUTHORIZED",
+          "消息接入密钥无效",
+          401,
+        );
+        const b = await body(req);
+        const ingested = patients.ingest(b.messages);
+        care.discover();
+        care.kick();
+        return send(res, 201, ingested);
+      }
+      // Only the native window can obtain a UI session. Existing API clients
+      // may use a session token explicitly obtained inside that window.
+      if (options.desktopAccessToken) {
+        const nativeWindow = sameSecret(req.headers["x-omw-desktop"], options.desktopAccessToken);
+        const authenticatedApi = path.startsWith("/api/") && path !== "/api/bootstrap" &&
+          sameSecret(req.headers["x-medical-token"] || url.searchParams.get("token"), secret);
+        check(nativeWindow || authenticatedApi, "DESKTOP_ONLY", "请在 Open Medical 桌面应用中打开工作台。", 403);
+      }
       if (path === "/api/agent/health" && req.method === "GET")
         return send(res, 200, {
           ok: true,
@@ -910,27 +940,6 @@ export function createServer(options = {}) {
         });
       if (path === "/api/skills" && req.method === "GET")
         return send(res, 200, { skills: skills.list() });
-      // Message ingest for local CLI bridges: guarded by its own secret, not
-      // the browser token, so external tools never need the UI credential.
-      if (path === "/api/ingest/messages" && req.method === "POST") {
-        check(
-          Boolean(ingestSecret),
-          "INGEST_DISABLED",
-          "未配置 MEDICAL_INGEST_SECRET，消息接入已关闭",
-          503,
-        );
-        check(
-          sameSecret(req.headers["x-ingest-secret"] || "", ingestSecret),
-          "UNAUTHORIZED",
-          "消息接入密钥无效",
-          401,
-        );
-        const b = await body(req);
-        const ingested = patients.ingest(b.messages);
-        care.discover();
-        care.kick();
-        return send(res, 201, ingested);
-      }
       if (path === "/api/bootstrap" && req.method === "GET")
         return send(res, 200, {
           token: secret,
@@ -2609,6 +2618,10 @@ export function createServer(options = {}) {
   return server;
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (!process.argv.includes("--dev-web")) {
+    console.error("请使用 npm start 启动桌面应用。开发调试服务：npm run dev:server。");
+    process.exit(1);
+  }
   try {
     process.loadEnvFile(resolve(ROOT, "../.env"));
   } catch (e) {
@@ -2629,7 +2642,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const server = createServer();
   const port = Number(process.env.PORT || 8787);
   server.listen(port, "127.0.0.1", () =>
-    console.log(`Medical workbench: http://127.0.0.1:${port}`),
+    console.log(`Medical development server: http://127.0.0.1:${port}`),
   );
   const stop = () => server.shutdown().then(() => process.exit(0));
   process.once("SIGINT", stop);

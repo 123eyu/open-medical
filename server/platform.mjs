@@ -207,6 +207,7 @@ export function createWorkspaceServer(options = {}) {
         throw new AppError("NOT_FOUND", "接口不存在", 404);
       }
       check(req.method === "GET", "NOT_FOUND", "接口不存在", 404);
+      check(options.webUi === true, "DESKTOP_ONLY", "请在 Open Medical 桌面应用中使用工作台。", 403);
       const dist = await realpath(
         options.dist ||
           resolve(dirname(fileURLToPath(import.meta.url)), "../dist"),
@@ -290,6 +291,7 @@ if (
   const server = createWorkspaceServer({
     database: process.env.AGENT_DATABASE,
     instanceId: process.env.AGENT_INSTANCE_ID,
+    webUi: process.argv.includes("--dev-web"),
   });
   const port = Number(process.env.AGENT_PORT || 8788);
   server.listen(port, "127.0.0.1", () =>

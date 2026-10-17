@@ -23,15 +23,13 @@ const canRun =
 
 async function openDesktopApp(t) {
   const directory = await mkdtemp(join(tmpdir(), "omw-desktop-e2e-"));
+  const desktopEnv = { ...process.env, MEDICAL_DESKTOP_TEST_DIR: directory };
+  delete desktopEnv.ELECTRON_RUN_AS_NODE;
   const app = await _electron.launch({
     executablePath: electronPath,
     args: [MAIN, "--e2e"],
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: "",
-      MEDICAL_DESKTOP_TEST_DIR: directory,
-    },
+    env: desktopEnv,
   });
   const desktopProcess = app.process();
   t.after(async () => {
@@ -46,8 +44,8 @@ async function openDesktopApp(t) {
   await window.waitForLoadState("load", { timeout: 15000 }).catch(() => {});
   const origin = new URL(window.url()).origin;
   assert.match(origin, /^http:\/\/127\.0\.0\.1:\d+$/);
-  // 节点侧种子：走 /api/bootstrap 拿本机令牌
-  const bootstrap = await (await fetch(`${origin}/api/bootstrap`)).json();
+  // 从原生窗口取得会话令牌后，供节点侧准备合成数据。
+  const bootstrap = await window.evaluate(() => fetch("/api/bootstrap").then(r => r.json()));
   const token = bootstrap.token;
   const request = (path, method = "GET", data) =>
     fetch(origin + path, {

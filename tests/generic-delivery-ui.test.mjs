@@ -24,7 +24,7 @@ async function bootServer(t, provider) {
   const dir = mkdtempSync(join(tmpdir(), "omw-n3-ui-"));
   const project = join(dir, "project");
   mkdirSync(project, { recursive: true });
-  const server = createWorkspaceServer({
+  const server = createWorkspaceServer({ webUi: true,
     database: join(dir, "app.sqlite"),
     provider,
   });

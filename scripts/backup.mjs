@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { resolve, dirname } from "node:path";
 import { mkdirSync, chmodSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 export function backupDatabase(source, destination) {
@@ -32,18 +33,17 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   try {
-    if (existsSync(".env")) process.loadEnvFile(".env");
     const source =
-      process.env.MEDICAL_DATABASE || resolve("server/data/medical.sqlite");
+      process.env.MEDICAL_DATABASE || resolve(homedir(), ".open-medical-workbench/medical.sqlite");
     const destination =
       process.argv[2] ||
       resolve(
-        "server/data/backups",
+        homedir(), ".open-medical-workbench/backups",
         `medical-${new Date().toISOString().replace(/[:.]/g, "-")}.sqlite`,
       );
     console.log("已创建一致性备份：" + backupDatabase(source, destination));
     console.log(
-      "备份包含本地医疗资料，请按原数据库同等标准保管。恢复时先停止服务，再设置 MEDICAL_DATABASE 指向备份文件。",
+      "备份包含本地医疗资料，请按原数据库同等标准保管。恢复时先退出应用，再用备份恢复数据目录；详见 docs/DESKTOP.md。",
     );
   } catch (error) {
     console.error(error.message);

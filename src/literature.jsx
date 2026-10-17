@@ -119,7 +119,7 @@ export function LiteratureView({ onOpenTask }) {
       setCopied(article.pmid || article.doi);
       setTimeout(() => setCopied(""), 1500);
     } catch {
-      setError("浏览器拒绝了剪贴板访问");
+      setError("无法写入剪贴板，请重试或手动复制");
     }
   };
   const pubmedLink = (article) =>

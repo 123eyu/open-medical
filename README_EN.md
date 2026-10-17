@@ -4,9 +4,9 @@
 
 # Open Medical
 
-### Bring patient records, medical knowledge and experience into every visit.
+### Working toward the most doctor-friendly desktop management agent.
 
-An open-source, local AI workbench for doctors · Patient records · Knowledge · Follow-up
+An open-source desktop management agent · Patients & records · Knowledge & tasks
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-28735b?style=flat-square)](LICENSE)
 [![Desktop](https://img.shields.io/badge/Desktop-macOS%20%7C%20Windows-334155?style=flat-square)](docs/DESKTOP.md)
@@ -20,7 +20,7 @@ An open-source, local AI workbench for doctors · Patient records · Knowledge �
 
 ---
 
-Open Medical is a local patient-management assistant for doctors. Keep clinical notes, lab results and follow-up records connected to the same patient. Organize guidelines, templates and useful cases in your own knowledge library, then retrieve, prepare and follow up through conversation.
+Open Medical is an open-source desktop management agent for doctors, available on macOS and Windows. Built around everyday clinical work, it helps doctors manage patients, records, knowledge and tasks through natural language, connecting record organization, literature searches, document preparation and ongoing follow-up.
 
 **Keep records locally, connect your preferred model, and review the results.** Use local Ollama / vLLM servers, DeepSeek, OpenAI, Anthropic, OpenRouter or an OpenAI-compatible endpoint.
 
@@ -54,7 +54,9 @@ Open Medical is a local patient-management assistant for doctors. Keep clinical 
 
 ## Quick start
 
-Requires **Node.js ≥ 22.18** and npm. Start locally, then connect a model when needed.
+With a desktop package, open `Open Medical.app` on macOS or run `Open Medical.exe` from the complete portable folder on Windows. The app starts its local runtime automatically.
+
+To launch from source, install **Node.js ≥ 22.18** and npm:
 
 ```bash
 git clone https://github.com/JuneYaooo/open-medical-workbench.git
@@ -64,11 +66,11 @@ npm run build
 npm start
 ```
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787). One local process serves the UI and API, binding only to the loopback interface by default.
+`npm start` opens the desktop app. `npm run desktop`, `npm run agent` and `npm run harness` use the same entry point.
 
 **First steps:** Open Example walkthroughs → Prepare all examples to explore ready-made records, or create a patient → add material → select a model → start a task. Patient records, clinical entries and follow-up records can be managed without a model.
 
-### Desktop app
+### Build desktop packages
 
 Build a portable package on the corresponding operating system:
 
@@ -77,11 +79,11 @@ npm run package:mac    # macOS
 npm run package:win    # Windows: build on Windows
 ```
 
-Packages are written to `release/`. Open the `.app` on macOS or run `Open Medical.exe` from the complete portable folder on Windows. Desktop data is stored separately from development data. Closing the window can leave the app running in the background; quitting stops it. See [desktop setup](docs/DESKTOP.md) for installation, platform verification and signing limitations.
+Packages are written to `release/`. Open the `.app` on macOS or run `Open Medical.exe` from the complete portable folder on Windows. Source launches and installed packages share the desktop data directory. Closing the window can leave the app running in the background; quitting stops it. See [desktop setup](docs/DESKTOP.md) for installation, platform verification and signing limitations.
 
 ### Connect a model
 
-Use **Settings → Model & runtime → Select model** to choose an available connection. Manage provider endpoints and credentials in connection configuration, or copy `.env.example` to `.env`, configure `AI_PROVIDER` and the provider credentials, then restart.
+Use **Settings → Model & runtime → Select model** to choose an available connection. Manage provider endpoints and credentials in connection configuration, or open **Settings → Desktop app → App maintenance → Open configuration folder**, edit `model.env`, then restart the app.
 
 | Connection | Use case |
 | :--- | :--- |
@@ -462,6 +464,15 @@ Prepare three fictional patients with notes, labs, follow-ups, knowledge documen
 
 </details>
 
+<details>
+<summary><strong>Desktop preferences and background tasks</strong></summary>
+
+Manage login startup, system reminders and app maintenance in Settings. Open the patient data and model configuration folders separately. Close or hide the work window while background tasks continue, then return from the Dock or tray. PDF exports use the system save dialog.
+
+![Desktop app settings](docs/assets/features/desktop-settings.png)
+
+</details>
+
 ## Data and scope
 
 - **Local storage.** Patient records, messages, follow-ups and conversations are stored in local SQLite. Model connection keys are encrypted in a local credential vault. **The patient database itself is not encrypted.**
@@ -472,13 +483,13 @@ Prepare three fictional patients with notes, labs, follow-ups, knowledge documen
 <details>
 <summary><strong>Storage, backup and recovery</strong></summary>
 
-Source installations default to `server/data/medical.sqlite`; override this with `MEDICAL_DATABASE`. Desktop builds use a separate system application-data directory; see [desktop setup](docs/DESKTOP.md).
+The patient database is stored at `~/.open-medical-workbench/medical.sqlite`. Open it through **Settings → Desktop app → App maintenance → Open data folder**. Model configuration lives in a separate configuration folder. From a source checkout, create a consistent database backup with:
 
 ```bash
 npm run backup
 ```
 
-Stop the service before recovery, point `MEDICAL_DATABASE` to a backup copy, and restart. Backups contain medical information and require the same protection as the original database. Deleting a patient also deletes their workspace and associated records; existing exports and backups remain.
+Quit the app before recovery and follow the [backup and recovery steps](docs/DESKTOP.md#备份与恢复), preserving the existing files first. Backups contain medical information and require the same protection as the original database. Deleting a patient also deletes their workspace and associated records; existing exports and backups remain.
 
 </details>
 
@@ -486,14 +497,16 @@ Stop the service before recovery, point `MEDICAL_DATABASE` to a backup copy, and
 
 The medical workbench shares a general-purpose agent runtime for model/tool loops, file workspaces, conversation branches, scheduled tasks, context management and background execution. Extend it with Skills, MCP, plugins, browser tools, terminal tools and office-file helpers.
 
-The generic runtime can run independently without loading the medical runtime or patient tables:
+The generic runtime also provides a headless CLI and local API for extensions and task execution:
 
 ```bash
-npm run build
-npm run platform        # http://127.0.0.1:8788
+npm run workspace --   # CLI usage
+npm run platform       # Local API without a workbench page
 ```
 
-Use `npm run dev` for frontend development and `npm run workspace --` for the standalone workspace CLI. Docker is optional and used for containerized terminal and some office tools. See the [capability matrix](docs/VALIDATION.md) and [runtime compatibility](RUNTIME_COMPATIBILITY.md) for supported scope.
+For development, run `npm run dev:server` with its separate development database, then `npm run dev:ui` for Vite. Use `npm run dev:platform` to debug the generic UI. The desktop runtime does not serve its UI or bootstrap credentials to external browsers. See [development setup](docs/DESKTOP.md#开发调试).
+
+Docker is optional and used for containerized terminal and some office tools. See the [capability matrix](docs/VALIDATION.md) and [runtime compatibility](RUNTIME_COMPATIBILITY.md) for supported scope.
 
 ## Documentation
 
@@ -524,3 +537,7 @@ npm run verify:model    # Live streaming, tool calls and continuation
 ## License
 
 [MIT](LICENSE)
+
+## Community
+
+[LINUX DO](https://linux.do/)
