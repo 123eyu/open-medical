@@ -55,7 +55,9 @@ export function KnowledgeSourcePanel({ contextKey }) {
     api(`/api/knowledge/${encodeURIComponent(request.id || "")}`)
       .then((doc) => {
         if (!alive) return;
-        const stale = Boolean(request.sourceHash && request.sourceHash !== doc.sha256);
+        const stale = Boolean(
+          request.sourceHash && request.sourceHash !== doc.sha256,
+        );
         const range = stale ? null : request.highlight;
         if (
           range &&
@@ -219,6 +221,9 @@ export function KnowledgeSourcePanel({ contextKey }) {
             embedded
             onLocationLabel={setLocationLabel}
             reader={reader}
+            onUpdated={(doc) =>
+              setReader({ doc, highlight: null, stale: true })
+            }
             onLocate={(_id, highlight) =>
               setReader((current) => ({ ...current, highlight }))
             }

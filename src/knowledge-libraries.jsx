@@ -41,7 +41,9 @@ export function KnowledgeLibraries({ onOpenTask }) {
         const name = new URLSearchParams(window.location.search).get(
           "collection",
         );
-        if (name)
+        // A citation must select its library together with the loaded document.
+        // Mounting the workspace first loses its one-time initial reader state.
+        if (name && !new URLSearchParams(window.location.search).has("knowledgeDoc"))
           return api("/api/knowledge/collections").then((data) =>
             setSelected(data.collections.find((c) => c.name === name) || null),
           );
@@ -64,20 +66,21 @@ export function KnowledgeLibraries({ onOpenTask }) {
           (c) => c.name === (doc.collection || "默认知识库"),
         );
         if (!library) throw new Error("引用所属知识库已不存在");
+        const stale = params.get("sourceHash") !== doc.sha256;
         const startLine = Number(params.get("line")),
           endLine = Number(params.get("endLine"));
-        if (
+        if (!stale && (
           !Number.isInteger(startLine) ||
           !Number.isInteger(endLine) ||
           startLine < 1 ||
           endLine < startLine ||
           endLine > doc.lineCount
-        )
+        ))
           throw new Error("引用行号已失效，请检索并重新核对原文");
         setInitialCitation({
           doc,
-          highlight: { startLine, endLine },
-          stale: params.get("sourceHash") !== doc.sha256,
+          highlight: stale ? null : { startLine, endLine },
+          stale,
         });
         setSelected(library);
       })

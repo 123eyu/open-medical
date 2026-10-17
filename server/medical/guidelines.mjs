@@ -230,42 +230,49 @@ export class GuidelineLibrary {
       return this.get(id);
     });
   }
-  // Body-level edit for short library documents (education materials):
-  // keeps id and metadata, revokes the review status like a source edit,
-  // and rebuilds chunks plus the vector index best-effort.
+  // Correct searchable text without deleting its retained source or import history.
   async updateDocumentText(id, input = {}) {
-    const doc = this.docRow(id);
-    check(input.expectedRevision === (doc.revision || 0), "REVISION_CONFLICT", "资料已被修改，请重新打开文档后再编辑", 409);
-    check(!this.indexTasks.has(id), "KNOWLEDGE_BUSY", "资料正在建立索引，请完成后再编辑", 409);
-    const body = string(input.text, "正文", KNOWLEDGE_TEXT_LIMIT);
-    const previous = { ...knowledgeMetadata(doc), title: doc.title, org: doc.org, year: doc.year, kind: doc.kind, collection: doc.collection, revision: doc.revision || 0 };
-    const chunks = knowledgeChunks(body, doc);
-    this.store.db.exec("BEGIN IMMEDIATE");
+    check(!this.deletingCollection, "KNOWLEDGE_BUSY", "正在删除知识库，请稍后编辑", 409);
+    this.activeIndexWrites++;
     try {
-      this.store.db.prepare("DELETE FROM guideline_chunks WHERE doc_id=?").run(id);
-      saveChunks(this, { ...doc, text: body }, chunks);
-      doc.text = body;
-      doc.sha256 = sha256(body);
-      doc.coverage = sourceCoverage(body);
-      doc.indexing = {status:"queued",embedded:0,processed:0,error:null};
-      doc.reviewStatus = "unreviewed";
-      doc.allowExternalUse = false;
-      doc.revision = (doc.revision || 0) + 1;
-      doc.updatedAt = Date.now();
-      doc.metadataHistory = [...(doc.metadataHistory || []), { ...previous, replacedAt: doc.updatedAt }].slice(-50);
-      this.store.db.prepare("UPDATE guideline_docs SET data=? WHERE id=?").run(JSON.stringify(doc), id);
-      this.store.db.exec("COMMIT");
-    } catch (error) {
-      this.store.db.exec("ROLLBACK");
-      throw error;
+      const body = string(input.text, "正文", KNOWLEDGE_TEXT_LIMIT);
+      const changed = sqliteTransaction(this.store.db, () => {
+        const doc = this.docRow(id);
+        check(input.expectedRevision === (doc.revision || 0), "REVISION_CONFLICT", "资料已被修改，请重新打开文档后再编辑", 409);
+        check(!this.indexTasks.has(id), "KNOWLEDGE_BUSY", "资料正在建立索引，请完成后再编辑", 409);
+        this.beforeUpdateDocumentText?.(id);
+        if (body === doc.text) return false;
+        const previous = { ...knowledgeMetadata(doc), title: doc.title, org: doc.org, year: doc.year, kind: doc.kind, collection: doc.collection, revision: doc.revision || 0 };
+        const coverage = doc.coverage || sourceCoverage(doc.text);
+        this.store.db.prepare("DELETE FROM guideline_chunks WHERE doc_id=?").run(id);
+        saveChunks(this, { ...doc, text: body }, knowledgeChunks(body, doc));
+        doc.text = body;
+        doc.sha256 = sha256(body);
+        doc.coverage = { ...coverage, textHash: doc.sha256,
+          status: ["excerpt", "needs_review"].includes(coverage.status) ? coverage.status : "unknown",
+          note: "正文已人工修订；原件与既有未读取范围保留，完整性需重新核对。" };
+        doc.textCorrected = true;
+        doc.indexing = {status:"queued",embedded:0,processed:0,error:null};
+        doc.reviewStatus = "unreviewed";
+        doc.allowExternalUse = false;
+        doc.revision = (doc.revision || 0) + 1;
+        doc.updatedAt = Date.now();
+        doc.metadataHistory = [...(doc.metadataHistory || []), { ...previous, replacedAt: doc.updatedAt }].slice(-50);
+        this.store.db.prepare("UPDATE guideline_docs SET data=? WHERE id=?").run(JSON.stringify(doc), id);
+        // This hook only invalidates derived database records and participates
+        // in this transaction. Source-file deletion belongs to explicit removal.
+        this.afterUpdateDocumentText?.(id);
+        this.store.audit(null, "knowledge.text.updated", { docId: id, revision: doc.revision });
+        return true;
+      });
+      if (changed) {
+        if (this.vectorStore) await this.vectorStore.removeDocs([id]).catch(() => {});
+        await indexKnowledgeDoc(this, id);
+      }
+      return this.get(id);
+    } finally {
+      this.activeIndexWrites--;
     }
-    // Derived views are stale the moment the text changes: purge the old
-    // vector rows and knowledge-map entries, then reindex best-effort.
-    if (this.afterRemoveDocuments) { try { await this.afterRemoveDocuments([id]); } catch { /* derived data only */ } }
-    if (this.vectorStore) await this.vectorStore.removeDocs([id]).catch(() => {});
-    await indexKnowledgeDoc(this, id);
-    this.store.audit(null, "knowledge.text.updated", { docId: id, revision: doc.revision });
-    return this.get(id);
   }
   async addDocument(input) {
     check(!this.deletingCollection, "KNOWLEDGE_BUSY", "正在删除知识库，请稍后上传", 409);

@@ -11,6 +11,8 @@ import { KnowledgeReader } from "./knowledge-reader";
 import { workspaceTabs } from "./knowledge-workspace-model.mjs";
 import "./knowledge-workspace.css";
 import { openKnowledgeSource } from "./knowledge-source-events";
+import { transcriptionSettingsUrl } from "./knowledge-transcription-settings";
+import { KnowledgeTranscriptRecovery } from "./knowledge-transcript-recovery";
 
 export function KnowledgeView({
   onOpenTask,
@@ -33,6 +35,7 @@ export function KnowledgeView({
     [deleting, setDeleting] = useState(null),
     [organizing, setOrganizing] = useState(null),
     [busy, setBusy] = useState(false);
+  const [transcriptJob, setTranscriptJob] = useState(null);
   const setTab = (value) => {
     updateTab(value);
     const url = new URL(window.location.href);
@@ -168,6 +171,7 @@ export function KnowledgeView({
           reader={reader}
           onClose={closeReader}
           onReview={review}
+          onUpdated={doc => { setReader(current => ({ doc, highlight: null, stale: Boolean(current?.highlight || current?.stale) })); refresh().catch(e => setRefreshError(e.message)); }}
           onPrepare={onOpenTask ? prepareSource : undefined}
           onLocate={openReader}
           busy={busy}
@@ -213,6 +217,10 @@ export function KnowledgeView({
                   重试导入
                 </button>
               )}
+              {!["queued", "running"].includes(job.status) && /\.(mp3|m4a|wav|mp4|mov)$/i.test(job.fileName) && <>
+                <a href={transcriptionSettingsUrl(collection)}>配置转写服务</a>
+                {!job.suppliedTranscript && !job.docId && <button className="text-button" disabled={busy} onClick={()=>setTranscriptJob(job)}>补充文字稿</button>}
+              </>}
             </div>
           ))}
           {(error || refreshError) && (
@@ -307,6 +315,7 @@ export function KnowledgeView({
           }}
         />
       )}
+      {transcriptJob && <KnowledgeTranscriptRecovery job={transcriptJob} onClose={()=>setTranscriptJob(null)} onSaved={async()=>{setTranscriptJob(null);await refresh();}}/>}
       {editing && (
         <KnowledgeMetadataModal
           key={editing.id}

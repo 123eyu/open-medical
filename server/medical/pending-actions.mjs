@@ -1,3 +1,4 @@
+import { intakeAudit } from './intake-evidence.mjs';
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../../shared/clinical-summary.mjs';
 import { learningPrefs } from "./personal-context.mjs";
 import { ReviewLog } from "./review-log.mjs";
@@ -87,6 +88,14 @@ export class PendingActions {
   get extensions() {
     return this.services.extensions?.() || null;
   }
+  audit(action, payload = action.reviewDraft?.payload || action.payload, reviews = action.reviewDraft?.evidenceReviews || {}) {
+    if (action.type !== 'patient-create' || !action.payload.sourceSessionId) return undefined;
+    let sources = [];
+    try { sources = this.services.intakeSources?.(action.payload.sourceSessionId, action.payload.sourceFileIds || []) || []; } catch { /* Missing original is a review blocker, not a broken inbox. */ }
+    if (!sources.length || sources.some(source => !String(source.text || '').trim()) || (action.payload.sourceFileIds || []).some(id => !sources.some(source => source.id === id))) return { issues: [{ id: 'intake-original-unavailable', section: 'sources', kind: 'source-unavailable', message: '原始资料不可读取，请恢复资料后重新整理。', sourceName: '', quote: '' }], unresolved: ['intake-original-unavailable'], sources: [], scope: '未能访问原始资料，不能确认建档。' };
+    return intakeAudit(payload, sources, reviews);
+  }
+  withAudit(action) { return { ...action, ...(action.type === 'patient-create' ? { intakeAudit: this.audit(action) } : {}) }; }
   row(id) {
     check(typeof id === "string" && id, "INVALID_INPUT", "提案编号无效");
     const row = this.store.db
@@ -95,7 +104,7 @@ export class PendingActions {
       )
       .get(id);
     check(row, "NOT_FOUND", "待确认提案不存在", 404);
-    return {
+    return this.withAudit({
       id: row.id,
       type: row.type,
       patientId: row.patient_id,
@@ -106,7 +115,7 @@ export class PendingActions {
       summary: row.summary,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-    };
+    });
   }
   propose(input = {}) {
     return sqliteTransaction(this.store.db, () => this.proposeTransaction(input));
@@ -263,6 +272,7 @@ export class PendingActions {
       patientId: resolvedPatientId,
       baseRevision,
       status: "pending",
+      intakeAudit: this.audit({ type, payload: normalized }),
       payload: normalized,
       summary: title,
       createdAt: time,
@@ -304,7 +314,7 @@ export class PendingActions {
          ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`,
       )
       .all(...args, limit, offset)
-      .map((row) => ({
+      .map((row) => this.withAudit({
         id: row.id,
         type: row.type,
         patientId: row.patient_id,
@@ -355,13 +365,14 @@ export class PendingActions {
     if (normalized.clinicalSummary) normalized.clinicalSummary.source = action.payload.clinicalSummary?.source || '医生补充';
     return { ...action.payload, ...normalized };
   }
-  saveReview(id, { payload, reasons = {}, expectedRevision } = {}) {
+  saveReview(id, { payload, reasons = {}, evidenceReviews = {}, expectedRevision } = {}) {
     return sqliteTransaction(this.store.db, () => {
       const action = this.row(id);
       check(action.type === 'patient-create' && action.status === 'pending', 'ACTION_RESOLVED', '仅可修改待确认的建档草稿', 409);
       check(expectedRevision === undefined || expectedRevision === action.reviewRevision, 'REVISION_CONFLICT', '草稿已在其他窗口更新，请重新载入后核对', 409);
       check(reasons && typeof reasons === 'object' && !Array.isArray(reasons) && Object.values(reasons).every(v => ['资料里没有', '重复', '不该算诊断', '不重要', '其他', ''].includes(v)), 'INVALID_INPUT', '删除原因无效');
-      const reviewDraft = { payload: this.normalizeReview(action, payload), reasons };
+      check(evidenceReviews && typeof evidenceReviews === 'object' && !Array.isArray(evidenceReviews) && JSON.stringify(evidenceReviews).length <= 200000, 'INVALID_INPUT', '来源复核记录无效');
+      const reviewDraft = { payload: this.normalizeReview(action, payload), reasons, evidenceReviews };
       this.store.db.prepare('UPDATE pending_actions SET review_draft=?,review_revision=review_revision+1,updated_at=? WHERE id=?').run(JSON.stringify(reviewDraft), new Date().toISOString(), id);
       return this.row(id);
     });
@@ -372,7 +383,7 @@ export class PendingActions {
     if (!action.reviewDraft) return '';
     return mode === 'preserve' ? diffSummary(reviewDiff(action.payload, action.reviewDraft.payload, action.reviewDraft)) : '';
   }
-  confirm(id, { note, payload, reviewMs = 0, reasons, expectedRevision } = {}) {
+  confirm(id, { note, payload, reviewMs = 0, reasons, evidenceReviews, expectedRevision } = {}) {
     let writtenSkill;
     const feedback = this.feedbackNote(note);
     try { return sqliteTransaction(this.store.db, () => {
@@ -432,6 +443,11 @@ export class PendingActions {
         // The registry validates all supplied fields before creating any record.
         check(expectedRevision === undefined || expectedRevision === action.reviewRevision, 'REVISION_CONFLICT', '草稿已更新，请重新核对', 409);
         const final = payload === undefined ? action.payload : this.normalizeReview(action, payload);
+        const reviews = evidenceReviews || action.reviewDraft?.evidenceReviews || {};
+        const audit = this.audit(action, final, reviews);
+        check(!audit?.unresolved.length, 'INTAKE_EVIDENCE_REVIEW_REQUIRED', `仍有 ${audit?.unresolved.length || 0} 项来源缺口或矛盾未核对，请更正草稿或逐项记录核对结论后再确认`, 409);
+        // Persist the exact human attestations with the draft, never as patient facts or learned preferences.
+        if (audit) this.store.db.prepare('UPDATE pending_actions SET review_draft=? WHERE id=?').run(JSON.stringify({ payload: final, reasons: reasons || action.reviewDraft?.reasons || {}, evidenceReviews: reviews }), id);
         const patient = this.patients.create(final);
         this.store.db.prepare("INSERT INTO patient_create_confirmations(action_id,patient_id,fingerprint) VALUES (?,?,?)").run(id, patient.id, confirmationFingerprint(final));
         this.reviewLog.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });

@@ -212,11 +212,17 @@ function ItemForm({ section, value, onSave, onCancel }) {
     </div>
   );
 }
-export function IntakeReview({ action, ref, onChange, onEditing }) {
+export function IntakeReview({ action, ref, onChange, onEditing, onEvidencePending, sources = [] }) {
   const original = action.payload;
   const [payload, setPayload] = useState(
     action.reviewDraft?.payload || original,
   );
+  const [evidenceReviews, setEvidenceReviews] = useState(action.reviewDraft?.evidenceReviews || {});
+  const [audit, setAudit] = useState(action.intakeAudit);
+  const unresolvedEvidence = (audit?.issues || []).some(issue => {
+    const review = evidenceReviews[issue.id];
+    return issue.kind === 'source-unavailable' || review?.decision !== (issue.kind === 'omission' ? 'exclude' : 'verified') || !review || !['verified', 'exclude'].includes(review.decision) || (review.reason || '').trim().length < 4;
+  });
   const [reasons, setReasons] = useState(action.reviewDraft?.reasons || {});
   const [editing, setEditing] = useState(null),
     [saveStatus, setSaveStatus] = useState(""),
@@ -224,7 +230,7 @@ export function IntakeReview({ action, ref, onChange, onEditing }) {
     [expandedLabs, setExpandedLabs] = useState(false);
   const opened = useRef(Date.now()),
     revision = useRef(action.reviewRevision || 0),
-    latest = useRef({ payload, reasons }),
+    latest = useRef({ payload, reasons, evidenceReviews }),
     timer = useRef(null),
     chain = useRef(Promise.resolve()),
     version = useRef(0),
@@ -248,8 +254,10 @@ export function IntakeReview({ action, ref, onChange, onEditing }) {
           );
           revision.current = saved.reviewRevision;
           persisted.current = at;
-          if (alive.current && at === version.current)
+          if (alive.current && at === version.current) {
             setSaveStatus("修改已保存");
+            setAudit(saved.intakeAudit);
+          }
           return;
         } catch (error) {
           if (alive.current)
@@ -265,8 +273,9 @@ export function IntakeReview({ action, ref, onChange, onEditing }) {
     chain.current = chain.current.catch(() => {}).then(run);
     return chain.current;
   };
-  const change = (next, nextReasons = reasons) => {
-    latest.current = { payload: next, reasons: nextReasons };
+  const change = (next, nextReasons = reasons, nextEvidenceReviews = evidenceReviews) => {
+    latest.current = { payload: next, reasons: nextReasons, evidenceReviews: nextEvidenceReviews };
+    setEvidenceReviews(nextEvidenceReviews);
     version.current++;
     setPayload(next);
     setReasons(nextReasons);
@@ -308,6 +317,7 @@ export function IntakeReview({ action, ref, onChange, onEditing }) {
   useEffect(() => {
     onEditing?.(Boolean(editing));
   }, [editing]);
+  useEffect(() => { onEvidencePending?.(unresolvedEvidence); }, [unresolvedEvidence]);
   const saveEditor = (value) => {
     const { section, index } = editing;
     if (section === "identity") change({ ...payload, ...value });
@@ -356,12 +366,44 @@ export function IntakeReview({ action, ref, onChange, onEditing }) {
           </button>
         )}
       </div>
+      {audit && <section aria-label="来源与完整性核对" className="review-row">
+        <h4>来源与完整性核对</h4>
+        <p className="muted">{audit.scope}</p>
+        <p>纳入本次核对的资料：{audit.sources?.map(source => source.name).join("、") || "尚无可读取原文"}</p>
+        {(audit.sources || []).map(source => {
+          const originalSource = sources.find(file => file.id === source.id);
+          return originalSource && <details key={source.id}>
+            <summary>查看识别原文：{source.name}</summary>
+            <pre style={{ whiteSpace: "pre-wrap", maxHeight: 360, overflow: "auto" }}>{String(originalSource.text || "").split("\n").map((line, index) => `${index + 1}: ${line}`).join("\n")}</pre>
+          </details>;
+        })}
+        {!!audit.issues?.length && <p role="alert">发现 {audit.issues.length} 项需要核对。请先更正下方清单；仍无法自动核实的项目，逐项对照原件并填写处理理由。未完成前不能确认建档。</p>}
+        {(audit.issues || []).map((issue, index) => {
+          const review = evidenceReviews[issue.id] || {};
+          const update = patch => change(payload, reasons, { ...evidenceReviews, [issue.id]: { ...review, ...patch } });
+          return <div className="review-row" key={issue.id}>
+            <p><b>{index + 1}. {issue.message}</b></p>
+            <p className="muted">{issue.sourceName || "来源未能定位"}{issue.startLine ? ` · 第 ${issue.startLine}–${issue.endLine} 行` : ""}</p>
+            {issue.quote && <blockquote style={{ whiteSpace: "pre-wrap" }}>{issue.quote}</blockquote>}
+            <label>核对结论
+              <select aria-label={`核对结论 ${index + 1}`} value={review.decision || ""} onChange={e => update({ decision: e.target.value })}>
+                <option value="">尚未核对</option>
+                {issue.kind !== "omission" && <option value="verified">已对照原件，确认草稿内容</option>}
+                {issue.kind === "omission" && <option value="exclude">本条不纳入档案，说明原因</option>}
+              </select>
+            </label>
+            <label>核对依据或排除理由（至少 4 字）
+              <textarea aria-label={`核对理由 ${index + 1}`} maxLength={500} value={review.reason || ""} onChange={e => update({ reason: e.target.value })} />
+            </label>
+          </div>;
+        })}
+      </section>}
       {resetConfirm && (
         <div role="alert">
           <p>放弃你做的 {counts.total} 处修改？</p>
           <button
             onClick={() => {
-              change(structuredClone(original), {});
+              change(structuredClone(original), {}, {});
               setEditing(null);
               setResetConfirm(false);
             }}

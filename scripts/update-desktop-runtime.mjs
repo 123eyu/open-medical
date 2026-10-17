@@ -72,6 +72,7 @@ try {
     "daemon-supervisor.mjs",
     "remote-coordinator.mjs",
     "remote-worker.mjs",
+    "local-transcription.py",
   ])
     await cp(join(root, "scripts", script), join(target, "scripts", script));
   const sourcePackage = JSON.parse(

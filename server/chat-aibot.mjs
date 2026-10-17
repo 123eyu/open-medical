@@ -202,7 +202,7 @@ export class WecomAibotChannel {
           for (const hit of edu.hits || [])
             knowledge.push({ title: `[患教素材] ${hit.docTitle}`, snippet: clip((hit.matches || []).map((m) => m.text).join("\n") || hit.snippet, 400) });
         } catch { /* 素材库不可用时回退普通检索 */ }
-        const found = await this.guidelines.search({ query: question.slice(0, 120), limit: 3 });
+        const found = await this.guidelines.search({ query: question.slice(0, 120), externalOnly: true, limit: 3 });
         for (const hit of found.hits || [])
           knowledge.push({ title: hit.docTitle, snippet: clip((hit.matches || []).map((m) => m.text).join("\n") || hit.snippet, 400) });
       }

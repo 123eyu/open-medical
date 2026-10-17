@@ -50,7 +50,7 @@ try {
     join(root, "scripts/workspace-cli.mjs"),
     join(stage, "scripts/workspace-cli.mjs"),
   );
-  for (const script of ["agent-daemon.mjs", "daemon-supervisor.mjs", "backup.mjs"]) await cp(join(root,"scripts",script),join(stage,"scripts",script));
+  for (const script of ["agent-daemon.mjs", "daemon-supervisor.mjs", "backup.mjs", "local-transcription.py"]) await cp(join(root,"scripts",script),join(stage,"scripts",script));
   await mkdir(join(stage, "node_modules"), { recursive: true });
   await bundleRuntimeDependencies(root, stage);
   const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));

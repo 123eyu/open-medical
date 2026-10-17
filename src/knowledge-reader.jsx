@@ -8,6 +8,7 @@ import { ChevronLeft } from "lucide-react";
 import { coverageLabel } from "../shared/knowledge-profiles.mjs";
 import { KnowledgeReading } from "./knowledge-organization";
 import { KnowledgeTablePreview } from "./knowledge-table-preview";
+import { KnowledgeTextEditor } from "./knowledge-text-editor";
 export function KnowledgeReader({
   reader,
   onClose,
@@ -17,7 +18,10 @@ export function KnowledgeReader({
   error,
   embedded = false,
   onLocationLabel,
+  onUpdated,
 }) {
+  const [editingText, setEditingText] = useState(false),
+    [textNotice, setTextNotice] = useState("");
   const [tableResult, setTableResult] = useState(null);
   const [rawOpen, setRawOpen] = useState(false);
   const [addresses, setAddresses] = useState(false);
@@ -39,7 +43,7 @@ export function KnowledgeReader({
     return () => {
       alive = false;
     };
-  }, [reader.doc.id, tableRetry]);
+  }, [reader.doc.id, reader.doc.sha256, tableRetry]);
   useEffect(() => {
     onLocationLabel?.(
       table
@@ -148,6 +152,7 @@ export function KnowledgeReader({
               {error}
             </p>
           )}
+          {textNotice && <p role="status">{textNotice}</p>}
           {reader.stale && (
             <p className="form-error" role="alert">
               原文已更新，此引用来自旧内容。请重新核对当前段落，不要沿用旧行号。
@@ -215,6 +220,17 @@ export function KnowledgeReader({
                   管理来源与版本
                 </button>
               )}
+              {onUpdated && (
+                <button
+                  className="text-button"
+                  onClick={() => {
+                    setEditingText(true);
+                    setTextNotice("");
+                  }}
+                >
+                  修正正文
+                </button>
+              )}
             </div>
 
             {onPrepare && (
@@ -247,6 +263,20 @@ export function KnowledgeReader({
               </button>
             )}
           </details>
+          {editingText && (
+            <KnowledgeTextEditor
+              key={reader.doc.id}
+              doc={reader.doc}
+              onClose={() => setEditingText(false)}
+              onSaved={(doc) => {
+                onUpdated(doc);
+                setEditingText(false);
+                setTextNotice(
+                  "正文已保存。请核对索引状态、重新生成图谱，并重新审核来源。",
+                );
+              }}
+            />
+          )}
           {ready && (!table || rawOpen) && (
             <div className="guidelines-text">
               {lines.map((line, index) => {

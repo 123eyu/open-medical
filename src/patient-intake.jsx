@@ -25,6 +25,7 @@ export function PatientIntakeModal({ onClose, onCreated, onManual, onOpenWorkspa
   const chooser = useRef(null);
   const review = useRef(null);
   const [reviewEditing, setReviewEditing] = useState(false);
+  const [evidencePending, setEvidencePending] = useState(false);
   const [editCount, setEditCount] = useState(0);
   const [reorganize, setReorganize] = useState(null);
   const [remembered, setRemembered] = useState([]);
@@ -262,7 +263,7 @@ export function PatientIntakeModal({ onClose, onCreated, onManual, onOpenWorkspa
       {error && <p className="error-text" role="alert">{error}</p>}
       {proposal && <section aria-label="自动解析的建档草稿">
         <PersonalReferences action={proposal} />
-        <IntakeReview key={proposal.id} action={proposal} ref={review} onEditing={setReviewEditing} onChange={({ count }) => setEditCount(count)} />
+        <IntakeReview key={proposal.id} action={proposal} sources={files} ref={review} onEditing={setReviewEditing} onEvidencePending={setEvidencePending} onChange={({ count }) => setEditCount(count)} />
       </section>}
       {reorganize !== null && <section role="alert" aria-label="重新整理修改处理" className="intake-rerun-choice"><p>重新整理会生成一份新草稿。你手动做的 {review.current?.count || 0} 处修改怎么处理？</p><label><input type="radio" name="reviewMode" checked={reviewMode === 'preserve'} onChange={() => setReviewMode('preserve')} />告诉 AI 我改了什么，让它在新草稿里保留</label><label><input type="radio" name="reviewMode" checked={reviewMode === 'discard'} onChange={() => setReviewMode('discard')} />丢弃我的修改</label><div><button className="secondary" onClick={() => setReorganize(null)}>取消</button><button className="primary" onClick={() => { const files = reorganize; setReorganize(null); parse(files, reviewMode); }}>继续重新整理</button></div></section>}
       {!busy && reply && <p style={{ whiteSpace: "pre-wrap" }}>{reply}</p>}
@@ -271,9 +272,9 @@ export function PatientIntakeModal({ onClose, onCreated, onManual, onOpenWorkspa
         <button className="secondary" disabled={busy || restoring || reviewEditing || (proposal && !correction.trim() && !failedUploads.length)} onClick={() => parse(failedUploads.filter(item => item.stage === "upload" && item.file instanceof File).map(item => item.file))}>{failedUploads.length ? "重试读取资料" : proposal ? "按补充内容重新整理" : "继续解析"}</button>
       </>}
       {proposal && <div className="intake-confirm-bar">
-        <span className="muted">{reviewEditing ? "先保存或取消正在编辑的条目" : "确认后保存档案，并关联本次上传的资料。"}</span>
+        <span className="muted">{reviewEditing || evidencePending ? "请完成条目编辑及来源核对" : "确认后保存档案，并关联本次上传的资料。"}</span>
         {!!failedUploads.length && <label><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} />我已知晓上述资料未纳入，先保存这份不完整草稿</label>}
-        <button className="primary" disabled={busy || reviewEditing || (!!failedUploads.length && !acknowledged)} onClick={confirm}>{editCount ? `确认建档（含你的 ${editCount} 处修改）` : "确认建档"}</button>
+        <button className="primary" disabled={busy || reviewEditing || evidencePending || (!!failedUploads.length && !acknowledged)} onClick={confirm}>{editCount ? `确认建档（含你的 ${editCount} 处修改）` : "确认建档"}</button>
       </div>}
       <div className="toolbar-actions">
         {busy && <button className="secondary" onClick={stop}>停止解析</button>}

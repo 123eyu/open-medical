@@ -1,3 +1,4 @@
+import { auditIntakeEvidence } from './intake-evidence.mjs';
 import { check } from '../errors.mjs';
 
 // A bounded reader for intake: compact text with stable file/line provenance,
@@ -86,12 +87,22 @@ export function configureIntakeTools(registry, workspace, saveNotes = () => {}, 
     execute: args => { const index = args.index || 0; return { notes: notes.slice(index, index + 1), nextIndex: index + 1 < notes.length ? index + 1 : null, batchesSaved: notes.length, instruction: index + 1 < notes.length ? "继续读取下一批笔记" : personalRead ? "个人参考已读取，下一步调用 patient_create_propose 提交完整草稿，不要重新读取资料或参考" : "下一步调用 read_personal_context" }; },
   });
   const proposal = registry.get('patient_create_propose'), propose = proposal.execute;
+  let evidenceCorrectionOffered = false;
   proposal.execute = (args, context) => {
     check(!awaitingNotes, "INTAKE_NOTES_REQUIRED", "请先保存最后一批事实笔记");
     const sources = selected(context);
     for (const [index, source] of sources.entries()) {
       const missing = source.text.split('\n').findIndex((_, i) => !seen.get(source.id)?.has(i + 1));
       check(missing === -1, 'INTAKE_NOT_READ', `还有资料未读完，请调用 read_intake_batch，fileIndex=${index}，startLine=${missing + 1}，按 nextCursor 读完后再提交草稿`);
+    }
+    // A mixed upload may explicitly select one patient's files. Audit that
+    // selection without instructing the model to import another patient's rows.
+    const evidenceSources = Array.isArray(args.sourceFileIds) && args.sourceFileIds.length
+      ? sources.filter(source => args.sourceFileIds.includes(source.id)) : sources;
+    const issues = auditIntakeEvidence({ payload: args, sources: evidenceSources, notes });
+    if (issues.length && !evidenceCorrectionOffered) {
+      evidenceCorrectionOffered = true;
+      return { proposed: false, evidenceReviewRequired: true, issues, instruction: '草稿与原文存在缺项或未核实内容，尚未创建提案。请按列出的原文逐项修正并重新提交完整 patient_create_propose；不能核实的不得猜测。再次提交仍未解决的问题将交医生逐项核对，确认前不可写入。' };
     }
     if (!personal) return propose(args, context);
     return getPersonal().then(value => {

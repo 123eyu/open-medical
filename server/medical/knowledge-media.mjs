@@ -294,7 +294,11 @@ export function sourceLines(parts) {
   const lines = [],
     locators = [];
   for (const part of parts) {
-    const marker = part.page
+    const marker = part.provenance === "user-supplied-transcript"
+      ? Number.isFinite(part.start)
+        ? `[${clockTime(part.start)}–${clockTime(part.end)} · 医生提供字幕]`
+        : "[医生提供文字稿 · 未提供时间标记]"
+      : part.page
       ? `[第 ${part.page} 页]`
       : Number.isFinite(part.start)
         ? `[${clockTime(part.start)}${Number.isFinite(part.end) ? "–" + clockTime(part.end) : ""} · ${part.kind === "frame" ? "画面抽样" : part.timing === "chunk" ? "分段转写，句子时间未提供" : "转写/字幕"}]`

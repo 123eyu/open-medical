@@ -273,6 +273,7 @@ export function createServer(options = {}) {
     trials: () => trialCandidates,
     extensions: () => extensions,
     doctor: () => doctor,
+    intakeSources: (id, fileIds) => id ? sessionBridge.get(id).files.filter(file => !fileIds.length || fileIds.includes(file.id)).map(({ id, name, text }) => ({ id, name, text: text || '' })) : [],
     intakeText: id => id ? sessionBridge.get(id).files.map(f => f.text || "").join("\n") : "",
     copySourceMaterials: (sourceId, targetId, fileIds, sourceInput) => {
       const source = sessionBridge.get(sourceId);
@@ -366,6 +367,8 @@ export function createServer(options = {}) {
   guidelines.afterMoveDocument = (id,collection) => knowledgeOrganizer.moveDocument(id,collection);
   guidelines.beforeRemoveDocument = id => knowledgeOrganizer.assertRemovable(null, [id]);
   guidelines.afterRemoveDocuments = (ids, name) => knowledgeOrganizer.purge(ids, name);
+  guidelines.beforeUpdateDocumentText = id => knowledgeOrganizer.assertTextEditable(id);
+  guidelines.afterUpdateDocumentText = id => knowledgeOrganizer.invalidateTextAnalysis(id);
   const cases = options.cases || new CaseLibrary(store);
   const research = options.research || new ResearchService();
   const drg = options.drg || new DrgService(store);
@@ -2218,12 +2221,14 @@ export function createServer(options = {}) {
           if(sub.length===1 && req.method==="GET")return send(res,200,{jobs:knowledgeOrganizer.list(url.searchParams.get("collection")||""),...knowledgeOrganizer.capabilities()});
           if(sub.length===1 && req.method==="POST")return send(res,202,await knowledgeOrganizer.upload(req,{collection:url.searchParams.get("collection"),name:url.searchParams.get("name"),sourceKind:url.searchParams.get("sourceKind")||"资料",indexOnly:url.searchParams.get("indexOnly")==="true",metadata:{...Object.fromEntries(["title","org","edition","sourceUrl"].map(k=>[k,url.searchParams.get(k)||""])),year:url.searchParams.get("year")?Number(url.searchParams.get("year")):undefined},externalConsent:req.headers["x-knowledge-consent"]==="true"}));
           if(sub.length===3 && sub[2]==="retry" && req.method==="POST")return send(res,202,knowledgeOrganizer.retry(sub[1],await body(req)));
+          if(sub.length===3 && sub[2]==="transcript" && req.method==="POST")return send(res,202,knowledgeOrganizer.supplyTranscript(sub[1],await body(req)));
           if(sub.length===3 && sub[2]==="cancel" && req.method==="POST")return send(res,200,knowledgeOrganizer.cancel(sub[1]));
           if(sub.length===3 && sub[2]==="playback" && req.method==="POST")return send(res,200,knowledgeOrganizer.playback(sub[1]));
         }
         if(sub[0]==="transcription-settings") {
           if(req.method==="PUT") {
             const value=await body(req);
+            check(value.expectedRevision === undefined || value.expectedRevision === knowledgeOrganizer.capabilities().transcriptionRevision, "REVISION_CONFLICT", "转写连接已在其他窗口更新，请重新载入后核对", 409);
             knowledgeProfiles.save("knowledge-transcription",value);
             return send(res,200,knowledgeOrganizer.capabilities());
           }
@@ -2281,6 +2286,8 @@ export function createServer(options = {}) {
         }
         if (sub[0] === "embedding-health" && req.method === "POST")
           return send(res, 200, await embedder.probe());
+        if (sub.length === 2 && sub[1] === "text" && req.method === "PUT")
+          return send(res, 200, await guidelines.updateDocumentText(sub[0], await body(req)));
         if (sub.length === 2 && sub[1] === "reindex" && req.method === "POST")
           return send(res, 202, guidelines.queueIndex(sub[0]));
         if (sub[0] === "reindex" && req.method === "POST")

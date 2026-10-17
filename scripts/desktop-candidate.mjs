@@ -107,7 +107,7 @@ export async function verifyCandidate(directory, sourceRoot) {
   const packaged = new Map((await inventory(app)).map((file) => [file.path, file]));
   for (const original of source.files) {
     if (!/^(?:dist|desktop|server|shared|skills|integrations|examples)\//.test(original.path)
-      && !['.env.example', 'scripts/workspace-cli.mjs', 'scripts/agent-daemon.mjs', 'scripts/daemon-supervisor.mjs'].includes(original.path)) continue;
+      && !['.env.example', 'scripts/workspace-cli.mjs', 'scripts/agent-daemon.mjs', 'scripts/daemon-supervisor.mjs', 'scripts/local-transcription.py'].includes(original.path)) continue;
     const included = packaged.get(original.path);
     if (!included || included.type !== original.type || included.sha256 !== original.sha256 || included.target !== original.target)
       throw new Error(`Packaged source differs from manifest: ${original.path}`);

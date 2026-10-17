@@ -8,6 +8,7 @@ import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
 import { DoctorNotificationSettings } from "./doctor-notifications";
 import { MessageChannelSettings } from "./message-channels";
+import { KnowledgeTranscriptionSettings } from "./knowledge-transcription-settings";
 
 const CHANNEL_SECTIONS = [
   ["channels", "私聊助手"],
@@ -22,6 +23,7 @@ const PERSONAL_SECTIONS = [
 ];
 
 function settingsGroup(section) {
+  if (section === "transcription") return "connections";
   if (section === "plugins" || CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
   return section;
@@ -142,6 +144,8 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {window.omwDesktop && section === "desktop" && <DesktopAppPanel desktop={window.omwDesktop} />}
         {section === "general" && <section><h2>模型与运行</h2><p>{config?.modelConfigured ? `当前模型：${config.provider} · ${config.model}` : "尚未配置模型"}</p><div className="toolbar-actions"><button onClick={onModel}>选择模型</button></div></section>}
         {section === "general" && medicalEnabled(config) && <section><h2>工作台显示</h2><label><input type="checkbox" checked={!config.demoEntryHidden} disabled={demoPreferenceBusy} onChange={event => onDemoEntryHiddenChange(!event.target.checked)} /> 显示示例体验入口</label><p>在侧栏首位和首页显示示例入口。隐藏入口会保留已有示例资料。</p></section>}
+        {group === "connections" && medicalEnabled(config) && <SettingsSubnav label="工具与服务分类" items={[["connections","项目工具"],["transcription","音视频转写"]]} section={section} onSelect={setSection}/>}
+        {section === "transcription" && medicalEnabled(config) && <KnowledgeTranscriptionSettings/>}
         {section === "connections" && <section>
           <h2>工具与服务</h2><p>选择项目可使用的工具与服务。访问范围和授权按项目保存。</p>
           {error && <div role="alert"><p>{error}</p><button onClick={() => setReload(v => v + 1)}>重新加载设置</button></div>}

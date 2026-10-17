@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./agent-runtime";
+import { transcriptionSettingsUrl } from "./knowledge-transcription-settings";
 export const timeLabel = (value) =>
   [
     Math.floor(value / 3600),
@@ -8,8 +9,18 @@ export const timeLabel = (value) =>
   ]
     .map((n) => String(n).padStart(2, "0"))
     .join(":");
-export function KnowledgeServices({ data }) {
-  return <details className="kw-section"><summary>音视频转写</summary><p>{data.transcriptionReady ? '转写服务已连接，上传音视频后即可使用。' : '尚无可用转写连接。此服务暂未提供快捷授权，可以先导入音视频对应的文字稿。'}</p></details>;
+export function KnowledgeServices({ data, collection }) {
+  return (
+    <details className="kw-section">
+      <summary>音视频转写</summary>
+      <p>
+        {data.transcriptionReady
+          ? "已保存转写连接，实际识别结果以导入任务为准。"
+          : "尚未配置转写连接。音视频原件会保留，可配置服务或在未完成任务中补充文字稿后继续。"}
+      </p>
+      <a href={transcriptionSettingsUrl(collection)}>前往转写设置</a>
+    </details>
+  );
 }
 export { KnowledgeMap } from "./knowledge-map";
 export function KnowledgeReading({ doc, highlight }) {
@@ -21,6 +32,7 @@ export function KnowledgeReading({ doc, highlight }) {
     let alive = true;
     setDetail(null);
     setPlayback(null);
+    setError("");
     api(`/api/knowledge/${doc.id}/organization`)
       .then((v) => {
         if (alive) setDetail(v);
@@ -31,7 +43,7 @@ export function KnowledgeReading({ doc, highlight }) {
     return () => {
       alive = false;
     };
-  }, [doc.id]);
+  }, [doc.id, doc.sha256]);
   const locator = detail?.locators.find(
     (l) =>
       l.startLine <= (highlight?.startLine || 1) &&
@@ -48,8 +60,15 @@ export function KnowledgeReading({ doc, highlight }) {
   return (
     <div className="knowledge-reading-extra">
       {error && <p role="alert">{error}</p>}
+      {detail?.textCorrected && (
+        <p role="status">正文已修正，旧时间定位已失效。请对照原文件核对。</p>
+      )}
       {detail?.job?.mediaInfo?.hasVideo && (
-        <p className="muted">视频画面每 30 秒抽样，未覆盖全部画面。</p>
+        <p className="muted">
+          {detail.job.suppliedTranscript
+            ? "本文使用医生补充的文字稿，未逐帧核对视频内容。"
+            : "视频画面每 30 秒抽样，未覆盖全部画面。"}
+        </p>
       )}
       {(detail?.sourceJob || detail?.job)?.hasOriginal && !playback && (
         <button
@@ -95,7 +114,7 @@ export function KnowledgeReading({ doc, highlight }) {
             <p>
               {Number.isFinite(locator?.start)
                 ? `原文对应 ${timeLabel(locator.start)}${locator.timing === "chunk" ? " 起的音频分段（非句子精确时间）" : ""}`
-                : "可按下方时间标记查找对应内容"}
+                : "本文没有经过核验的时间定位，请对照原音频核对内容。"}
             </p>
           </div>
         ) : (

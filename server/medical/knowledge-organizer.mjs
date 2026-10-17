@@ -24,6 +24,7 @@ import {
   extractFrame,
   transcribe,
   sourceLines,
+  subtitles,
 } from "./knowledge-media.mjs";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const skill = readFileSync(
@@ -277,6 +278,7 @@ export class KnowledgeOrganizer {
       prepared: _prepared,
       sourcePath: _path,
       transcriptionIdentity: _identity,
+      transcriptReceipt: _receipt,
       ...value
     } = job;
     return {
@@ -285,7 +287,7 @@ export class KnowledgeOrganizer {
       coverage: job.docId ? this.library.docRow(job.docId).coverage : job.coverage,
       indexing: job.docId ? this.library.docRow(job.docId).indexing : null,
       transcriptSegments:
-        job.parts?.filter((p) => p.kind === "speech").length || 0,
+        job.parts?.filter((p) => p.kind === "speech" || p.provenance === "user-supplied-transcript").length || 0,
     };
   }
   list(collection) {
@@ -299,8 +301,10 @@ export class KnowledgeOrganizer {
       modelReady: providerConfigured(this.getProvider()),
       mediaReady: mediaAvailable(),
       transcriptionReady: Boolean(cfg?.model),
+      transcriptionRevision: hash(JSON.stringify(cfg || null)),
       transcription: cfg
         ? {
+            provider: cfg.provider,
             model: cfg.model,
             baseUrl: cfg.baseUrl,
             hasKey: Boolean(cfg.apiKey),
@@ -493,8 +497,41 @@ export class KnowledgeOrganizer {
       "原知识库已删除",
       404,
     );
+    check(!job.textCorrected || !job.docId || job.prepared?.text === this.library.docRow(job.docId).text,
+      "KNOWLEDGE_STALE", "正文已修订，请从资料重新生成图谱", 409);
     if (job.docId && this.library.docRow(job.docId).indexing?.status !== "ready") this.library.queueIndex(job.docId);
     this.write({ ...job, status: "queued", error: "", stage: "等待继续整理" });
+    this.kick();
+    return this.public(this.get(id));
+  }
+  supplyTranscript(id, input = {}) {
+    check(input.externalConsent === true, "CONSENT_REQUIRED", "请确认使用这份文字稿建立检索索引，并按任务设置生成图谱", 412);
+    check(typeof input.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId), "INVALID_INPUT", "补充文字稿请求编号无效");
+    check(typeof input.text === "string" && input.text.trim() && input.text.length <= 1000000 && !input.text.includes("\u0000"), "INVALID_INPUT", "请提供 100 万字符以内的完整文字稿");
+    check(["text", "srt", "vtt"].includes(input.format), "INVALID_INPUT", "请选择文字稿或字幕格式");
+    const fingerprint = hash(JSON.stringify([input.format, input.text.trim()]));
+    const job = this.get(id);
+    if (job.transcriptReceipt?.requestId === input.requestId) {
+      check(job.transcriptReceipt.fingerprint === fingerprint, "TRANSCRIPT_CONFLICT", "同一提交的文字稿内容发生变化，请重新核对", 409);
+      return { ...this.public(job), replayed: true };
+    }
+    check(!this.active.has(id) && !["queued", "running", "completed"].includes(job.status) && !job.prepared && !job.docId && !job.transcriptReceipt, "JOB_STATE", "任务已在处理或已有文字稿，请刷新查看；不会覆盖已保存内容", 409);
+    check(input.expectedUpdatedAt === job.updatedAt, "TRANSCRIPT_CONFLICT", "任务状态已变化，请刷新后核对再提交", 409);
+    check(MEDIA_EXTENSIONS.has(extname(job.fileName).toLowerCase()), "INVALID_INPUT", "此入口仅用于音视频原件");
+    check(this.library.collections().some(c => c.name === job.collection), "NOT_FOUND", "原知识库已删除", 404);
+    let parts;
+    if (input.format === "text") parts = [{text:input.text.trim(),kind:"transcript"}];
+    else {
+      parts = subtitles(input.text);
+      const cueCount = input.text.split(/\r?\n/).filter(line => line.includes("-->")).length;
+      check(parts.length && parts.length === cueCount && parts.every(part => part.start >= 0 && part.end > part.start && (!job.mediaInfo?.duration || part.end <= job.mediaInfo.duration + 2)), "TRANSCRIPT_TIME", "字幕时间或内容无效，或超出原件时长；请核对后再提交");
+    }
+    parts = parts.map(part => ({...part, provenance:"user-supplied-transcript"}));
+    // A complete supplied transcript replaces partial speech recognition. Keep
+    // the original and any sampled frames, without pretending to transcribe it.
+    parts.push(...(job.parts || []).filter(part => part.kind === "frame"));
+    const prepared = sourceLines(parts);
+    this.write({...job,parts,prepared,status:"queued",error:"",stage:"已保存补充文字稿，等待继续整理",suppliedTranscript:{format:input.format,providedAt:new Date().toISOString()},transcriptReceipt:{requestId:input.requestId,fingerprint}});
     this.kick();
     return this.public(this.get(id));
   }
@@ -683,7 +720,7 @@ export class KnowledgeOrganizer {
           kind: knowledgeProfile(job.sourceKind).kind,
           sourceKind: job.sourceKind,
           coverage: sourceCoverage(job.prepared.text, {
-            trusted: true, originalRetained: Boolean(job.sourcePath), sampled: job.parts.some(p => p.kind === "frame"),
+            trusted: true, originalRetained: Boolean(job.sourcePath), sampled: job.parts.some(p => p.kind === "frame") || Boolean(job.suppliedTranscript && job.mediaInfo?.hasVideo),
             extraction: job.parts.find(p => p.extraction)?.extraction || (job.parts.some(p => p.page) ? {
               pageCount: Math.max(...job.parts.map(p => p.totalPages || p.page || 0)),
               emptyPages: job.parts.filter(p => p.empty).map(p => p.page),
@@ -966,15 +1003,16 @@ export class KnowledgeOrganizer {
     return {sheets:[...sheets.values()]};
   }
   detail(docId) {
-    this.library.docRow(docId);
+    const doc = this.library.docRow(docId);
     const jobs = this.listRaw().filter(j => j.docId === docId);
     const job = jobs[0];
     const sourceJob = jobs.find(j=>j.sourcePath);
     return {
-      analysis: this.analysis(docId),
+      analysis: this.analysis(docId)?.sourceHash === doc.sha256 ? this.analysis(docId) : null,
       job: job ? this.public(job) : null,
       sourceJob: sourceJob ? this.public(sourceJob) : null,
-      locators: job?.prepared?.locators?.length ? job.prepared.locators : sourceJob?.prepared?.locators || [],
+      locators: jobs.find(j => j.prepared?.text === doc.text && j.prepared.locators?.length)?.prepared.locators || [],
+      textCorrected: Boolean(doc.textCorrected || (sourceJob?.prepared?.text && sourceJob.prepared.text !== doc.text)),
     };
   }
   graphDocuments(collection) {
@@ -1058,6 +1096,19 @@ export class KnowledgeOrganizer {
       "此库有正在整理的资料，请先停止整理再删除",
       409,
     );
+  }
+  assertTextEditable(id) {
+    check(!this.listRaw().some(job => job.docId === id && (["queued", "running"].includes(job.status) || this.active.has(job.id))),
+      "KNOWLEDGE_BUSY", "资料正在整理，请先停止整理，完成后再修订正文", 409);
+  }
+  invalidateTextAnalysis(id) {
+    this.assertTextEditable(id);
+    this.store.db.prepare("DELETE FROM knowledge_analysis WHERE doc_id=?").run(id);
+    for (const job of this.listRaw().filter(job => job.docId === id)) {
+      this.write({ ...job, previousAnalysis: null, textCorrected: true,
+        analysisInvalidatedAt: new Date().toISOString(),
+        ...(!terminal.has(job.status) ? { status: "cancelled", stage: "正文已修订，请重新生成图谱" } : {}) });
+    }
   }
   moveDocument(id, collection) {
     for (const job of this.listRaw().filter((j) => j.docId === id))

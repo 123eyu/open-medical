@@ -242,7 +242,7 @@ export class CareEngine {
         const edu = await this.guidelines.search({ query, collection: EDUCATION_COLLECTION, externalOnly: true, limit: 2 });
         for (const hit of edu.hits || []) hits.push({ ...hit, docTitle: `[患教素材] ${hit.docTitle}` });
       } catch { /* 素材检索失败回退普通知识库 */ }
-      const found = await this.guidelines.search({ query, limit: 4 });
+      const found = await this.guidelines.search({ query, externalOnly: true, limit: 4 });
       hits.push(...(found.hits || []));
       return hits.map((hit, i) => ({ id: `K${i + 1}`, title: hit.docTitle, snippet: (hit.matches || []).map((m) => m.text).join("\n") || hit.snippet, docId: hit.docId, startLine: hit.startLine, endLine: hit.endLine }));
     } catch { return []; }

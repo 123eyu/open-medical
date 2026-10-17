@@ -244,7 +244,7 @@ export function KnowledgeImport({
         </fieldset>
       </form>
       {files.some((file) => /\.(mp3|m4a|wav|mp4|mov)$/i.test(file.name)) &&
-        !progress && <KnowledgeServices data={capabilities} />}
+        !progress && <KnowledgeServices data={capabilities} collection={collection} />}
     </Modal>
   );
 }
