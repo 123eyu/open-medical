@@ -199,3 +199,9 @@ ul.ext-builtin-skills p { margin:4px 0 0; }
 
 .followup-merged-title { margin:22px 0 8px; font-size:15px; border-top:1px solid var(--border); padding-top:14px; }
 .followup-auto-collapsed summary { color:var(--muted); cursor:pointer; margin-top:18px; }
+
+.appointment-form > fieldset { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:10px 14px; border:0; padding:0; margin:0; min-width:0; }
+.appointment-form select { min-width:0; padding:7px 9px; font:inherit; border:1px solid var(--border); border-radius:6px; background:#fff; }
+.appointment-draft { display:grid; gap:12px; padding:16px; margin-top:16px; border:1px solid var(--border); border-radius:10px; }
+.appointment-draft label { display:grid; gap:6px; }
+.appointment-draft textarea { width:100%; min-width:0; box-sizing:border-box; padding:10px; font:inherit; border:1px solid var(--border); border-radius:6px; }

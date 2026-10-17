@@ -1,3 +1,4 @@
+import { messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Bell, Contact, Inbox, Loader2, MessageSquare, RefreshCw, Send, Settings2, Stethoscope, UserCog } from "lucide-react";
 import { api } from "./agent-runtime";
@@ -185,10 +186,10 @@ function MessageList({ messages, patients, busy, onProcess, onMark, onAssign, on
   return <ul className="care-list compact">{messages.map((m) => {
     const s = m.state || {};
     return <li key={m.id} className={`care-card level-${s.level || "routine"}`}>
-      <header><PatientLink id={m.patientId} name={m.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{m.direction === "out" ? "发出" : "收到"} · {m.channel}</span>
+      <header><PatientLink id={m.patientId} name={m.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{m.direction === "out" ? "发出" : "收到"} · {messageSpeakerLabel(m)} · {m.channel}</span>
         {s.level && s.level !== "routine" && <span className={`care-level ${s.level}`}>{LEVEL[s.level]}</span>}
         {s.category && <span className="care-tag">{CATEGORY[s.category] || s.category}</span>}
-        <span className="care-status">{STATUS[s.status] || s.status || "—"}</span><time>{fmt(m.time)}</time></header>
+        <span className="care-status">{STATUS[s.status] || s.status || "—"}</span><time>{m.timeUnknown ? messageTimeLabel(m) : fmt(m.time)}</time></header>
       <p className="care-text">{m.text}</p>
       {m.attachments?.length > 0 && <p className="care-sources">附件：{m.attachments.map((f, i) => <span key={i}>{f.name || f.type}</span>)}</p>}
       {s.reasons?.length > 0 && <p className="care-hint">{s.reasons.join("；")}</p>}

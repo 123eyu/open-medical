@@ -75,14 +75,17 @@ export class PatientSchedule {
   update(id, input = {}) {
     return sqliteTransaction(this.db, () => {
       const current = this.row(id);
+      check(!this.patients.row(current.patientId).archived, "PATIENT_ARCHIVED", "已归档患者不能修改复诊预约", 409);
+      if (input.expectedRevision !== undefined) check(input.expectedRevision === (current.revision || 0), "REVISION_CONFLICT", "预约已变化，请重新打开后核对；当前输入已保留", 409);
       const status = input.status ?? current.status;
+      if (current.status !== "scheduled" && status !== current.status) check(typeof input.correctionReason === "string" && input.correctionReason.trim(), "INVALID_INPUT", "更正到诊结果须填写原因");
       check(APPOINTMENT_STATUS[status], "INVALID_INPUT", "预约状态须为 scheduled/attended/missed/cancelled");
       const value = this.fields(input, current);
       if (status === "scheduled" && value.date !== current.date) check(value.date >= this.today(), "INVALID_INPUT", "复诊日期不能早于今天");
       if (["attended", "missed"].includes(status) && status !== current.status) check(value.date <= this.today(), "INVALID_INPUT", "复诊日期还没到，不能登记到诊结果");
       const at = new Date(this.now()).toISOString();
-      const item = { ...current, ...value, status, note: input.note !== undefined ? (input.note ? string(input.note, "备注", 500) : "") : current.note, updatedAt: at,
-        history: [...current.history, { status: current.status, date: current.date, time: current.time, at }].slice(-20) };
+      const item = { ...current, ...value, status, revision: (current.revision || 0) + 1, note: input.note !== undefined ? (input.note ? string(input.note, "备注", 500) : "") : current.note, updatedAt: at,
+        history: [...current.history, { status: current.status, date: current.date, time: current.time, place: current.place, reason: current.reason, note: current.note, correctionReason: input.correctionReason ? string(input.correctionReason, "更正原因", 500) : "", at }] };
       this.db.prepare("UPDATE appointments SET date=?, status=?, data=? WHERE id=?").run(item.date, item.status, JSON.stringify(item), item.id);
       this.store.audit(null, "appointment.updated", { patientId: item.patientId, appointmentId: item.id, status: item.status });
       return item;

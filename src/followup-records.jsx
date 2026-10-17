@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { patientOptionLabel } from "./patient-labels";
+import { useClinicalDraft } from "./clinical-drafts";
 import { api } from "./agent-runtime";
 
 const outcomeLabels = {
@@ -26,8 +27,8 @@ export function FollowupRecords({
   const generation = useRef(0);
   const [addendum, setAddendum] = useState(null);
   const [addendumNote, setAddendumNote] = useState("");
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({});
+  const [editing, setEditing] = useClinicalDraft(patientId || "global", "followupEditing", null);
+  const [form, setForm] = useClinicalDraft(patientId || "global", "followupForm", {});
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState("");
@@ -93,6 +94,7 @@ export function FollowupRecords({
         "POST",
         {
           ...form,
+          ...(form.status !== "completed" ? { clinical: {}, checkedItems: [] } : {}),
           contactedAt: form.contactedAt
             ? new Date(form.contactedAt).toISOString()
             : undefined,
@@ -102,6 +104,7 @@ export function FollowupRecords({
         },
       );
       setEditing(null);
+      setForm({});
       setNotice(
         "随访结果已保存，可在随访记录中查看。" +
           (form.nextDueAt ? "下次提醒已安排。" : ""),
@@ -123,7 +126,7 @@ export function FollowupRecords({
       requestId: crypto.randomUUID(),
       title: "主动联系记录",
       contactedAt: "",
-      status: "completed",
+      status: record.attempt ? "" : "completed",
       note: "",
       contactMethod: "unspecified",
       clinical: { symptoms: "", medications: "", results: "", plan: "" },
@@ -264,6 +267,7 @@ export function FollowupRecords({
                   ? { campaign: "自动随访收集", chat: "聊天随访归档" }[record.source?.kind] || "主动联系"
                   : `计划时间：${date(record.dueAt)}`}
               </small>
+              {record.attempt && <div className="followup-addendum"><b>自动尝试（原始记录）</b><p>{record.attempt.note}</p><small>尝试时间：{date(record.attempt.contactedAt)} · 记录时间：{date(record.attempt.recordedAt)}</small></div>}
               {record.outcome ? (
                 <>
                   <strong>
@@ -272,6 +276,7 @@ export function FollowupRecords({
                       record.outcome.contactedAt || record.outcome.recordedAt,
                     )}
                   </strong>
+                  <small>录入时间：{date(record.outcome.recordedAt)}</small>
                   <p className="followup-note">{record.outcome.note}{record.outcome.noRetryReason ? `；未另行安排：${record.outcome.noRetryReason}` : ""}</p>
                   {record.outcome.contactMethod &&
                     record.outcome.contactMethod !== "unspecified" && (
@@ -505,25 +510,17 @@ export function FollowupRecords({
               联系结果
               <select
                 aria-label="联系结果"
+                required
                 value={form.status}
                 onChange={(e) =>
                   setForm({
                     ...form,
                     status: e.target.value,
-                    ...(e.target.value !== "completed"
-                      ? {
-                          checkedItems: [],
-                          clinical: {
-                            symptoms: "",
-                            medications: "",
-                            results: "",
-                            plan: "",
-                          },
-                        }
-                      : {}),
+
                   })
                 }
               >
+                <option value="" disabled>请选择实际联系结果</option>
                 {Object.entries(outcomeLabels).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -643,7 +640,7 @@ export function FollowupRecords({
               <button
                 className="secondary"
                 type="button"
-                onClick={() => setEditing(null)}
+                onClick={() => { setEditing(null); setForm({}); }}
               >
                 取消
               </button>

@@ -1,3 +1,4 @@
+import { parsePastedMessages } from "../shared/message-import.mjs";
 import { CampaignPanel } from "./care-inbox";
 import { ChatFollowupsPanel } from "./chat-followups";
 import { WeComPanel } from "./wecom-panel";
@@ -76,28 +77,7 @@ const proposalDetail = (type, payload = {}) => {
     parts.push(`就诊 ${payload.visits.length} 次待录入`);
   return parts.join(" · ");
 };
-export function parsePastedMessages(raw) {
-  return raw
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\s*[|｜]\s*/);
-      let time = new Date().toISOString(),
-        direction = "in",
-        text = line;
-      if (parts.length >= 3) {
-        const parsed = Date.parse(parts[0]);
-        if (Number.isFinite(parsed)) time = new Date(parsed).toISOString();
-        direction = /医生|out/i.test(parts[1]) ? "out" : "in";
-        text = parts.slice(2).join(" | ");
-      } else if (parts.length === 2) {
-        direction = /医生|out/i.test(parts[0]) ? "out" : "in";
-        text = parts.slice(1).join(" | ");
-      }
-      return { direction, time, text };
-    });
-}
+export { parsePastedMessages };
 export function PatientsView({
   config,
   onOpenWorkspace,
@@ -298,8 +278,8 @@ export function PatientsView({
         messages: parsed,
       });
       setPaste("");
-      setNotice(`已导入 ${result.stored} 条消息。`);
       await refreshPatient();
+      setNotice(`已导入 ${result.stored} 条消息。${result.duplicates ? `跳过 ${result.duplicates} 条重复消息。` : ""}`);
     } catch (err) {
       setError(err.message);
     }
@@ -653,7 +633,7 @@ export function PatientsView({
           </nav>}
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} onChanged={onChanged} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
-          {tab === "overview" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
+          {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
           {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace}/></div>}
           {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "overview" && (
@@ -806,12 +786,12 @@ export function PatientsView({
                 {messages.map((m) => (
                   <div className="msg-row" key={m.id}>
                     <span className={`msg-dir ${m.direction}`}>
-                      {m.direction === "in" ? "患" : "医"}
+                      {{ patient: "患者", doctor: "医生", family: "家属", unknown: "身份待核对" }[m.speaker] || (m.direction === "in" ? "患" : "医")}
                     </span>
                     <span>
                       {m.text}
                       <small>
-                        {fmtDate(m.time)} · {m.channel}
+                        {m.timeUnknown ? `时间待核对（原文：${m.rawTime || "未提供"}；导入于 ${fmtDate(m.collectedAt)}）` : fmtDate(m.time)} · {m.channel}
                         {m.processed ? " · 已整理" : ""}
                       </small>
                     </span>
@@ -893,7 +873,7 @@ export function PatientsView({
                       <button
                         className="secondary"
                         onClick={async () => {
-                          await api(
+                          try { setError(""); await api(
                             `/api/patients/${detail.id}/followups/${job.id}`,
                             "PATCH",
                             {
@@ -902,7 +882,7 @@ export function PatientsView({
                                 job.status === "active" ? "paused" : "active",
                             },
                           );
-                          await refreshPatient();
+                          await refreshPatient(); } catch (err) { setError(err.message); }
                         }}
                       >
                         {job.status === "active" ? "暂停" : "恢复"}
@@ -911,12 +891,13 @@ export function PatientsView({
                     <button
                       className="secondary"
                       onClick={async () => {
-                        await api(
+                        if (!window.confirm(`删除 ${detail.name} 的「${job.name}」随访计划？`)) return;
+                        try { setError(""); await api(
                           `/api/patients/${detail.id}/followups/${job.id}`,
                           "DELETE",
                           { revision: job.revision },
                         );
-                        await refreshPatient();
+                        await refreshPatient(); } catch (err) { setError(err.message); }
                       }}
                     >
                       删除
@@ -1174,6 +1155,8 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
     e.preventDefault();
     setSaving(true);
     setError("");
+    try {
+    if (!form.firstDueAt || !Number.isFinite(Date.parse(form.firstDueAt))) throw new Error("请填写有效的首次随访时间");
     const payload = {
       name: form.name,
       intervalDays: Number(form.intervalDays),
@@ -1183,7 +1166,6 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
         .map((s) => s.trim())
         .filter(Boolean),
     };
-    try {
       if (editing) {
         await api(
           `/api/patients/${patientId}/followups/${job.id}`,
@@ -1231,6 +1213,7 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
             首次随访时间
             <input
               type="datetime-local"
+              required
               value={form.firstDueAt}
               onChange={set("firstDueAt")}
             />

@@ -1,3 +1,4 @@
+import { messageProvenance } from "../../shared/message-provenance.mjs";
 import { createHash } from "node:crypto";
 
 const newest = (a, b) => String(b.date || b.at || "").localeCompare(String(a.date || a.at || ""));
@@ -33,8 +34,8 @@ export class PatientBrief {
     }).sort(newest);
     const outcomes = db.prepare("SELECT id,data FROM reminders WHERE patient_id=? AND json_extract(data,'$.outcome') IS NOT NULL ORDER BY json_extract(data,'$.outcome.recordedAt') DESC LIMIT 6").all(patientId)
       .map((r) => { const data = JSON.parse(r.data); return { id: r.id, title: data.title, ...data.outcome, addenda: (data.outcome.addenda || []).slice(-3), addendumCount: data.outcome.addenda?.length || 0, source: `随访记录 ${r.id}` }; });
-    const messages = db.prepare("SELECT id,time,data FROM patient_messages WHERE patient_id=? AND processed=0 ORDER BY time DESC LIMIT 3").all(patientId)
-      .map((r) => ({ id: r.id, at: r.time, text: JSON.parse(r.data).text, source: `患者消息 ${r.id}` }));
+    const messages = db.prepare("SELECT id,direction,time,data FROM patient_messages WHERE patient_id=? AND processed=0 ORDER BY time DESC LIMIT 3").all(patientId)
+      .map((r) => ({ id: r.id, at: r.time, text: JSON.parse(r.data).text, ...messageProvenance(JSON.parse(r.data), r.direction), source: `患者消息 ${r.id}` }));
     const careTaskCount = db.prepare("SELECT COUNT(*) n FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled')").get(patientId).n;
     const careTasks = db.prepare("SELECT data FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled') ORDER BY due_at LIMIT 5").all(patientId)
       .map((row) => { const task = JSON.parse(row.data); return { id: task.id, title: task.title, status: task.status, dueAt: task.dueAt, note: task.note, resultSource: task.resultSource, reviewNote: task.reviewNote, source: `待跟进事项 ${task.id}` }; });

@@ -1,3 +1,4 @@
+import { messageProvenance } from "../shared/message-provenance.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { AppError, check, identifier, string } from "./errors.mjs";
@@ -484,6 +485,7 @@ export class FollowUpManager {
         channel: row.channel,
         time: row.time,
         text: JSON.parse(row.data).text,
+        ...messageProvenance(JSON.parse(row.data), row.direction),
       }));
   }
   createReminder(patient, followUp, detail) {

@@ -1,3 +1,4 @@
+import { messageProvenance, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
 import { dashboardLabLayout } from "../shared/patient-dashboard.mjs";
 import { ReviewLog } from "./medical/review-log.mjs";
 import { sqliteTransaction } from "./sqlite-transaction.mjs";
@@ -379,13 +380,14 @@ export class PatientRegistry {
     );
     const text = string(raw.text, "消息内容", 5000);
     check(text.trim().length > 0, "INVALID_INPUT", "消息内容不能为空");
+    const timeUnknown = raw.timeUnknown === true;
     let time = raw.time === undefined ? new Date().toISOString() : raw.time;
     if (typeof time === "number" && Number.isFinite(time))
       time = new Date(time).toISOString();
     check(
-      typeof time === "string" &&
+      timeUnknown || (typeof time === "string" &&
         Number.isFinite(Date.parse(time)) &&
-        Date.parse(time) <= Date.now() + 86400000,
+        Date.parse(time) <= Date.now() + 86400000),
       "INVALID_INPUT",
       "消息时间无效",
     );
@@ -403,7 +405,12 @@ export class PatientRegistry {
           ? null
           : string(raw.patientHint, "patientHint", 80),
       direction: raw.direction,
-      time: new Date(time).toISOString(),
+      time: timeUnknown ? "" : new Date(time).toISOString(),
+      timeUnknown,
+      rawTime: raw.rawTime ? string(raw.rawTime, "原始时间", 200) : "",
+      speaker: optionalChoice(raw.speaker, ["doctor", "patient", "family", "unknown"]),
+      rawSpeaker: raw.rawSpeaker ? string(raw.rawSpeaker, "原始发言人", 200) : "",
+      collectedAt: new Date().toISOString(),
       text,
     };
   }
@@ -418,6 +425,7 @@ export class PatientRegistry {
     let stored = 0,
       duplicates = 0,
       unassigned = 0;
+    return sqliteTransaction(this.store.db, () => {
     for (const message of parsed) {
       if (
         message.externalId &&
@@ -433,11 +441,15 @@ export class PatientRegistry {
         : message.patientHint
           ? this.matchPatient(message.patientHint)
           : null;
+      if (fallbackChannel === "manual" && patient && this.store.db.prepare(
+        "SELECT id FROM patient_messages WHERE patient_id=? AND channel=? AND direction=? AND time=? AND json_extract(data,'$.text')=? AND COALESCE(json_extract(data,'$.speaker'),'')=? AND COALESCE(json_extract(data,'$.rawTime'),'')=? AND COALESCE(json_extract(data,'$.rawSpeaker'),'')=?"
+      ).get(patient.id, message.channel, message.direction, message.time, message.text, message.speaker || "", message.rawTime, message.rawSpeaker)) { duplicates++; continue; }
       if (!patient) unassigned++;
       this.insertMessage(patient?.id || null, message);
       stored++;
     }
     return { stored, duplicates, unassigned };
+    });
   }
   insertMessage(patientId, message) {
     this.store.db
@@ -453,6 +465,8 @@ export class PatientRegistry {
         JSON.stringify({
           text: message.text,
           patientHint: message.patientHint,
+          speaker: message.speaker, rawSpeaker: message.rawSpeaker,
+          timeUnknown: message.timeUnknown, rawTime: message.rawTime, collectedAt: message.collectedAt,
         }),
       );
   }
@@ -478,7 +492,8 @@ export class PatientRegistry {
         time: row.time,
         externalId: row.external_id,
         processed: Boolean(row.processed),
-        text: JSON.parse(row.data).text,
+        ...JSON.parse(row.data),
+        ...messageProvenance(JSON.parse(row.data), row.direction),
       }));
   }
   unassigned({ limit = 200 } = {}) {
@@ -552,8 +567,9 @@ export function selectDigestMessages(pending) {
   const messages = [];
   let budget = 12000;
   for (const message of pending.slice(0, 50)) {
-    if (message.text.length > budget) break;
-    budget -= message.text.length;
+    const size = message.text.length + JSON.stringify(messageProvenance(message, message.direction)).length + 80;
+    if (size > budget) break;
+    budget -= size;
     messages.push(message);
   }
   check(
@@ -570,7 +586,7 @@ export function composeDigest(messages, patientName = "患者") {
     .sort((a, b) => a.time.localeCompare(b.time))
     .map(
       (m) =>
-        `[${m.time}] ${m.direction === "out" ? "医生侧发出" : "患者发来"}（${m.channel}）：${m.text}`,
+        `[${messageTimeLabel(m)}] ${messageSpeakerLabel(m)}${m.rawSpeaker ? `（原始发言人：${m.rawSpeaker}）` : ""}（${m.channel}）：${m.text}`,
     );
   return `请把以下${patientName}的消息整理为病历记录补充。按主题归纳要点并保留发生时间；无法从消息中确认的内容明确标注"待确认"；不要给出治疗、剂量或用药建议。整理完成后在本次回复中概括新增内容与实际缺失或冲突，用户可直接回复补充或更正。\n\n${lines.join("\n")}`;
 }

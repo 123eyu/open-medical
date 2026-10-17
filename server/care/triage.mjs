@@ -1,3 +1,4 @@
+import { messageSpeakerLabel, messageTimeLabel } from "../../shared/message-provenance.mjs";
 import { AppError, check } from "../errors.mjs";
 
 export const CATEGORIES = Object.freeze([
@@ -39,7 +40,7 @@ export function compactBrief(brief) {
 export function triageMessages({ brief, thread, knowledge, campaignQuestions }) {
   const data = {
     患者简报: compactBrief(brief),
-    最近对话: thread.map((m) => ({ 方向: m.direction === "in" ? "患者" : "我方", 时间: m.time, 内容: clip(m.text, 800) })),
+    最近对话: thread.map((m) => ({ 方向: m.direction === "in" ? "收到" : "发出", 发言人: messageSpeakerLabel(m), 原始发言人: m.rawSpeaker || "", 时间: messageTimeLabel(m), 内容: clip(m.text, 800) })),
     知识库: knowledge.map((k) => ({ 编号: k.id, 标题: k.title, 片段: clip(k.snippet, 500) })),
     ...(campaignQuestions?.length ? { 当前随访问题: campaignQuestions } : {}),
   };
@@ -85,7 +86,7 @@ needsDoctor：出现新发/加重症状、不良反应、自行停药、检查�
 export async function extractFollowup(provider, { questions, text, replies }, signal) {
   const result = await provider.complete([
     { role: "system", content: EXTRACT },
-    { role: "user", content: JSON.stringify({ 随访内容: text, 随访问题: questions, 患者回复: replies.map((r) => ({ 时间: r.time, 内容: clip(r.text, 1500) })) }) },
+    { role: "user", content: JSON.stringify({ 随访内容: text, 随访问题: questions, 患者回复: replies.map((r) => ({ 发言人: messageSpeakerLabel(r), 原始发言人: r.rawSpeaker || "", 时间: messageTimeLabel(r), 内容: clip(r.text, 1500) })) }) },
   ], [], { signal: AbortSignal.any([signal || new AbortController().signal, AbortSignal.timeout(90000)]), maxTokens: 1024 });
   const raw = parseJsonObject(result?.message?.content);
   return {

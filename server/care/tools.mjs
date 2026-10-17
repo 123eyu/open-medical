@@ -1,3 +1,4 @@
+import { messageProvenance } from "../../shared/message-provenance.mjs";
 import { AUTO_CATEGORIES } from "./triage.mjs";
 
 // Chat tools for patient care. Reads and low-risk bookkeeping run
@@ -32,7 +33,7 @@ export function careTools(getCare, pending) {
     if (!d?.c.client) throw new Error("尚未配置企业微信客户联系，请在「患者消息 → 设置」或接入向导第 4 步填写客户联系 Secret");
     return d;
   };
-  const summaryOf = (msg) => ({ id: msg.id, patientId: msg.patientId, patientName: msg.patientName, direction: msg.direction, time: msg.time, text: msg.text.slice(0, 500), attachments: msg.attachments.length, state: msg.state });
+  const summaryOf = (msg) => ({ id: msg.id, patientId: msg.patientId, patientName: msg.patientName, direction: msg.direction, time: msg.time, ...messageProvenance(msg, msg.direction), text: msg.text.slice(0, 500), attachments: msg.attachments.length, state: msg.state });
   const propose = (type, patientId, payload, summary) => ({
     ...pending.propose({ type, patientId, payload, summary }),
     note: "已生成待确认提案。请提醒医生在工作台右下角「待确认」面板核对后确认；确认前不会发送或生效。",

@@ -92,7 +92,7 @@ test("browser: agenda opens the patient's appointments; new results can be marke
   assert.equal(await page.locator(".agenda-item", { hasText: "待阅检验结果" }).count(), 0);
   if (shots) await page.screenshot({ path: `${shots}-agenda.png`, fullPage: true });
   await row.click();
-  await page.getByRole("region", { name: "复诊预约" }).getByText("复查血常规").waitFor();
+  await page.getByRole("region", { name: "复诊预约" }).getByRole("heading", { name: "复查血常规", exact: true }).waitFor();
   assert.deepEqual(errors, []);
   void p;
 });

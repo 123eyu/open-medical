@@ -1,3 +1,4 @@
+import { messageProvenance } from "../../shared/message-provenance.mjs";
 import { randomUUID } from "node:crypto";
 import { check, string, identifier } from "../errors.mjs";
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
@@ -217,6 +218,7 @@ export class CareEngine {
   messageView(row) {
     const data = JSON.parse(row.data);
     return { id: row.id, patientId: row.patient_id, patientName: this.patientName(row.patient_id), channel: row.channel, direction: row.direction, time: row.time,
+      ...messageProvenance(data, row.direction),
       text: data.text, attachments: data.attachments || [], sender: data.sender || null, kfExternalUserId: data.kfExternalUserId || null,
       state: row.s_status ? { status: row.s_status, level: row.level, category: row.category, reasons: JSON.parse(row.reasons || "[]"), replyId: row.reply_id, alertId: row.alert_id } : null };
   }
@@ -228,7 +230,7 @@ export class CareEngine {
   }
   thread(patientId, beforeId, limit = 12) {
     return this.db.prepare("SELECT id,direction,time,data FROM patient_messages WHERE patient_id=? AND id<=? ORDER BY time DESC, id DESC LIMIT ?")
-      .all(patientId, beforeId, limit).reverse().map((r) => ({ id: r.id, direction: r.direction, time: r.time, text: JSON.parse(r.data).text }));
+      .all(patientId, beforeId, limit).reverse().map((r) => ({ id: r.id, direction: r.direction, time: r.time, text: JSON.parse(r.data).text, ...messageProvenance(JSON.parse(r.data), r.direction) }));
   }
   async knowledge(text) {
     if (!this.guidelines) return [];
