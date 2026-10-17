@@ -66,6 +66,7 @@ try {
   await mkdir(join(target, "scripts"), { recursive: true });
   for (const script of [
     "workspace-cli.mjs",
+    "backup.mjs",
     "agent-daemon.mjs",
     "daemon-supervisor.mjs",
     "remote-coordinator.mjs",
