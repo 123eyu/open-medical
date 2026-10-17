@@ -19,6 +19,7 @@ const labels = {
 const fields = {
   identity: [
     ["name", "姓名", "text", true, 80],
+    ["patientNumber", "患者编号", "text", false, 40],
     ["gender", "性别", ["male:男", "female:女", "unknown:待补充"]],
     ["birthYear", "出生年", "number"],
     ["phone", "电话", "text", false, 20],
@@ -440,6 +441,7 @@ export function IntakeReview({ action, ref, onChange, onEditing, onEvidencePendi
       <section aria-label="身份信息" className="review-row">
         <p>
           <b>{payload.name}</b> · {statusText[payload.gender] || "性别待补充"}
+          {payload.patientNumber ? ` · 患者编号 ${payload.patientNumber}` : ""}
           {payload.birthYear ? ` · ${payload.birthYear} 年生` : ""}
           {payload.phone ? ` · ${payload.phone}` : ""}
         </p>

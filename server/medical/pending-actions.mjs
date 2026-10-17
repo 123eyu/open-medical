@@ -627,6 +627,7 @@ const diagnosisItemsDef = {
         "创建新患者的结构化档案提案。姓名优先使用用户明确指定的名称。用户已要求建档或纠正后执行且材料归属明确时，提交后在同一轮调用 proposal_confirm 完成，不再索要固定确认口令；仅预览或尚未授权保存时保留草稿。用户和材料都未提供姓名时才询问。排除其他患者时同步排除其临床事实，并用 sourceFileIds 指定保留的附件。",
         {
           name: { ...textDef, description: "优先使用用户指定姓名（可为昵称/化名），否则使用清晰材料姓名" },
+          patientNumber: { ...textDef, maxLength: 40, description: "材料或医生明确提供的病历号/患者编号，原样保留；未提供时不推测" },
           sourceFileIds: { type: "array", items: textDef, description: "本次纳入档案的附件 ID，必须属于本轮可用附件；排除其他人材料时必传，空数组表示不复制附件，省略则保留全部" },
           gender: { type: "string", enum: ["male", "female"] },
           birthYear: { type: "integer" },
