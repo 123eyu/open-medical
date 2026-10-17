@@ -10,7 +10,7 @@ import { assessmentQuestion } from "./medical/assessment-tools.mjs";
 // 患者页、随访、计划任务、消息摘要通过 dispatcher 对两类引擎透明。
 import { imageTextWithFallback, visionTranscriber } from "./core/image-text.mjs";
 import { assessOcrQuality } from "../shared/ocr-quality.mjs";
-import { autoClassifyMaterial, suggestDocumentDate, MATERIAL_CATEGORIES } from "../shared/material-classify.mjs";
+import { autoClassifyMaterial, suggestDocumentDate, isCalendarDate, MATERIAL_CATEGORIES } from "../shared/material-classify.mjs";
 import { sqliteTransaction } from "./sqlite-transaction.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
@@ -434,6 +434,7 @@ export class SessionBridge {
       if (!target.documentDate) {
         const date = suggestDocumentDate({ name: target.name, text: target.text });
         if (date) target.dateSuggestion = date;
+        else delete target.dateSuggestion;
       }
       prepared = target;
     });
@@ -516,7 +517,7 @@ export class SessionBridge {
     check(!this.service.active.has(id), "RUN_ACTIVE", "执行期间不能变更材料", 409);
     let prepared;
     this.service.store.update(id, (current) => {
-      const target = current.materials.find((item) => item.id === fileId);
+      const target = (current.materials || []).find((item) => item.id === fileId);
       check(target, "NOT_FOUND", "材料不存在", 404);
       if (input.category !== undefined) {
         check((input.category === "" || MATERIAL_CATEGORIES.includes(input.category)), "INVALID_INPUT", "资料类型无效");
@@ -528,9 +529,9 @@ export class SessionBridge {
           target.documentDate = "";
         } else {
           check(
-            /^\d{4}-\d{2}-\d{2}$/.test(input.documentDate) && Number.isFinite(Date.parse(input.documentDate)),
+            isCalendarDate(input.documentDate),
             "INVALID_INPUT",
-            "资料日期须为 YYYY-MM-DD",
+            "资料日期须为真实日历日期（YYYY-MM-DD）",
           );
           target.documentDate = input.documentDate;
         }

@@ -301,7 +301,7 @@ export function TaskDirectory({
     .filter(
       (x) =>
         (filter === "全部" || x.type === filter) &&
-        `${x.title} ${patients.find((p) => p.id === x.patientId)?.name || ""}`
+        `${x.title} ${patients.find((p) => p.id === x.patientId)?.name || ""} ${patients.find((p) => p.id === x.patientId)?.patientNumber || ""}`
           .toLowerCase()
           .includes(query.toLowerCase()),
     )
@@ -351,7 +351,7 @@ export function TaskDirectory({
               <small>
                 {x.type}
                 {x.patientId
-                  ? ` · ${patients.find((p) => p.id === x.patientId)?.name || "关联患者"}`
+                  ? ` · ${[patients.find((p) => p.id === x.patientId)?.name || "关联患者", patients.find((p) => p.id === x.patientId)?.patientNumber || x.patientId].join(" · ")}`
                   : ""}{" "}
                 · {date(x.updatedAt)}
               </small>

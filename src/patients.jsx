@@ -161,16 +161,8 @@ export function PatientsView({
   const filtered = patients
     .filter((p) => archiveFilter === "archived" ? p.archived : !p.archived)
     .filter((p) => !group || p.groups?.includes(group))
-    .filter(
-      (p) =>
-        !query ||
-        p.name.includes(query) ||
-        (p.patientNumber || "").includes(query) ||
-        p.id.includes(query) ||
-        (p.phone || "").includes(query) ||
-        (p.tags || []).some((t) => t.includes(query)) ||
-        (p.diagnosisSummary || "").includes(query),
-    );
+    .filter((p) => [p.name, p.patientNumber, p.id, p.phone, ...(p.tags || []), p.diagnosisSummary]
+      .some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase())));
   const sortedFiltered = [...filtered].sort((a, b) => {
     if (sortBy === "name") return String(a.name).localeCompare(String(b.name), "zh-Hans-CN");
     if (sortBy === "visit") return String(b.lastVisitAt || "").localeCompare(String(a.lastVisitAt || ""));
@@ -207,6 +199,7 @@ export function PatientsView({
     if (!detail) listScroll.current = panelRoot.current?.scrollTop || 0;
     const version = ++patientGeneration.current;
     setError("");
+    setNotice("");
     setPatientLoading(true);
     setReviewProposal(null);
     setConsent(false);
@@ -423,6 +416,7 @@ export function PatientsView({
           <button className="secondary" onClick={() => setModal("import-labs")}>导入检验结果</button>
           <button className="secondary" onClick={() => setModal("group-suggest")}>生成分组建议</button>
           <button className="secondary" onClick={() => setModal("manual-patient")}>手动建档</button>
+          <button className="secondary" onClick={() => setModal("import-patients")}>导入患者表格</button>
           <button className="primary" onClick={() => setModal("new-patient")}><UserPlus size={15}/> 上传资料建档</button>
         </div>
       </div>}
@@ -1000,7 +994,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
     let live = true;
     setMatches([]);
     const timer = setTimeout(() => {
-      if (form.name.trim()) api(`/api/patients?summary=1&q=${encodeURIComponent(form.name.trim())}`)
+      if (form.name.trim()) api(`/api/patients?summary=1&archived=1&q=${encodeURIComponent(form.name.trim())}`)
         .then((value) => { if (live) setMatches(value.patients.filter((p) => p.name === form.name.trim())); })
         .catch((err) => { if (live) setError(err.message); });
     }, 250);
@@ -1055,7 +1049,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
           <b>找到 {matches.length} 位同名患者</b>
           <p>先核对已有档案，避免重复建档。</p>
           {matches.map((patient) => <button key={patient.id} className="secondary" type="button" onClick={() => onCreated(patient)} disabled={saving}>
-            {patient.name} · {patient.patientNumber || "未编号"} · {patient.birthYear ? `${patient.birthYear} 年生` : "出生年未填"} · {patient.phone ? `尾号 ${patient.phone.slice(-4)}` : "电话未填"} · 打开已有档案
+            {patient.name} · {patient.patientNumber || "未编号"} · {patient.birthYear ? `${patient.birthYear} 年生` : "出生年未填"} · {patient.phone ? `尾号 ${patient.phone.slice(-4)}` : "电话未填"} · {patient.archived ? "已归档 · 打开并恢复档案" : "打开已有档案"}
           </button>)}
           <label><input type="checkbox" checked={form.confirmDistinctPatient} onChange={(e) => setForm({ ...form, confirmDistinctPatient: e.target.checked })} />已核对，这是另一位同名患者</label>
         </section>}
@@ -1076,7 +1070,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
               min="1900"
               max={new Date().getFullYear()}
               value={form.birthYear}
-              onChange={set("birthYear")}
+              onChange={(e) => setForm({ ...form, birthYear: e.target.value, ageText: "" })}
             />
           </label>
           <label>

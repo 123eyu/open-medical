@@ -53,3 +53,22 @@ test("batch import rechecks identity changes and rolls back all rows if final au
   assert.equal((await f.json(`${base}/commit`, "POST", input)).status, 409);
   assert.equal((await f.json("/api/patients")).data.patients.length, 1);
 });
+
+
+test("patient import keeps source line numbers and blocks every conflicting number including archived identities", async (t) => {
+  const rows = parsePatientImport('姓名,出生年份\r\n\r\n"虚构\r\n甲",1980\r\n\r\n虚构乙,2099');
+  assert.deepEqual(rows.map((r) => r.row), [3, 6]);
+  assert.throws(() => parsePatientImport("姓名\n" + "中".repeat(70000)), /200KB/);
+  const f = await fixture(t);
+  const a = (await f.json("/api/patients", "POST", {name:"虚构归档甲", patientNumber:"ARCH-A"})).data;
+  await f.json(`/api/patients/${a.id}`, "PATCH", {archived:true, expectedRevision:0});
+  assert.equal((await f.json("/api/patients", "POST", {name:a.name, patientNumber:"ARCH-B"})).status, 409);
+  const archived = (await f.json("/api/patients/import/preview", "POST", {text:"姓名,患者编号\n虚构归档甲,ARCH-B"})).data;
+  assert.equal(archived.rows[0].status,"same_name"); assert.equal(archived.rows[0].matches[0].archived,true);
+  const text = "姓名,患者编号\n虚构一,DUP-A\n\n虚构二,DUP-A";
+  const preview = (await f.json("/api/patients/import/preview", "POST", {text})).data;
+  assert.deepEqual(preview.rows.map(r => [r.row,r.status]), [[2,"invalid"],[4,"invalid"]]);
+  assert.equal((await f.json("/api/patients/import/commit", "POST", {text, fingerprint:preview.fingerprint, selectedRows:[2], requestId:"conflict-all"})).status,409);
+  const search = (await f.json("/api/patients?summary=1&archived=1&q=%20arch-a%20")).data;
+  assert.equal(search.patients[0].id,a.id);
+});

@@ -15,7 +15,7 @@ async function browserFixture(t) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, []));
-  mkdirSync("output/doctor-workbench-8h-20260922/screenshots", { recursive: true });
+  mkdirSync(process.env.DOCTOR_UI_EVIDENCE || "output/doctor-workbench-8h-20260922/screenshots", { recursive: true });
   return { ...f, page };
 }
 
@@ -72,13 +72,13 @@ test("doctor experience: paste a patient table, distinguish duplicates, import a
   await f.page.goto(f.origin + "/?view=home");
   await f.page.locator(".app-navigation").waitFor();
   await f.page.getByRole("button", { name: "患者", exact: true }).click();
-  await f.page.getByRole("button", { name: "导入已有患者", exact: true }).click();
+  await f.page.getByRole("button", { name: "导入患者表格", exact: true }).click();
   await f.page.getByLabel("患者表格文本", { exact: true }).fill("姓名,患者编号,出生年份\n合成同名,IMPORT-OLD,1960\n合成新患者,IMPORT-NEW,1980\n合成同名,IMPORT-OTHER,1990");
   await f.page.getByRole("button", { name: "预览并检查", exact: true }).click();
   await f.page.getByText("1 条同名待核对", { exact: true }).waitFor();
   assert.equal((await f.json("/api/patients")).data.patients.length, 1);
   await f.page.getByLabel("选择第 4 行，已核对是另一位同名患者", { exact: true }).check();
-  await f.page.screenshot({ path: "output/doctor-workbench-8h-20260922/screenshots/patient-import.png", fullPage: false });
+  await f.page.screenshot({ path: `${process.env.DOCTOR_UI_EVIDENCE || "output/doctor-workbench-8h-20260922/screenshots"}/patient-import.png`, fullPage: false });
   await f.page.getByRole("button", { name: "新建 2 位患者", exact: true }).click();
   await f.page.getByRole("dialog").waitFor({ state: "hidden" });
   await f.page.locator(".patient-card", { hasText: "IMPORT-NEW" }).click();

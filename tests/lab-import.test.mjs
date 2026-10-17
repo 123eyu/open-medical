@@ -69,3 +69,17 @@ test("lab import commit: one patient-update proposal per patient, confirmed thro
     /可导入/,
   );
 });
+
+
+test("lab imports reject conflicting name-number pairs and never fall back from an unknown number", async (t) => {
+  const f = await setup(t);
+  for (const number of ["P-1001", "UNKNOWN-ID"]) {
+    const text = `姓名,患者编号,项目,数值,日期\n导入患者甲,${number},虚构指标,5,2026-10-01`;
+    const preview = (await f.json("/api/patients/lab-import/preview", "POST", {text})).data;
+    assert.notEqual(preview.rows[0].status,"ready");
+    assert.equal(preview.rows[0].name,"导入患者甲");
+    assert.equal((await f.json("/api/patients/lab-import/commit", "POST", {text, selectedRows:[2]})).status,400);
+  }
+  assert.equal((await f.json(`/api/pending-actions?patientId=${f.yi.id}`)).data.actions.length,0);
+  assert.equal((await f.json(`/api/patients/${f.yi.id}`)).data.labs.length,0);
+});

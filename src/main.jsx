@@ -539,6 +539,7 @@ function App() {
   const [, setActiveWsId] = useState("");
   const [wsList, setWsList] = useState([]);
   const [patientRoute, setPatientRoute] = useState(initialLocation.view === "patients" ? { id: initialLocation.id, tab: initialLocation.tab } : {});
+  const [visiblePatientRoute, setVisiblePatientRoute] = useState(patientRoute);
   const [homeKey, setHomeKey] = useState(0);
   const [homeDraft, setHomeDraft] = useState({});
   const [patientsList, setPatientsList] = useState([]);
@@ -1116,10 +1117,13 @@ function App() {
     const files = [...(e.target.files || [])];
     e.target.value = "";
     if (!files.length) return;
+    if (loading) { setError("患者会话仍在加载，请加载完成后再添加资料。"); return; }
     setUploading(true);
     setError("");
     try {
       let current = readLocation().view === "home" ? homePending.current : session;
+      const targetId = readLocation().view === "workbench" ? activeRef.current : null;
+      if (targetId && current?.id !== targetId) throw new Error("患者会话尚未就绪，请重新打开后添加资料。");
       if (!current) current = await create();
       if (!current) return;
       for (const [index, file] of files.entries()) {
@@ -1316,11 +1320,14 @@ function App() {
   const medical = medicalEnabled(config);
   usePaletteHotkey(setPaletteOpen);
   useEffect(() => {
-    if (config)
-      document.title = medical
-        ? `${view === "patients" && patientRoute.id ? `${patientsList.find(p => p.id === patientRoute.id)?.name || "患者"} · ${VIEW_LABELS[view]}` : VIEW_LABELS[view] || "医疗工作台"} · Open Medical`
-        : `${VIEW_LABELS[view] || "通用工作台"} · Open Agent`;
-  }, [config, medical, view, patientRoute.id, patientsList]);
+    if (!config) return;
+    const patient = patientsList.find((p) => p.id === visiblePatientRoute.id);
+    const patientTitle = [patient?.name || "患者", patient?.patientNumber || visiblePatientRoute.id,
+      ({ overview: "概览", diagnoses: "诊断与病史", clinical: "治疗与预后", medications: "治疗与预后", labs: "检验趋势", visits: "就诊经过", library: "资料库", messages: "沟通", appointments: "预约", followups: "随访" })[visiblePatientRoute.tab] || "患者"].filter(Boolean).join(" · ");
+    document.title = medical
+      ? `${view === "patients" && visiblePatientRoute.id ? patientTitle : VIEW_LABELS[view] || "医疗工作台"} · Open Medical`
+      : `${VIEW_LABELS[view] || "通用工作台"} · Open Agent`;
+  }, [config, medical, view, visiblePatientRoute, patientsList]);
   // 桌面壳(Windows)用系统窗口按钮覆盖层时,顶栏兼作窗口拖拽区;类名挂在
   // html 上供 v6-layout.css 门控,浏览器与 macOS(无覆盖层)不会有该类。
   useEffect(() => {
@@ -1546,7 +1553,7 @@ function App() {
             <PatientsView
               key={`${patientRoute.id || "list"}-${patientRoute.tab || "overview"}-${patientRoute.create || false}-${patientRoute.import || false}-${patientRoute.intakeOpen || ""}-${patientRoute.navigationKey || ""}`}
               config={config}
-              onLocationChange={(id, tab) => writeLocation("patients", { id, tab })}
+              onLocationChange={(id, tab) => { writeLocation("patients", { id, tab }); setVisiblePatientRoute({ id, tab }); }}
               initialPatientId={patientRoute.id}
               initialTab={patientRoute.tab}
               initialCreate={patientRoute.create}
@@ -2133,7 +2140,7 @@ function App() {
                         className="attach-button"
                         title="添加材料：图片 / PDF / Word / Excel / TXT / Markdown / CSV / JSON"
                         onClick={() => fileRef.current?.click()}
-                        disabled={busy || uploading || !config}
+                        disabled={busy || loading || uploading || !config}
                       >
                         <Paperclip size={16} />
                         {uploading ? "导入中…" : "附件"}

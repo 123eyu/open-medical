@@ -78,7 +78,8 @@ export class LabImporter {
       const number = String(input.patientNumber || "").trim();
       const name = String(input.name || "").trim();
       if (number) patient = byNumber.get(number) || null;
-      if (!patient && name) {
+      if (patient && name && patient.name !== name) return { ...row, status: "invalid", reason: `姓名与编号不一致：编号属于 ${patient.name}，请核对原表`, candidates: [{ id: patient.id, name: patient.name, patientNumber: patient.patientNumber }] };
+      if (!number && name) {
         if (sameName.has(name)) return { ...row, status: "same-name", reason: "存在同名患者，请补充患者编号", candidates: this.patients.list({ query: name, summary: true, includeArchived: true }).map((p) => ({ id: p.id, name: p.name, patientNumber: p.patientNumber || "" })) };
         patient = byName.get(name) || null;
       }

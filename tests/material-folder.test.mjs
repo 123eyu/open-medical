@@ -5,7 +5,7 @@ import { autoClassifyMaterial, classifyMaterial, suggestDocumentDate, MATERIAL_C
 import { groupMaterials } from "../shared/material-folder.mjs";
 
 test("material classifier is deterministic and explains its keyword hit", () => {
-  assert.deepEqual(MATERIAL_CATEGORIES, ["检验报告", "影像报告", "门诊病历", "住院记录", "用药记录", "其他"]);
+  assert.deepEqual(MATERIAL_CATEGORIES, ["检验报告", "影像报告", "病理报告", "门诊病历", "住院记录", "用药记录", "其他"]);
   assert.equal(classifyMaterial({ name: "生化检验报告单.pdf" }).category, "检验报告");
   assert.equal(classifyMaterial({ name: "胸部CT平扫报告.docx" }).category, "影像报告");
   assert.equal(classifyMaterial({ name: "IMG_2233.jpg", text: "出院记录：患者于 2026-09-01 出院" }).category, "住院记录");
@@ -97,4 +97,25 @@ test("chart materials do not take dates from historical diagnoses and invalid ca
   assert.equal(suggestDocumentDate({name:"IMG_20260230.jpg"}), null);
   assert.equal(suggestDocumentDate({text:"报告日期： 2024-02-29"}), "2024-02-29");
   assert.equal(classifyMaterial({name:"病历附件-影像报告.pdf",text:"血常规"}).category, "影像报告");
+});
+
+
+test("material dates reconcile all sources; calendar errors and foreign files never mutate records", async (t) => {
+  for (const name of ["截图20261017.txt", "报告2026-10-01至2026-10-17.txt", "报告20261001至20261017.txt"]) {
+    assert.equal(suggestDocumentDate({ name, text: "报告日期：2026-10-01" }), null);
+  }
+  assert.equal(suggestDocumentDate({ name: "报告20261001.txt", text: "报告日期：2026-10-01" }), "2026-10-01");
+  assert.equal(classifyMaterial({ name: "病理报告.txt" }).category, "病理报告");
+  assert.equal(autoClassifyMaterial({name:"病理报告.txt", category:"其他", categorySource:"manual"}).category, "其他");
+  const f = await fixture(t);
+  const a = (await f.json("/api/patients", "POST", { name: "虚构资料甲" })).data;
+  const b = (await f.json("/api/patients", "POST", { name: "虚构资料乙" })).data;
+  const file = (await f.json(`/api/sessions/${a.sessionId}/files`, "POST", {name:"病理报告.txt", text:"虚构正文"})).data;
+  const path = `/api/sessions/${a.sessionId}/files/${file.id}/meta`;
+  assert.equal((await f.json(path, "PATCH", {documentDate:"2024-02-29"})).status, 200);
+  assert.equal((await f.json(path, "PATCH", {documentDate:"2026-02-30", category:"其他"})).status, 400);
+  assert.equal((await f.json(`/api/sessions/${b.sessionId}/files/${file.id}/meta`, "PATCH", {category:"其他"})).status, 404);
+  const saved = (await f.json(`/api/sessions/${a.sessionId}`)).data.files[0];
+  assert.equal(saved.documentDate,"2024-02-29"); assert.equal(saved.category,"病理报告");
+  assert.equal((await f.json(`/api/sessions/${b.sessionId}`)).data.files.length, 0);
 });

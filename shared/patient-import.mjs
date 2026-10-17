@@ -4,19 +4,19 @@ export const PATIENT_IMPORT_TEMPLATE = "姓名,患者编号,性别,出生年份,
 // Small RFC-style quoted cell parser for CSV and tab-separated Excel paste.
 // Reject malformed quoting; never execute spreadsheet expressions.
 export function parsePatientImport(text) {
-  if (typeof text !== "string" || !text.trim() || text.length > 200000) throw new Error("请提供 200KB 以内的患者表格文本");
+  if (typeof text !== "string" || !text.trim() || new TextEncoder().encode(text).length > 200000) throw new Error("请提供 200KB 以内的患者表格文本");
   text = text.replace(/^\uFEFF/, "");
   const first = text.split(/\r?\n/, 1)[0], delimiter = first.includes("\t") ? "\t" : ",";
-  const rows = []; let row = [], cell = "", quoted = false, closed = false;
+  const rows = [], lineNumbers = []; let row = [], cell = "", quoted = false, closed = false, line = 1, rowStart = 1;
   const pushCell = () => { row.push(cell.trim()); cell = ""; closed = false; };
-  const pushRow = () => { pushCell(); if (row.some(Boolean)) rows.push(row); row = []; if (rows.length > 201) throw new Error("一次最多导入 200 位患者，请分批处理"); };
+  const pushRow = () => { pushCell(); if (row.some(Boolean)) { rows.push(row); lineNumbers.push(rowStart); } row = []; if (rows.length > 201) throw new Error("一次最多导入 200 位患者，请分批处理"); };
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
     if (quoted) {
       if (char === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else { quoted = false; closed = true; } }
-      else cell += char;
+      else { cell += char; if (char === "\n" || char === "\r" && text[i + 1] !== "\n") line++; }
     } else if (char === delimiter) pushCell();
-    else if (char === "\n" || char === "\r") { if (char === "\r" && text[i + 1] === "\n") i++; pushRow(); }
+    else if (char === "\n" || char === "\r") { if (char === "\r" && text[i + 1] === "\n") i++; pushRow(); line++; rowStart = line; }
     else if (char === '"' && !cell && !closed) quoted = true;
     else { if (closed && char.trim() || char === '"') throw new Error("表格引号格式不正确，请使用 CSV 模板或直接粘贴 Excel 单元格"); cell += char; }
   }
@@ -25,6 +25,7 @@ export function parsePatientImport(text) {
   const columns = rows.shift()?.map((name) => Object.hasOwn(headers, name.toLowerCase()) ? headers[name.toLowerCase()] : undefined);
   if (!columns?.includes("name")) throw new Error("首行必须包含「姓名」列，请下载模板核对表头");
   if (columns.some((key) => !key) || new Set(columns).size !== columns.length) throw new Error("表头包含未知列或重复列；仅支持姓名、患者编号、性别、出生年份、电话、分组、标签");
+  lineNumbers.shift();
   if (!rows.length) throw new Error("表格中没有患者记录");
   return rows.map((cells, index) => {
     const input = Object.fromEntries(columns.map((key, i) => [key, cells[i] || ""]));
@@ -39,6 +40,6 @@ export function parsePatientImport(text) {
       if (input[key].length > max || input[key].some((value) => value.length > 40)) errors.push(`${key === "groups" ? "分组" : "标签"}数量或长度超限`);
     }
     if (!input.phone) delete input.phone;
-    return { row: index + 2, input, errors };
+    return { row: lineNumbers[index], input, errors };
   });
 }

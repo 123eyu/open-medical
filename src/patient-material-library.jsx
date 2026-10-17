@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FileText, Search } from "lucide-react";
 import { groupMaterials } from "../shared/material-folder.mjs";
-import { MATERIAL_CATEGORIES, suggestDocumentDate } from "../shared/material-classify.mjs";
+import { MATERIAL_CATEGORIES, suggestDocumentDate, documentDateCandidates } from "../shared/material-classify.mjs";
 import { MaterialDetails } from "./material-details";
 import { api } from "./agent-runtime";
 
@@ -9,8 +9,7 @@ import { api } from "./agent-runtime";
 // 这里按同一算法现算兜底；仍是「建议」——点采纳才会写入 documentDate。
 const dateSuggestionOf = (file) =>
   file.documentDate ||
-  file.dateSuggestion ||
-  suggestDocumentDate({ name: file.name }) ||
+  suggestDocumentDate(file) ||
   "";
 
 export function PatientMaterialLibrary({
@@ -183,6 +182,9 @@ export function PatientMaterialLibrary({
                   {selected.categorySource === "auto" ? " · 自动归类" : ""}
                 </span>
               </header>
+              {!selected.documentDate && new Set(documentDateCandidates(selected).map((item) => item.date)).size > 1 && (
+                <p className="form-notice" role="status">资料日期待核对：{documentDateCandidates(selected).map((item) => `${item.source} ${item.date}`).join("；")}。请在「类型与资料日期」中确认。</p>
+              )}
               <details className="material-metadata">
                 <summary>类型与资料日期</summary>
                 <div className="library-meta-editor">

@@ -98,16 +98,8 @@ export class PatientRegistry {
     const patients = (summary ? this.summaries() : this.all())
       .filter((p) => includeArchived || !p.archived)
       .filter((p) => !group || p.groups?.includes(group))
-      .filter(
-        (p) =>
-          !query ||
-          p.name.includes(query) ||
-          (p.patientNumber || "").includes(query) ||
-          p.id.includes(query) ||
-          (p.phone || "").includes(query) ||
-          (p.tags || []).some((t) => t.includes(query)) ||
-          diagnosisText(p).includes(query),
-      )
+      .filter((p) => [p.name, p.patientNumber, p.id, p.phone, ...(p.tags || []), diagnosisText(p)]
+        .some((value) => String(value || "").toLowerCase().includes(String(query || "").trim().toLowerCase())))
       .sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt) || a.id.localeCompare(b.id));
     return patients.map((p) => ({
       ...p,
@@ -142,7 +134,7 @@ export class PatientRegistry {
         }
       }
       check(
-        input.confirmDistinctPatient === true || !this.all().some((p) => !p.archived && p.name === patient.name),
+        input.confirmDistinctPatient === true || !this.all().some((p) => p.name === patient.name),
         "CONFLICT",
         "存在同名患者，请核对后选择已有档案，或确认是另一位患者",
         409,

@@ -9,18 +9,17 @@ export class PatientImporter {
   preview(text) {
     let rows;
     try { rows = parsePatientImport(text); } catch (error) { throw new AppError("INVALID_IMPORT", error.message); }
-    const people = this.patients.summaries(), numbers = new Set();
+    const people = this.patients.summaries();
     for (const row of rows) {
       const { input, errors } = row;
       const existing = input.patientNumber && people.find((p) => p.patientNumber === input.patientNumber);
-      const sameName = people.filter((p) => !p.archived && p.name === input.name);
+      const sameName = people.filter((p) => p.name === input.name);
       const sameBatchName = rows.filter((other) => other !== row && other.input.name === input.name).length;
-      if (input.patientNumber && numbers.has(input.patientNumber)) errors.push("本表内患者编号重复");
-      if (input.patientNumber) numbers.add(input.patientNumber);
+      if (input.patientNumber && rows.some((other) => other !== row && other.input.patientNumber === input.patientNumber)) errors.push("本表内患者编号重复，请核对所有同编号行");
       if (existing && existing.name !== input.name) errors.push("该编号已属于另一姓名，请核对");
       row.status = errors.length ? "invalid" : existing ? "existing" : sameName.length || sameBatchName ? "same_name" : "ready";
       row.existing = existing ? { id: existing.id, name: existing.name, archived: Boolean(existing.archived) } : null;
-      row.matches = sameName.slice(0, 5).map(({ id, name, patientNumber, birthYear }) => ({ id, name, patientNumber, birthYear }));
+      row.matches = sameName.slice(0, 5).map(({ id, name, patientNumber, birthYear, archived }) => ({ id, name, patientNumber, birthYear, archived: Boolean(archived) }));
       row.sameBatchName = sameBatchName;
     }
     return { rows, fingerprint: hash(text), counts: Object.fromEntries(["ready", "same_name", "existing", "invalid"].map((status) => [status, rows.filter((row) => row.status === status).length])) };
