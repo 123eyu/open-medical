@@ -15,10 +15,8 @@ const label = (value) => {
 };
 const values = (value) => value === undefined ? [] : Array.isArray(value) ? value : [value];
 
-export function PatientProposalModal({ patient, proposal, busy, error, onClose, onConfirm }) {
-  const stale = patient.revision !== proposal.baseRevision;
-  return <Modal title="核对档案变更" wide onClose={() => { if (!busy) onClose(); }}>
-    <section className="patient-proposal-review"><p><b>{patient.name}</b> · {proposal.summary}</p><p className="muted">左侧为当前档案，右侧为采纳后的完整内容。未列出的字段保持原记录。</p>
+export function PatientProposalComparison({ patient, proposal }) {
+  return <section className="patient-proposal-review"><p><b>{patient.name}</b> · {proposal.summary}</p><p className="muted">左侧为当前档案，右侧为采纳后的完整内容。未列出的字段保持原记录。</p>
       {identityFields.filter(([key]) => proposal.payload[key] !== undefined).map(([key, name]) => {
         const changed = identityText(patient[key]) !== identityText(proposal.payload[key]);
         return <section key={key}><h4>{name}</h4><div className="proposal-comparison"><div><b>当前记录</b><p className={changed ? "proposal-removed" : ""}>{changed && <small>将移除 / 改写</small>}{identityText(patient[key])}</p></div><div><b>采纳后</b><p className={changed ? "proposal-added" : ""}>{changed && <small>新增 / 变更</small>}{identityText(proposal.payload[key])}</p></div></div></section>;
@@ -28,9 +26,15 @@ export function PatientProposalModal({ patient, proposal, busy, error, onClose, 
         const beforeLabels = before.map(label), afterLabels = after.map(label);
         return <section key={key}><h4>{name} <small>{before.length} → {after.length} 项</small></h4><div className="proposal-comparison"><div><b>当前记录</b>{before.map((value, i) => <p className={!afterLabels.includes(label(value)) ? "proposal-removed" : ""} key={i}>{!afterLabels.includes(label(value)) && <small>将移除 / 改写</small>}{label(value)}</p>)}{!before.length && <p className="muted">无记录</p>}</div><div><b>采纳后</b>{after.map((value, i) => <p className={!beforeLabels.includes(label(value)) ? "proposal-added" : ""} key={i}>{!beforeLabels.includes(label(value)) && <small>新增 / 变更</small>}{label(value)}</p>)}{!after.length && <p className="proposal-removed">将清空此项记录</p>}</div></div></section>;
       })}
+    </section>;
+}
+
+export function PatientProposalModal({ patient, proposal, busy, error, onClose, onConfirm }) {
+  const stale = patient.revision !== proposal.baseRevision;
+  return <Modal title="核对档案变更" wide onClose={() => { if (!busy) onClose(); }}>
+      <PatientProposalComparison patient={patient} proposal={proposal} />
       {stale && <p className="error-text" role="alert">档案在提案后已变化，请关闭并重新生成提案，避免覆盖新记录。</p>}
       {error && <p className="error-text" role="alert">{error}</p>}
       <div className="modal-actions"><button className="secondary" disabled={busy} onClick={onClose}>返回核对</button><button className="primary" disabled={busy || stale} onClick={onConfirm}>{busy ? "写入中…" : "确认这些变更并写入"}</button></div>
-    </section>
   </Modal>;
 }

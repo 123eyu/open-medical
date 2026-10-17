@@ -4,7 +4,7 @@ import { useState } from "react";
 // persist patient text in browser storage or transmit it before explicit Add.
 const drafts = new Map();
 export function hasClinicalDraft(patientId, section) {
-  const fields = { diagnoses: ["diagnosis", "icd", "diagnosisMeta"], medications: ["medication", "allergy", "medEdit"], labs: ["lab"], visits: ["visit"] };
+  const fields = { diagnoses: ["diagnosis", "icd", "diagnosisMeta"], medications: ["medication", "allergy", "medEdit"], labs: ["lab", "labEdit"], visits: ["visit"] };
   return (fields[section] || []).some(field => drafts.has(`${patientId}:${field}`));
 }
 export function useClinicalDraft(patientId, field, initial) {

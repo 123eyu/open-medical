@@ -9,6 +9,7 @@ import { chatFollowupsApi } from "./chat-followups-api.mjs";
 import { WechatAutoFollow } from "./chat-autofollow.mjs";
 import { chatAutoFollowApi } from "./chat-autofollow-api.mjs";
 import { KnowledgeOrganizer } from "./medical/knowledge-organizer.mjs";
+import { graphSlice } from "../shared/knowledge-graph-search.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
 import { createReadStream } from "node:fs";
 import {TrialEligibilityJobs} from './medical/trial-eligibility-jobs.mjs';
@@ -496,12 +497,16 @@ export function createServer(options = {}) {
     return Number.isFinite(value) && value > 0 ? value : fallback;
   };
   knowledgeToolPlugins.push({
-    definition: { type: "function", function: { name: "knowledge_map", description: "读取指定知识库中由原文提取的知识节点、关系及引文。仅用于导航，不能当作已确认指南推荐。", parameters: { type: "object", properties: { collection: { type: "string" }, query: {type:"string"} }, required: ["collection"], additionalProperties: false } } },
+    definition: { type: "function", function: { name: "knowledge_map", description: "读取指定知识库中由原文提取的知识节点、关系及引文。支持多个实体词和原文别名，返回匹配实体的一跳关系与端点；no_matches仅表示本次查询无匹配，不代表库中没有图谱。仅用于导航，不能当作已确认指南推荐。", parameters: { type: "object", properties: { collection: { type: "string" }, query: {type:"string"} }, required: ["collection"], additionalProperties: false } } },
     capability: { backend: "local" }, execute: ({ collection, query }) => {
-      const graph=knowledgeOrganizer.graph(collection), matched=graph.nodes.filter(n=>!query||n.label.toLowerCase().includes(query.toLowerCase()));
-      const nodes=matched.slice(0,30).map(n=>({...n,evidence:n.evidence.slice(0,3)})),ids=new Set(nodes.map(n=>n.id));
-      const edges=graph.edges.filter(e=>ids.has(e.from)&&ids.has(e.to)).slice(0,50);
-      return {nodes,edges,matchedNodes:matched.length,truncated:matched.length>nodes.length,notice:"知识地图用于检索导航，引用时须 knowledge_read 阅读原文。"};
+      const graph=knowledgeOrganizer.graph(collection);
+      const slice=graphSlice(graph,{query,includeNeighbors:true,limit:30,edgeLimit:50});
+      const nodes=slice.nodes.map(n=>({...n,evidence:(n.evidence||[]).slice(0,3),evidenceCount:n.evidence?.length||0,evidenceTruncated:(n.evidence?.length||0)>3}));
+      const status=!graph.nodes.length ? "empty_graph" : !slice.matchedNodes ? "no_matches" : "matched";
+      return {...slice,nodes,status,collection,query:query||"",graphNodes:graph.nodes.length,graphEdges:graph.edges.length,
+        returnedNodes:nodes.length,returnedEdges:slice.edges.length,
+        truncated:slice.truncated||nodes.some(n=>n.evidenceTruncated),
+        notice:(status==="empty_graph"?"此库当前没有可用图谱。":status==="no_matches"?"此库已有图谱，但本次查询未匹配实体；不能据此声称尚未提取图谱。请缩短查询或改用别名。":"已返回匹配实体及一跳相邻关系；匹配实体数与返回节点数不同是因为包含关系端点。")+"知识地图用于检索导航，引用时须 knowledge_read 阅读原文。"};
     },
   });
   const runtime = new MedicalRuntime(store, provider, {

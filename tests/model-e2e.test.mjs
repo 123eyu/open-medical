@@ -42,7 +42,7 @@ async function openApp(t) {
 async function openPatientWorkspace(page, name) {
   await openPatient(page, name);
   await page.waitForSelector(".detail-head");
-  await page.locator('button:has-text("打开病例工作区")').click();
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
 }
 

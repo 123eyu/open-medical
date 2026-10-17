@@ -1395,8 +1395,8 @@ function App() {
         <div className="top-actions">
           <button className="palette-trigger" aria-label="打开命令面板（Cmd/Ctrl+K）" title="命令面板 · Cmd/Ctrl+K" onClick={() => setPaletteOpen(true)}><Search size={15} /><kbd>K</kbd></button>
           {medical && <PendingTray />}
-          {view === "workspaces" && (session?.artifacts?.length || session?.files?.length) ? (() => {
-            // 显示方式合并成单按钮：只有任务已产生材料/成果时才有切换的意义。
+          {view === "workspaces" ? (() => {
+            // 项目的文件、终端等工作面板独立于医疗会话。
             const modes = [["work", "工作区"], ["split", "AI 半屏"], ["chat", "AI 全屏"]];
             const current = workspaceDisplay;
             const next = modes[(modes.findIndex(([id]) => id === current) + 1) % modes.length];

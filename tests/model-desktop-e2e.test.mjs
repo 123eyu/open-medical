@@ -92,10 +92,10 @@ test("桌面 · 真实模型咨询直接答：默认档位咨询、回答实质�
   });
   await page.goto(origin + "/?view=home");
   await page.locator(".app-navigation").waitFor();
-  // 打开病例工作区
+  // 打开问诊工作台
   await openPatient(page, "桌面模型咨询患者");
   await page.waitForSelector(".detail-head");
-  await page.locator('button:has-text("打开病例工作区")').click();
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
   // 默认档位应为咨询（模型已配置）
   // 无模式档位：会话头/输入区不应出现档位选择器

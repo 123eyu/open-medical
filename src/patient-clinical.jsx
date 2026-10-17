@@ -25,6 +25,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const [newDiagnosis, setNewDiagnosis] = useClinicalDraft(detail.id, "diagnosis", "");
   const [diagnosisMeta, setDiagnosisMeta] = useClinicalDraft(detail.id, "diagnosisMeta", { status: "needs_review", date: "", source: "" });
   const [medEdit, setMedEdit] = useClinicalDraft(detail.id, "medEdit", null);
+  const [labEdit, setLabEdit] = useClinicalDraft(detail.id, "labEdit", null);
+  const [labNotice, setLabNotice] = useState("");
+  const [pendingMutation, setPendingMutation] = useClinicalDraft(detail.id, "mutation", null);
   const [labError, setLabError] = useState("");
   const [newMed, setNewMed] = useClinicalDraft(detail.id, "medication", { name: "", dose: "", frequency: "", status: "unknown", source: "" });
   const [newAllergy, setNewAllergy] = useClinicalDraft(detail.id, "allergy", "");
@@ -36,19 +39,24 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   });
   const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "" });
 
-  const patch = async (fields) => {
+  const patch = async (fields, intent = fields) => {
     if (inFlight.current) return false;
     inFlight.current = true;
     setSaving(true);
+    const signature = JSON.stringify(intent);
+    const request = pendingMutation || { signature, body: { expectedRevision: detail.revision, ...fields, requestId: crypto.randomUUID() } };
+    setPendingMutation(request);
     try {
-      const saved = await api(`/api/patients/${detail.id}`, "PATCH", {
-        expectedRevision: detail.revision,
-        ...fields,
-      });
+      const saved = await api(`/api/patients/${detail.id}`, "PATCH", request.body);
+      setPendingMutation(null);
       setDraft(normalize(saved));
-      await onChanged();
+      try { await onChanged(); } catch (error) { onError?.(`记录已保存，但刷新失败：${error.message}。请刷新查看，勿重复添加。`); }
+      if (request.signature !== signature) { onError?.("先前保存已确认。当前新输入仍保留，请核对最新记录后再次保存。"); return false; }
       return true;
     } catch (err) {
+      // A structured rejection proves this request did not commit. A lost
+      // response is uncertain, so retry its exact body before another mutation.
+      if (err.code) setPendingMutation(null);
       if (err.code === "REVISION_CONFLICT") {
         setConflict(true);
         onError?.("档案已被另一窗口更新。输入已保留，请载入最新记录后核对并重新添加。");
@@ -59,11 +67,11 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       setSaving(false);
     }
   };
-  const saveDiagnoses = (diagnoses) => patch({ diagnoses });
-  const saveMedications = (medications) => patch({ medications });
-  const saveAllergies = (allergies) => patch({ allergies });
-  const saveLabs = (labs) => patch({ labs });
-  const saveVisits = (visits) => patch({ visits });
+  const saveDiagnoses = (diagnoses, intent) => patch({ diagnoses }, intent);
+  const saveMedications = (medications, intent) => patch({ medications }, intent);
+  const saveAllergies = (allergies, intent) => patch({ allergies }, intent);
+  const saveLabs = (labs, intent) => patch({ labs }, intent);
+  const saveVisits = (visits, intent) => patch({ visits }, intent);
 
   const searchIcd = async (text) => {
     const version = ++searchVersion.current;
@@ -82,7 +90,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       !(await saveDiagnoses([
         ...draft.diagnoses,
         { code, name, ...diagnosisMeta },
-      ]))
+      ], { diagnosis: { code, name, ...diagnosisMeta } }))
     )
       return;
     searchVersion.current++;
@@ -93,13 +101,13 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   };
   const addMedication = async () => {
     if (!newMed.name.trim()) return;
-    if (!(await saveMedications([...draft.medications, { ...newMed }]))) return;
+    if (!(await saveMedications([...draft.medications, { ...newMed }], { medication: newMed }))) return;
     setNewMed({ name: "", dose: "", frequency: "", status: "unknown", source: "" });
   };
   const addAllergy = async () => {
     const text = newAllergy.trim();
     if (!text || draft.allergies.includes(text)) return;
-    if (!(await saveAllergies([...draft.allergies, text]))) return;
+    if (!(await saveAllergies([...draft.allergies, text], { allergy: text }))) return;
     setNewAllergy("");
   };
   const addLab = async () => {
@@ -124,14 +132,14 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           date: newLab.date,
           source: newLab.source, note: newLab.note,
         },
-      ]))
+      ], { lab: newLab }))
     )
       return;
     setNewLab({ item: "", value: "", unit: "", date: "", source: "", note: "" });
   };
   const addVisit = async () => {
     if (!newVisit.date || !newVisit.reason.trim()) return;
-    if (!(await saveVisits([...draft.visits, { ...newVisit }]))) return;
+    if (!(await saveVisits([...draft.visits, { ...newVisit }], { visit: newVisit }))) return;
     setNewVisit({ date: "", reason: "" });
   };
   // 收进案例库：医生主动策展动作，点击即入库（精选标记），不再套一层确认。
@@ -323,7 +331,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <label>更正剂量<input maxLength={60} value={medEdit.value.dose || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,dose:e.target.value}})}/></label>
           <label>更正频次<input maxLength={60} value={medEdit.value.frequency || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,frequency:e.target.value}})}/></label>
           <label>更正处方来源<input maxLength={200} value={medEdit.value.source || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,source:e.target.value}})}/></label>
-          <button type="button" onClick={()=>setMedEdit(null)}>取消更正</button><button type="submit">保存用药更正</button>
+          <button type="button" onClick={()=>{setMedEdit(null);setPendingMutation(null);}}>取消更正</button><button type="submit">保存用药更正</button>
         </form>}
         <div className="clinical-add clinical-add-med">
           <input
@@ -359,6 +367,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
         <h3>检验记录</h3>
         <p id="lab-value-help">仅录入精确数值；定性结果及带比较符的结果请保留原始报告。</p>
         {labError && <p role="alert" className="error">{labError}</p>}
+        {labNotice && <p role="status">{labNotice}</p>}
         <ul className="clinical-rows">
           {draft.labs.slice(-12).map((l, index, visible) => {
             const realIndex = draft.labs.length - visible.length + index;
@@ -367,7 +376,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
                 <span>
                   <b>{l.item}</b> {l.value}
                   {l.unit || ""} · {fmtDate(l.date)}
+                  {l.source && <small> · 来源：{l.source}</small>}
                 </span>
+                <button type="button" className="text-button" disabled={Boolean(labEdit)} onClick={() => { setLabError(""); setLabNotice(""); setLabEdit({ index: realIndex, revision: detail.revision, value: { ...l, value: String(l.value) } }); }}>更正检验</button>
                 <button
                   className="icon-button"
                   title="移除"
@@ -382,6 +393,20 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           })}
           {!draft.labs.length && <li className="muted">未记录检验。</li>}
         </ul>
+        {labEdit && <form aria-label="更正检验记录" onSubmit={async e => {
+          e.preventDefault(); setLabError(""); setLabNotice("");
+          if (labEdit.revision !== detail.revision) { setLabError("档案已变化，本次更正尚未保存，输入已保留。请取消后重新核对原记录。"); return; }
+          const value = Number(labEdit.value.value);
+          if (!String(labEdit.value.value).trim() || !Number.isFinite(value)) { setLabError("请输入精确数值；输入已保留。"); return; }
+          if (await saveLabs(draft.labs.map((lab, index) => index === labEdit.index ? { ...labEdit.value, value } : lab))) { setLabEdit(null); setLabNotice("检验记录已更正，原来源与其他记录已保留。"); }
+        }}>
+          <p>{labEdit.value.item} · 来源：{labEdit.value.source || "未记录"}</p>
+          <label>更正检验数值<input required inputMode="decimal" value={labEdit.value.value} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, value: e.target.value } })}/></label>
+          <label>更正检验单位<input maxLength={40} value={labEdit.value.unit || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, unit: e.target.value } })}/></label>
+          <label>更正采样日期<input required type="date" value={labEdit.value.date || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, date: e.target.value } })}/></label>
+          <label>更正检验备注<input maxLength={500} value={labEdit.value.note || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, note: e.target.value } })}/></label>
+          <button type="button" onClick={() => { setLabEdit(null); setPendingMutation(null); setLabError(""); }}>取消更正</button><button type="submit">保存检验更正</button>
+        </form>}
         <div className="clinical-add clinical-add-med">
           <input
             value={newLab.item}

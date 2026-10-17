@@ -118,7 +118,7 @@ test("guideline agent tools: search/list/read execute and skip validation upfron
   const tools = knowledgeTools(library);
   assert.deepEqual(
     tools.map((tool) => tool.definition.function.name),
-    ["knowledge_collections", "knowledge_collection_save", "knowledge_import_status", "knowledge_search", "knowledge_list", "knowledge_read", "knowledge_cite", "knowledge_ingest"],
+    ["knowledge_collections", "knowledge_collection_save", "knowledge_document_update", "knowledge_import_status", "knowledge_search", "knowledge_list", "knowledge_read", "knowledge_cite", "knowledge_ingest"],
   );
   const hits = await tools.find(t=>t.definition.function.name==="knowledge_search").execute({ query: "糖尿病 血压" });
   assert.equal(hits.count, 1);

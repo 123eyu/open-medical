@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fixture } from './helpers.mjs';
+
+test('intake confirmation recovers the exact saved patient across concurrent retries and restart', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'intake-confirm-'));
+  const cleanups = [], context = { after: fn => cleanups.push(fn) };
+  const options = { database: join(dir, 'synthetic.sqlite'), followupOptions: { autoStart: false } };
+  let f = await fixture(context, options);
+  t.after(async () => { for (const cleanup of cleanups.reverse()) await cleanup(); rmSync(dir, {recursive:true,force:true}); });
+  const source = await f.session('上传资料建档');
+  const proposal = f.server.pendingActions.propose({type:'patient-create',summary:'合成重试',payload:{name:'虚构重试患者',sourceSessionId:source.id}});
+  const payload = {name:'虚构重试患者',note:'医生确认内容'};
+  const body = {payload,expectedRevision:0,reviewMs:10};
+  const url = `/api/pending-actions/${proposal.id}/confirm`;
+  const [a,b] = await Promise.all([f.json(url,'POST',body),f.json(url,'POST',body)]);
+  assert.equal(a.status,200); assert.equal(b.status,200); assert.equal(a.data.applied.id,b.data.applied.id);
+  const id = a.data.applied.id;
+  assert.equal((await f.json('/api/patients')).data.patients.length,1);
+  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) n FROM review_sessions WHERE action_id=?').get(proposal.id).n,1);
+  assert.equal((await f.json(url,'POST',{...body,payload:{...payload,note:'另一份内容'}})).status,409);
+  await f.json(`/api/patients/${id}`,'PATCH',{expectedRevision:0,note:'随后已修改的档案'});
+  await cleanups.pop()(); f = await fixture(context,options);
+  const recovered = await f.json(url,'POST',{...body,reviewMs:200});
+  assert.equal(recovered.status,200); assert.equal(recovered.data.replayed,true);
+  assert.equal(recovered.data.applied.id,id); assert.equal(recovered.data.applied.note,'随后已修改的档案');
+  assert.equal((await f.json('/api/patients')).data.patients.length,1);
+  // Existing installations can recover using the precise audit link, without a name lookup.
+  f.server.store.db.prepare('DELETE FROM patient_create_confirmations WHERE action_id=?').run(proposal.id);
+  assert.equal((await f.json(url,'POST',{})).data.applied.id,id);
+  const rejected = f.server.pendingActions.propose({type:'patient-create',summary:'拒绝',payload:{name:'虚构拒绝患者'}});
+  f.server.pendingActions.reject(rejected.id);
+  assert.equal((await f.json(`/api/pending-actions/${rejected.id}/confirm`,'POST',{})).status,409);
+  const update = f.server.pendingActions.propose({type:'patient-update',patientId:id,summary:'更新',payload:{gender:'female'}});
+  f.server.pendingActions.confirm(update.id);
+  assert.equal((await f.json(`/api/pending-actions/${update.id}/confirm`,'POST',{})).status,409);
+});

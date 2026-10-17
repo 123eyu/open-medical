@@ -102,7 +102,7 @@ test(
     assert.match((await f.json(`/api/sessions/${p.sessionId}`)).data.files.find(x=>x.id===image.id).text,/症状改善/);
     await tabs.getByRole("button",{name:"检验趋势",exact:true}).click();
     const lab = panel.getByRole("article",{name:"合成指标 U/L",exact:true});
-    assert.match(await lab.innerText(),/同日存在不同数值/);
+    assert.match(await lab.innerText(),/同日有不同数值/);
     await lab.getByText("全部记录与来源 · 2 条").click();
     assert.equal(await lab.getByRole("table").locator("tbody tr").count(),2);
     const current = (await f.json(`/api/patients/${p.id}`)).data;

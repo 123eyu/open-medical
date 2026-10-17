@@ -108,59 +108,62 @@ test(
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(`${f.origin}/?view=patients&patient=${p.id}&tab=overview`);
-    await page.getByRole("button", { name: "检验数值冲突 1" }).click();
-    const work = page.getByRole("region", { name: "逐项核对" });
-    await work.waitFor();
-    const reader = work.getByRole("complementary", { name: "依据阅读区" });
-    assert.match(await reader.innerText(), /采样时间 08:00/);
-    assert.match(await reader.innerText(), /采样时间 16:00/);
-    await work
-      .getByRole("button", { name: "报告甲.txt 第1行", exact: true })
-      .click();
-    assert.doesNotMatch(await reader.innerText(), /采样时间 16:00/);
-    await work.getByRole("button", { name: "修正这条记录" }).first().click();
-    await work.getByLabel("检验数值", { exact: true }).fill("7");
-    assert.equal(
-      await work
-        .getByRole("button", { name: "下一项", exact: true })
-        .isDisabled(),
-      true,
-    );
-    await work.getByRole("button", { name: "取消", exact: true }).click();
+    await page.getByRole("button", { name: "检验趋势", exact: true }).click();
+    await page.getByRole("button", { name: "编辑记录", exact: true }).click();
+    const work = page.locator(".clinical-panel");
+    assert.match(await work.innerText(), /报告甲.txt 第1行/);
+    assert.match(await work.innerText(), /报告乙.txt 第1行/);
+    const editor = work.getByRole("form", { name: "更正检验记录" });
+    await work.getByRole("button", { name: "更正检验", exact: true }).first().click();
+    await editor.getByLabel("更正检验数值", { exact: true }).fill("7");
+    await editor.getByRole("button", { name: "取消更正", exact: true }).click();
     assert.equal((await f.json(`/api/patients/${p.id}`)).data.labs[0].value, 0);
-    await work.getByRole("button", { name: "修正这条记录" }).first().click();
-    await work.getByLabel("检验数值", { exact: true }).fill("1");
-    await work
-      .getByLabel("备注", { exact: true })
-      .fill("已核对采样时间，保留两次结果。");
-    await work.getByRole("button", { name: "保存修正", exact: true }).click();
+    await work.getByRole("button", { name: "更正检验", exact: true }).first().click();
+    await editor.getByLabel("更正检验数值", { exact: true }).fill("1");
+    await editor.getByLabel("更正检验备注", { exact: true }).fill("已核对采样时间，保留两次结果。");
+    await editor.getByLabel("更正检验单位", { exact: true }).fill("U/L");
+    await editor.getByLabel("更正采样日期", { exact: true }).fill("2026-01-03");
+    await page.route(`**/api/patients/${p.id}`, async route => {
+      if (route.request().method() === 'PATCH') await route.abort('failed');
+      else await route.continue();
+    });
+    await editor.getByRole("button", { name: "保存检验更正", exact: true }).click();
+    await page.getByRole("alert").filter({ hasText: /fetch|网络/ }).waitFor();
+    assert.equal(await editor.getByLabel("更正检验数值", { exact: true }).inputValue(), "1");
+    assert.equal((await f.json(`/api/patients/${p.id}`)).data.labs[0].value, 0);
+    await page.unroute(`**/api/patients/${p.id}`);
+    await editor.getByRole("button", { name: "保存检验更正", exact: true }).click();
     await work.getByRole("status").waitFor();
     let current = (await f.json(`/api/patients/${p.id}`)).data;
     assert.equal(current.labs[0].value, 1);
+    assert.equal(current.labs[0].unit, "U/L");
+    assert.equal(current.labs[0].date, "2026-01-03");
+    assert.equal(current.labs[0].note, "已核对采样时间，保留两次结果。");
     assert.equal(current.labs[0].source, "报告甲.txt 第1行");
     assert.deepEqual(current.labs.slice(1), p.labs.slice(1));
-    await work.getByRole("button", { name: "修正这条记录" }).first().click();
-    await work.getByLabel("检验数值", { exact: true }).fill("9");
+    await work.getByRole("button", { name: "更正检验", exact: true }).first().click();
+    await editor.getByLabel("更正检验数值", { exact: true }).fill("9");
     await f.json(`/api/patients/${p.id}`, "PATCH", {
       expectedRevision: current.revision,
       note: "外部更新保留",
     });
-    await work.getByRole("button", { name: "保存修正", exact: true }).click();
-    await work.getByRole("alert").filter({ hasText: "档案已变化" }).waitFor();
+    await editor.getByRole("button", { name: "保存检验更正", exact: true }).click();
+    await work.getByRole("alert").filter({ hasText: "档案版本已变化" }).waitFor();
+    assert.equal(await editor.getByLabel("更正检验数值", { exact: true }).inputValue(), "9");
     current = (await f.json(`/api/patients/${p.id}`)).data;
     assert.equal(current.labs[0].value, 1);
     assert.equal(current.note, "外部更新保留");
-    await work.getByRole("button", { name: "取消", exact: true }).click();
+    await editor.getByRole("button", { name: "取消更正", exact: true }).click();
     mkdirSync("output/playwright", { recursive: true });
     await page.screenshot({ path: "output/playwright/cdss-review-flow.png" });
     await page.setViewportSize({ width: 760, height: 1000 });
-    assert.ok(
-      await work.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
-    );
+    assert.ok(await work.evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
     await page.reload();
-    await page.getByRole("button", { name: "修正检验记录" }).click();
-    await work.getByRole("button", { name: "下一项", exact: true }).click();
-    assert.match(await work.innerText(), /待核对用药/);
+    await page.getByRole("button", { name: "编辑记录", exact: true }).click();
+    await work.getByRole("button", { name: "更正检验", exact: true }).first().click();
+    assert.equal(await editor.getByLabel("更正检验数值", { exact: true }).inputValue(), "1");
+    assert.match(await editor.innerText(), /报告甲.txt 第1行/);
+    await editor.getByRole("button", { name: "取消更正", exact: true }).click();
     assert.deepEqual(errors, []);
   },
 );
@@ -269,7 +272,7 @@ test(
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(`${f.origin}/?view=patients&patient=${p.id}&tab=overview`);
     await page
-      .getByRole("button", { name: "打开病例工作区", exact: true })
+      .getByRole("button", { name: "打开问诊工作台", exact: true })
       .click();
     await page.getByText("以前的问答 · 2", { exact: true }).click();
     await page

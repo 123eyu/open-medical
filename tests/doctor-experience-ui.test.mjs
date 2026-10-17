@@ -94,16 +94,24 @@ test("doctor experience: patient chart is not a project and record replacement s
   await f.page.locator(".app-navigation").waitFor();
   await openPatient(f.page, p.name);
   assert.equal(await f.page.locator('nav[aria-label="项目"] .session', { hasText: p.name }).count(), 0);
-  await f.page.getByRole("button", { name: "核对变更", exact: true }).click();
-  const comparison = f.page.locator(".proposal-comparison");
+  await f.page.getByRole("button", { name: /^待确认/ }).click();
+  await f.page.getByRole("button", { name: "全屏审核", exact: true }).click();
+  const comparison = f.page.getByRole("dialog", { name: "全屏审核：档案更新", exact: true });
+  await comparison.getByText("当前记录", { exact: true }).waitFor();
   assert.match(await comparison.innerText(), /正在使用/); assert.match(await comparison.innerText(), /已停用/);
   assert.match(await comparison.innerText(), /将移除/); assert.match(await comparison.innerText(), /新增/);
+  assert.match(await comparison.innerText(), /来源：合成门诊记录 L2/);
   await f.page.screenshot({ path: "output/doctor-workbench-8h-20260922/screenshots/clinical-proposal-review.png", fullPage: false });
-  await f.page.getByRole("button", { name: "确认这些变更并写入", exact: true }).click();
+  await comparison.getByRole("button", { name: "确认执行", exact: true }).click();
   await f.page.getByRole("dialog").waitFor({ state: "hidden" });
   const saved = (await f.json(`/api/patients/${p.id}`)).data;
   assert.equal(saved.medications[0].status, "stopped"); assert.equal(saved.labs.length, 1);
   await f.page.locator(".pending-badge").waitFor({ state: "detached", timeout: 2000 });
+  await f.page.reload();
+  const reloaded = (await f.json(`/api/patients/${p.id}`)).data;
+  assert.equal(reloaded.medications[0].status, "stopped");
+  assert.equal(reloaded.medications[0].source, "合成门诊记录 L2");
+  assert.deepEqual(reloaded.labs, p.labs);
 });
 
 test("doctor experience: archived patient can be found and restored without losing its chart", { skip }, async (t) => {
@@ -121,6 +129,41 @@ test("doctor experience: archived patient can be found and restored without losi
   await f.page.getByLabel("患者档案状态", { exact: true }).selectOption("active");
   await f.page.locator(".patient-card", { hasText: "ARCHIVE-1" }).waitFor();
   assert.equal((await f.json(`/api/patients/${p.id}`)).data.diagnoses[0].name, "合成既往记录");
+});
+
+test("patient update review keeps failed reads and saves recoverable and rejects a concurrent chart edit", { skip }, async (t) => {
+  const f = await browserFixture(t);
+  const p = (await f.json("/api/patients", "POST", { name: "合成审核失败恢复", medications: [{ name: "合成药物", status: "active", source: "原始合成报告 L1" }] })).data;
+  const proposal = await f.server.runtime.toolPlugins.get("patient_record_propose").execute({ patientId: p.id, summary: "核对停用记录", updateMode: "replace", medications: [{ name: "合成药物", status: "stopped", source: "合成门诊记录 L2" }] });
+  await f.page.goto(f.origin + "/?view=home");
+  await f.page.getByRole("button", { name: /^待确认/ }).click();
+  await f.page.route(`**/api/patients/${p.id}`, route => route.fulfill({ status: 503, json: { error: "合成档案读取故障" } }));
+  await f.page.getByRole("button", { name: "全屏审核", exact: true }).click();
+  const review = f.page.getByRole("dialog", { name: "全屏审核：档案更新", exact: true });
+  const confirm = review.getByRole("button", { name: "确认执行", exact: true });
+  await review.getByRole("alert").filter({ hasText: "读取当前档案失败" }).waitFor();
+  assert.equal(await confirm.isDisabled(), true);
+  await f.page.unroute(`**/api/patients/${p.id}`);
+  await review.getByRole("button", { name: "重试读取档案", exact: true }).click();
+  await review.getByText(/原始合成报告 L1/).waitFor();
+  assert.equal(await confirm.isDisabled(), false);
+  await f.page.route(`**/api/pending-actions/${proposal.id}/confirm`, route => route.fulfill({ status: 503, json: { error: "合成写入网络故障" } }));
+  await confirm.click();
+  await review.getByRole("alert").filter({ hasText: "合成写入网络故障" }).waitFor();
+  assert.equal(await review.isVisible(), true);
+  assert.equal((await f.json(`/api/patients/${p.id}`)).data.medications[0].status, "active");
+  await f.page.unroute(`**/api/pending-actions/${proposal.id}/confirm`);
+  const latest = (await f.json(`/api/patients/${p.id}`, "PATCH", { expectedRevision: p.revision, medications: [{ name: "合成最新药物", status: "active", source: "远端核对记录" }] })).data;
+  await confirm.click();
+  await review.getByRole("alert").filter({ hasText: /档案.*变化/ }).waitFor();
+  assert.equal(await review.isVisible(), true);
+  assert.deepEqual((await f.json(`/api/patients/${p.id}`)).data.medications, latest.medications);
+  assert.equal((await f.json(`/api/pending-actions?patientId=${p.id}`)).data.actions.find(a => a.id === proposal.id).status, "pending");
+  await review.getByRole("button", { name: "关闭全屏审核", exact: true }).click();
+  await f.page.getByRole("button", { name: "全屏审核", exact: true }).click();
+  await review.getByRole("alert").filter({ hasText: /档案.*变化/ }).waitFor();
+  assert.equal(await confirm.isDisabled(), true);
+  await review.getByText(/远端核对记录/).waitFor();
 });
 
 test("doctor experience: today's agenda opens the correct patient and tracks completed follow-up", { skip }, async (t) => {
@@ -260,9 +303,9 @@ test("doctor experience: narrow screens keep context and settings reachable with
     const box=await entry.boundingBox();assert.ok(box.x>=0 && box.x+box.width<=width);
     await f.page.getByRole('button',{name:'设置与连接',exact:true}).click();
     await f.page.getByRole('heading',{name:'设置',exact:true}).waitFor();
-    await f.page.getByRole('button',{name:'配置模型',exact:true}).click();
-    await f.page.getByRole('dialog',{name:'切换模型',exact:true}).waitFor();await f.page.keyboard.press('Escape');
-    await f.page.getByRole('dialog',{name:'切换模型',exact:true}).waitFor({state:'hidden'});
+    await f.page.getByRole('button',{name:'选择模型',exact:true}).click();
+    await f.page.getByRole('dialog',{name:'模型与识别',exact:true}).waitFor();await f.page.keyboard.press('Escape');
+    await f.page.getByRole('dialog',{name:'模型与识别',exact:true}).waitFor({state:'hidden'});
     await f.page.getByRole('button',{name:'打开工作台导航'}).click();await entry.click();
   }
   await f.page.setViewportSize({ width: 390, height: 844 });
@@ -277,7 +320,8 @@ test("new task stays focused and agenda round-trip preserves draft on desktop an
   assert.equal(await f.page.getByRole("region",{name:"今日待办",exact:true}).count(),0);
   assert.equal(await f.page.getByRole("heading",{name:"继续最近的工作"}).count(),0);
   const input=f.page.getByRole("textbox",{name:"任务内容",exact:true});
-  assert.ok((await input.boundingBox()).y<400);
+  const box = await input.boundingBox();
+  assert.ok(box.y >= 0 && box.y + box.height <= f.page.viewportSize().height, "任务输入框应完整位于首屏");
   await input.fill("保留这份未发送的任务草稿");
   await f.page.getByRole("button",{name:"今日待办",exact:true}).click();
   await f.page.getByRole("region",{name:"今日待办",exact:true}).waitFor();

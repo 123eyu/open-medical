@@ -72,6 +72,7 @@ test('project entry creates a separate conversation and runs the submitted goal 
   await page.goto(origin);
   await page.getByRole('combobox',{name:'任务关联项目'}).selectOption(project.id);
   await page.getByRole('textbox',{name:'任务内容',exact:true}).fill('仅回答你好，不操作文件。');
+  await page.getByRole('checkbox',{name:'本轮允许外发',exact:true}).check();
   const created=page.waitForResponse(r=>r.url().endsWith(`/workspaces/${project.id}/tasks`)&&r.request().method()==='POST');
   await page.getByRole('button',{name:'发送任务',exact:true}).click();
   const child=await(await created).json();assert.notEqual(child.id,project.id);

@@ -85,7 +85,7 @@ test('live journey one patient materials model chart proposal care followup back
  const f=await start(t),{page}=f;
  await openIntake(page);await page.getByRole('button',{name:'没有资料？手动建档',exact:true}).click();
  await page.getByLabel('姓名 *',{exact:true}).fill('连续闭环合成患者');await page.getByLabel('患者编号（可选）',{exact:true}).fill('JOURNEY-001');await page.getByRole('button',{name:'创建患者档案',exact:true}).click();
- await page.getByRole('button',{name:'打开病例工作区',exact:true}).click();
+ await page.getByRole('button',{name:'打开问诊工作台',exact:true}).click();
  const p=(await f.json('/api/patients')).patients[0];
  const chooser=page.waitForEvent('filechooser');await page.getByRole('button',{name:'附件',exact:true}).click();await(await chooser).setFiles({name:'合成复诊记录.txt',mimeType:'text/plain',buffer:Buffer.from('软件验收合成资料，不对应真实患者。\n患者编号 JOURNEY-001。\n2026-09-24 检验：合成指标 321 TEST。\n过敏史尚未核对，不得记为无过敏。\n仅补充检验资料，不作临床建议。')});
  await page.waitForFunction(()=>!document.querySelector('.composer button:disabled')?.textContent.includes('上传'));
@@ -107,7 +107,7 @@ test('live journey one patient materials model chart proposal care followup back
  await page.getByRole('button',{name:'已结束',exact:true}).click();await page.locator('.care-tracking-card').waitFor();
  await page.getByRole('button',{name:'随访计划',exact:true}).click();await page.getByRole('button',{name:'记录一次联系',exact:true}).click();await page.getByLabel('随访记录',{exact:true}).fill('闭环完成，合成患者已收到反馈');await page.getByRole('button',{name:'保存随访结果',exact:true}).click();await page.getByRole('status').filter({hasText:'随访结果已保存'}).waitFor();
  await f.restart(true);await patient(page,p.name);await page.getByRole('button',{name:'沟通与随访',exact:true}).click();await page.getByRole('button',{name:'随访计划',exact:true}).click();await page.getByRole('button',{name:/随访记录 1/}).click();await page.getByText('闭环完成，合成患者已收到反馈',{exact:true}).waitFor();
- await page.getByRole('button',{name:'打开病例工作区',exact:true}).click();await send(page,'只读取这位患者最新档案和联系记录，回答合成指标数值与最近联系内容。不生成文书或提案。');
+ await page.getByRole('button',{name:'打开问诊工作台',exact:true}).click();await send(page,'只读取这位患者最新档案和联系记录，回答合成指标数值与最近联系内容。不生成文书或提案。');
  const next=await finish(f,p.sessionId,1),answer=next.messages.filter(m=>m.role==='assistant').at(-1).content;assert.match(answer,/321/);assert.match(answer,/反馈|闭环/);
  assert.equal((await f.json('/api/patients/'+p.id)).labs.length,1);
  await openTool(page, '临床试验');await page.getByRole('button',{name:'添加试验方案',exact:true}).click();

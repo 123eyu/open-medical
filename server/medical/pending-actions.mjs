@@ -3,7 +3,7 @@ import { learningPrefs } from "./personal-context.mjs";
 import { ReviewLog } from "./review-log.mjs";
 import { HabitLearner } from "./habit-learner.mjs";
 import { alignReviewItems, reviewDiff, diffSummary } from "../../shared/review-diff.mjs";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { check, string } from "../errors.mjs";
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
 import { validateClinicalInput, validateIdentityInput, normalizePatientCreate } from "../patients.mjs";
@@ -36,6 +36,11 @@ const TYPES = [
 const isCare = (type) => type.startsWith("care-");
 const isTrial = (type) => type.startsWith("trial-");
 const isExt = (type) => type.startsWith("ext-");
+const confirmationFingerprint = (value) => {
+  const canonical = (item) => Array.isArray(item) ? item.map(canonical) : item && typeof item === "object"
+    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, canonical(item[key])])) : item;
+  return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+};
 // 医生在聊天里口头同意即可经 proposal_confirm 执行的本地档案类提案；
 // care-/trial-/ext- 涉及对外发送或安装代码，仍只走「待确认」面板。
 const CHAT_CONFIRM_TYPES = [
@@ -55,6 +60,11 @@ export class PendingActions {
     this.services = services;
     this.reviewLog = new ReviewLog(store);
     this.habitLearner = new HabitLearner(store, services.doctor?.());
+    store.db.exec(`CREATE TABLE IF NOT EXISTS patient_create_confirmations (
+      action_id TEXT PRIMARY KEY REFERENCES pending_actions(id) ON DELETE CASCADE,
+      patient_id TEXT NOT NULL,
+      fingerprint TEXT NOT NULL
+    )`);
   }
   get patients() {
     return this.services.patients();
@@ -367,6 +377,19 @@ export class PendingActions {
     const feedback = this.feedbackNote(note);
     try { return sqliteTransaction(this.store.db, () => {
       const action = this.row(id);
+      if (action.type === "patient-create" && action.status === "applied") {
+        const receipt = this.store.db.prepare("SELECT patient_id,fingerprint FROM patient_create_confirmations WHERE action_id=?").get(id);
+        // Older confirmations already have an exact action-to-patient audit link.
+        // Never recover by patient name or by a different proposal from the same task.
+        const legacy = !receipt && this.store.db.prepare("SELECT patient_id FROM review_sessions WHERE action_id=? AND kind='intake' AND superseded=0").get(id);
+        check(receipt || legacy, "ACTION_RESOLVED", "该提案已处理，但无法确认对应档案，请从患者列表核对。", 409);
+        if (payload !== undefined) {
+          const saved = receipt?.fingerprint || confirmationFingerprint(action.reviewDraft?.payload || action.payload);
+          check(confirmationFingerprint(this.normalizeReview(action, payload)) === saved,
+            "ACTION_CONFLICT", "该建档提案已保存，当前修改与已确认内容不同；请打开已有档案核对修改。", 409);
+        }
+        return { ok: true, action, applied: this.patients.row((receipt || legacy).patient_id), replayed: true, habitSuggestions: [], remembered: [], pausedHabits: [] };
+      }
       const eventCursor = this.store.db.prepare("SELECT COALESCE(MAX(id),0) n FROM learning_events").get().n;
       check(
         action.status === "pending",
@@ -410,6 +433,7 @@ export class PendingActions {
         check(expectedRevision === undefined || expectedRevision === action.reviewRevision, 'REVISION_CONFLICT', '草稿已更新，请重新核对', 409);
         const final = payload === undefined ? action.payload : this.normalizeReview(action, payload);
         const patient = this.patients.create(final);
+        this.store.db.prepare("INSERT INTO patient_create_confirmations(action_id,patient_id,fingerprint) VALUES (?,?,?)").run(id, patient.id, confirmationFingerprint(final));
         this.reviewLog.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });
         applied = { ...patient };
         if (action.payload.sourceSessionId && this.services.copySourceMaterials)

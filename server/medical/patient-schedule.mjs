@@ -20,6 +20,7 @@ export class PatientSchedule {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS appointments(id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, date TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS appointments_due ON appointments(status, date);
+      CREATE TABLE IF NOT EXISTS appointment_requests(patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, appointment_id TEXT NOT NULL REFERENCES appointments(id) ON DELETE CASCADE, PRIMARY KEY(patient_id, request_id));
       CREATE TABLE IF NOT EXISTS lab_reviews(patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, key TEXT NOT NULL, reviewed_at TEXT NOT NULL, PRIMARY KEY(patient_id, key));
     `);
     // Labs already in charts when this feature arrives are not "new".
@@ -61,15 +62,27 @@ export class PatientSchedule {
     };
   }
   create(patientId, input = {}) {
-    const patient = this.patients.row(identifier(patientId));
-    check(!patient.archived, "PATIENT_ARCHIVED", "已归档患者不能预约复诊", 409);
-    const value = this.fields(input);
-    check(value.date >= this.today(), "INVALID_INPUT", "复诊日期不能早于今天");
-    const at = new Date(this.now()).toISOString();
-    const item = { id: randomUUID(), patientId: patient.id, ...value, status: "scheduled", note: "", createdAt: at, updatedAt: at, history: [] };
-    this.db.prepare("INSERT INTO appointments VALUES (?,?,?,?,?)").run(item.id, item.patientId, item.date, item.status, JSON.stringify(item));
-    this.store.audit(null, "appointment.created", { patientId: item.patientId, appointmentId: item.id, date: item.date });
-    return item;
+    return sqliteTransaction(this.db, () => {
+      const patient = this.patients.row(identifier(patientId));
+      const value = this.fields(input);
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const fingerprint = createHash("sha256").update(JSON.stringify(value)).digest("hex");
+      if (requestId) {
+        const previous = this.db.prepare("SELECT * FROM appointment_requests WHERE patient_id=? AND request_id=?").get(patient.id, requestId);
+        if (previous) {
+          check(previous.fingerprint === fingerprint, "REQUEST_CONFLICT", "这次预约提交的内容已变化，请先核对已保存的预约；如需另建预约，请取消后重新预约", 409);
+          return this.row(previous.appointment_id);
+        }
+      }
+      check(!patient.archived, "PATIENT_ARCHIVED", "已归档患者不能预约复诊", 409);
+      check(value.date >= this.today(), "INVALID_INPUT", "复诊日期不能早于今天");
+      const at = new Date(this.now()).toISOString();
+      const item = { id: randomUUID(), patientId: patient.id, ...value, status: "scheduled", note: "", createdAt: at, updatedAt: at, history: [] };
+      this.db.prepare("INSERT INTO appointments VALUES (?,?,?,?,?)").run(item.id, item.patientId, item.date, item.status, JSON.stringify(item));
+      if (requestId) this.db.prepare("INSERT INTO appointment_requests VALUES (?,?,?,?)").run(patient.id, requestId, fingerprint, item.id);
+      this.store.audit(null, "appointment.created", { patientId: item.patientId, appointmentId: item.id, date: item.date });
+      return item;
+    });
   }
   // Reschedule (date/time/reason/place) or record the outcome (status + note).
   update(id, input = {}) {

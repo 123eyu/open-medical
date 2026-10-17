@@ -58,8 +58,9 @@ test("education materials live in their own collection with the review loop", as
   assert.equal(badRevision.status, 409);
 });
 
-test("smart-reply drafting puts reviewed education material first in the prompt", async () => {
+test("smart-reply drafting puts education material allowed for external use first in the prompt", async () => {
   const prompts = [];
+  const searches = [];
   const channel = new WecomAibotChannel({
     provider: {
       apiKey: "test",
@@ -70,8 +71,9 @@ test("smart-reply drafting puts reviewed education material first in the prompt"
       },
     },
     guidelines: {
-      async search({ collection, reviewStatus }) {
-        if (collection === "患教素材" && reviewStatus === "reviewed")
+      async search(args) {
+        searches.push(args);
+        if (args.collection === "患教素材" && args.externalOnly === true)
           return { hits: [{ docTitle: "介入术后居家注意", docId: "gl_edu", startLine: 1, endLine: 3, matches: [{ text: BODY }] }] };
         return { hits: [{ docTitle: "肝癌诊疗指南", docId: "gl_guide", startLine: 10, endLine: 20, matches: [{ text: "指南原文片段" }] }] };
       },
@@ -80,11 +82,37 @@ test("smart-reply drafting puts reviewed education material first in the prompt"
   const draft = await channel.modelDraft({ patientId: "p1", title: "会话" }, "术后要注意什么？");
   assert.equal(draft, "好的");
   assert.equal(prompts.length, 1);
+  assert.deepEqual(searches[0], { query: "术后要注意什么？", collection: "患教素材", externalOnly: true, limit: 2 });
   const user = JSON.parse(prompts[0].find((m) => m.role === "user").content);
   assert.ok(user.知识库[0].title.startsWith("[患教素材]"), "患教素材应排最前");
   assert.match(user.知识库[0].snippet, /伤口保持干燥/);
   const system = prompts[0].find((m) => m.role === "system").content;
   assert.match(system, /\[患教素材\]/);
+});
+
+test("smart-reply education priority follows stored external permission rather than review status", async (t) => {
+  const f = await setup(t);
+  const library = f.server.guidelines;
+  library.embedder = null;
+  const allowed = await createMaterial(f);
+  library.updateMetadata(allowed.id, { expectedRevision: 0, allowExternalUse: true });
+  const privateMaterial = await library.addDocument({
+    title: "仅内部核对的伤口素材", collection: "患教素材", kind: "患教", text: "伤口内部核对测试原文。",
+  });
+  library.updateMetadata(privateMaterial.id, { expectedRevision: 0, reviewStatus: "reviewed", reviewNote: "合成核对", allowExternalUse: false });
+  const prompts = [];
+  const channel = new WecomAibotChannel({
+    guidelines: library,
+    provider: { async complete(messages) { prompts.push(messages); return { message: { content: "合成草稿" } }; } },
+  });
+  await channel.modelDraft({ patientId: f.patient.id, title: "合成会话" }, "伤口");
+  const knowledge = JSON.parse(prompts[0].find(m => m.role === "user").content).知识库;
+  const education = knowledge.filter(item => item.title.startsWith("[患教素材]"));
+  assert.equal(education.length, 1);
+  assert.equal(knowledge[0], education[0]);
+  assert.match(education[0].snippet, /伤口保持干燥/);
+  assert.equal(library.get(allowed.id).reviewStatus, "unreviewed");
+  assert.equal(library.get(privateMaterial.id).allowExternalUse, false);
 });
 
 function wecomFetch(log) {

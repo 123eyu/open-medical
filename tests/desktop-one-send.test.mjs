@@ -92,6 +92,7 @@ test("桌面 · 项目任务一次发送：首页发送后自动开始运行", {
   await page
     .locator(".hub-composer textarea")
     .fill("列出当前目录下的文件名，并用一句话说明这个文件夹的用途。");
+  await page.getByRole("checkbox", { name: "本轮允许外发", exact: true }).check();
   const created=page.waitForResponse(r=>r.url().endsWith(`/workspaces/${seededWorkspace.id}/tasks`));
   await page.getByRole("button",{name:"发送任务",exact:true}).click();
   const task=await(await created).json();

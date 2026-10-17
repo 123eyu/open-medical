@@ -2,7 +2,7 @@ import { ReviewLog } from "./medical/review-log.mjs";
 import {taskPresentation} from '../shared/task-presentation.mjs';
 import {requestsMedicalDeliverable} from '../shared/medical-delivery.mjs';
 import { collectWorkspaceDelivery } from "./core/workspace-delivery.mjs";
-import {similarCaseQuestion} from './medical/similar-case-workflow.mjs';
+import {similarCaseQuestion, similarCaseSearchScope} from './medical/similar-case-workflow.mjs';
 import { assessmentQuestion } from "./medical/assessment-tools.mjs";
 // Session Bridge：把「统一内核工作区（kind:"session"）」投影成首页医疗
 // 会话的 API 形状，并按会话类别双轨分派——新建会话走 WorkspaceService
@@ -865,7 +865,7 @@ export class SessionBridge {
     const assessment = Boolean(w.patientId && policy.workflow !== "patient-intake" && (body.workflow === "patient-assessment" || assessmentQuestion(message)));
     const similarCases = Boolean(w.patientId && policy.workflow !== "patient-intake" && similarCaseQuestion(message));
     if (assessment) policy.workflow = "patient-assessment";
-    if (similarCases) { policy.workflow = "similar-case-search"; policy.intent = "similar_cases"; policy.searchScope = /(?:只|仅).{0,6}本地|不要.{0,3}(?:联网|网上)/.test(message) ? "local" : "online"; }
+    if (similarCases) { policy.workflow = "similar-case-search"; policy.intent = "similar_cases"; policy.searchScope = similarCaseSearchScope(message); }
     policy.presentation = taskPresentation(message);
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
     const fileIds = this.selectMaterials(w, body.fileIds);

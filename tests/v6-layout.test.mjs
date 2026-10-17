@@ -25,9 +25,10 @@ test('V6 uses real navigation, project identity, task history and display modes 
  await page.getByRole('button',{name:'查看全部项目文件',exact:true}).click();await projects.locator('.directory-open',{hasText:'项目乙'}).click();
  await page.locator('.conversation-head h1').filter({hasText:'项目乙'}).waitFor();
  await page.locator('.composer textarea').fill('保留在项目乙的输入草稿');
- const modes=page.getByRole('group',{name:'工作区显示方式'});
- await modes.getByRole('button',{name:'AI 全屏',exact:true}).click();assert.equal(await page.locator('.inspector').isVisible(),false);
- await modes.getByRole('button',{name:'AI 半屏',exact:true}).click();await page.locator('.inspector').waitFor();assert.equal(await page.locator('.inspector').isVisible(),true);
+ const modes=page.locator('.display-modes.single');
+ await modes.click();assert.equal(await modes.innerText(),'显示：AI 半屏');
+ await modes.click();assert.equal(await modes.innerText(),'显示：AI 全屏');assert.equal(await page.locator('.inspector').isVisible(),false);
+ await modes.click();assert.equal(await modes.innerText(),'显示：工作区');await page.locator('.inspector').waitFor();assert.equal(await page.locator('.inspector').isVisible(),true);
  assert.equal(await page.locator('.composer textarea').inputValue(),'保留在项目乙的输入草稿');
  await page.screenshot({path:'output/playwright/v6-project.png'});
  await page.getByRole('navigation',{name:'资料与工具',exact:true}).getByRole('button').click();await page.getByRole('main',{name:'工具目录'}).waitFor();
@@ -41,10 +42,24 @@ test('V6 uses real navigation, project identity, task history and display modes 
  assert.equal(await history.getByRole('button',{name:/持续任务验收/}).count(),1);
  await history.getByRole('button',{name:/持续任务验收/}).click();await page.locator('.conversation-head h1').filter({hasText:'持续任务验收'}).waitFor();
  await page.locator('.composer textarea').fill('保留独立任务草稿');
- await modes.getByRole('button',{name:'AI 全屏',exact:true}).click();assert.equal(await page.locator('.inspector').isVisible(),false);
- await modes.getByRole('button',{name:'AI 半屏',exact:true}).click();await page.locator('.inspector').waitFor();assert.equal(await page.locator('.inspector').isVisible(),true);
+ await page.getByRole('button',{name:'查看资料',exact:true}).click();await page.locator('.inspector').waitFor();
+ await page.getByRole('button',{name:'收起资料',exact:true}).click();assert.equal(await page.locator('.inspector').isVisible(),false);
+ await page.getByRole('button',{name:'查看资料',exact:true}).click();await page.locator('.inspector').waitFor();
  assert.equal(await page.locator('.composer textarea').inputValue(),'保留独立任务草稿');
- await page.getByRole('button',{name:'Aa · 大字模式',exact:true}).click();
+ const withFile=await f.session('有合成材料的独立任务');
+ await f.json('/api/sessions/'+withFile.id+'/files','POST',{name:'合成材料.txt',text:'仅用于显示模式回归。'});
+ for(const previous of [session,withFile]) {
+  await page.goto(f.origin+'/?view=workbench&session='+previous.id);await page.locator('.composer textarea').waitFor();
+  if(previous.id===withFile.id){await page.getByRole('button',{name:'查看资料',exact:true}).click();await page.locator('.file-card').waitFor();}
+  await page.getByRole('button',{name:'查看全部项目文件',exact:true}).click();
+  await page.getByRole('main',{name:'项目目录'}).locator('.directory-open',{hasText:'项目乙'}).click();
+  await page.locator('.conversation-head h1').filter({hasText:'项目乙'}).waitFor();
+  await modes.waitFor();await page.locator('.composer textarea').fill('切换显示保持项目草稿');
+  for(let i=0;i<3;i++)await modes.click();
+  assert.equal(await page.locator('.composer textarea').inputValue(),'切换显示保持项目草稿');
+  await page.reload();await modes.waitFor();await page.getByRole('button',{name:'浏览工作区文件',exact:true}).click();await page.getByText('note.md',{exact:true}).first().waitFor();
+ }
+ await page.getByRole('button',{name:'Aa · 切换字号（标准/大/特大）',exact:true}).click();
  await page.setViewportSize({width:600,height:900});
  await page.getByRole('button',{name:'打开工作台导航',exact:true}).click();assert.equal(await page.getByRole('navigation',{name:'资料与工具',exact:true}).getByRole('button').isVisible(),true);
  await page.getByRole('navigation',{name:'资料与工具',exact:true}).getByRole('button').click();await page.getByRole('main',{name:'工具目录'}).waitFor();

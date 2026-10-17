@@ -239,6 +239,8 @@ test(
     const f = await setup(t),
       { page } = f;
     await page.goto(f.origin + "/?view=settings");
+    await page.getByRole("button", { name: "技能与规则", exact: true }).click();
+    await page.getByRole("button", { name: "学习与记忆", exact: true }).click();
     const settings = page.getByRole("region", { name: "学习与隐私" });
     await settings
       .getByRole("radio", { name: "仅本地模型", exact: true })
@@ -249,7 +251,8 @@ test(
         .isChecked(),
       true,
     );
-    assert.equal(await settings.getByRole("switch").count(), 3);
+    assert.equal(await settings.getByRole("switch").count(), 4);
+    assert.equal(await settings.getByRole("switch", {name:"新会话默认允许把患者材料发给模型服务",exact:true}).isChecked(), false);
     assert.equal(
       await settings.getByRole("switch", { name: "参与效果比较" }).isVisible(),
       false,
@@ -296,7 +299,7 @@ test(
     });
     await page.goto(f.origin + "/?view=home");
     await page.locator(".pending-badge").click();
-    await page.getByRole("button", { name: "拒绝", exact: true }).click();
+    await page.getByRole("region", { name: "待确认的操作" }).getByRole("button", { name: "拒绝", exact: true }).click();
     await page.getByLabel("拒绝原因（建档提案）").fill("以后小结都写成段落");
     await page.getByRole("button", { name: "记录并拒绝", exact: true }).click();
     const notice = page.locator(".pending-tray").getByRole("status");
@@ -327,7 +330,7 @@ test(
     );
     await page.reload();
     await page.locator(".pending-badge").click();
-    await page.getByRole("button", { name: "确认执行", exact: true }).click();
+    await page.getByRole("region", { name: "待确认的操作" }).getByRole("button", { name: "确认执行", exact: true }).click();
     await notice.waitFor();
     assert.match(await notice.innerText(), /记下了：以后摘要先写变化/);
     await notice.getByRole("link", { name: "查看" }).click();

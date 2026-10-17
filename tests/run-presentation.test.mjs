@@ -313,6 +313,7 @@ test(
     await page
       .locator(".composer textarea")
       .fill("请摘录检验数值：血糖 8.9 mmol/L，血红蛋白 105 g/L");
+    await page.getByRole('checkbox', {name:'本轮允许外发', exact:true}).check();
     await page.locator(".composer textarea").press("Enter");
     await page.waitForSelector('.artifact-inline',{timeout:60000});
     assert.equal(await page.locator('.wb-outcome.delivered').count(),0,'成功交付不再重复展示技术回执');
@@ -324,6 +325,7 @@ test(
     await page
       .locator(".composer textarea")
       .fill("请整理本次材料的检验数值，生成一份核对表");
+    await page.getByRole('checkbox', {name:'本轮允许外发', exact:true}).check();
     await page.locator(".composer textarea").press("Enter");
     await page.waitForFunction(()=>document.querySelectorAll(".message-list .message").length>=4,undefined,{timeout:60000});
     await page.waitForSelector(".wb-outcome.answered", { timeout: 60000 });
@@ -350,6 +352,7 @@ test(
       .click();
     await page.waitForSelector(".composer textarea", { timeout: 15000 });
     await page.locator(".composer textarea").fill("把资料整理成清单");
+    await page.getByRole('checkbox', {name:'本轮允许外发', exact:true}).check();
     await page.locator(".composer textarea").press("Enter");
     await page.waitForFunction(
       () =>
@@ -360,9 +363,7 @@ test(
     );
     await page.locator(".composer textarea").fill("补充：按日期分组");
     await page.locator(".composer textarea").press("Enter");
-    await page.waitForSelector(".notice:has-text('补充要求已加入队列')", {
-      timeout: 15000,
-    });
+    await page.getByRole('status').filter({hasText:'补充要求已加入队列'}).waitFor({timeout:15000});
     await page.waitForSelector(
       '.message:has-text("已收到补充，清单已按日期分组整理完成")',
       { timeout: 60000 },

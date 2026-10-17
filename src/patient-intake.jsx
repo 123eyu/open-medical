@@ -97,7 +97,12 @@ export function PatientIntakeModal({ onClose, onCreated, onManual, onOpenWorkspa
         api(`/api/sessions/${id}`), intakeActions("pending", id), intakeActions("applied", id), api("/api/sessions"),
       ]);
       if (!mounted.current) return;
-      if (applied.actions.some(a => a.type === "patient-create" && a.payload.sourceSessionId === id)) throw new Error("该任务已完成建档，请到患者档案查看。");
+      const completed = applied.actions.find(a => a.type === "patient-create" && a.payload.sourceSessionId === id);
+      if (completed) {
+        const result = await api(`/api/pending-actions/${completed.id}/confirm`, "POST", {});
+        await onCreated(result.applied);
+        return;
+      }
       const running = saved.intakeJob?.status === "running";
       if (intakeUploads.has(id)) throw new Error("资料仍在上传，请稍候再查看。");
       if (!running && sessions.sessions.find(item => item.id === id)?.running) throw new Error("该任务仍在处理中，请打开资料工作区查看进度。");

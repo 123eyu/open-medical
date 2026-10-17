@@ -243,10 +243,11 @@ test("browser: 我的工作台 shows skills, rules and suggestions; templates re
   assert.equal(f.ext.stats(rule.id).done, 1);
 
   await page.goto(f.origin + "/?view=settings");
+  await page.getByRole("button", { name: "技能与规则", exact: true }).click();
   await page.getByRole("button", { name: "技能", exact: true }).click();
   await page.getByRole("article", { name: skill.name }).getByText("首页快捷任务「本院出院小结」").waitFor();
-  await page.getByRole("button", { name: "我的工作台" }).click();
-  const center = page.getByRole("region", { name: "我的工作台" });
+  await page.getByRole("button", { name: "自动化规则", exact: true }).click();
+  const center = page.getByRole("region", { name: "自动化规则" });
   await center.getByRole("article", { name: "每日看看糖友" }).getByText(/已产生 1 条：完成 1/).waitFor();
   if (shots) await page.screenshot({ path: `${shots}-center.png`, fullPage: true });
   await center.getByRole("button", { name: "在对话中完善" }).click();

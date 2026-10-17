@@ -3,6 +3,7 @@ import { ClipboardCheck, X } from "lucide-react";
 import { api, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import "./care.css";
 import { RememberedNotice } from "./learning-loop";
+import { PatientProposalComparison } from "./patient-proposal";
 
 const TYPES = { "patient-create": "建档提案", "patient-update": "档案更新", "followup-create": "随访提醒", "case-save": "病例入库", "care-message": "发送消息", "care-campaign": "随访计划", "care-settings": "自动化设置", "care-bind": "关联微信客户", "care-group-message": "客户群群发", "care-education-broadcast": "患教群发", "patient-group-suggest": "分组建议", "patient-grouping": "患者分组", "trial-batch": "批量 AI 初筛", "trial-enrollment": "试验入组状态", "ext-change": "工作台扩展", "ext-install": "技能安装" };
 export { PENDING_REFRESH_EVENT } from "./agent-runtime";
@@ -70,8 +71,22 @@ function ReviewSection({ title, items, render }) {
   </section>;
 }
 
-function PendingReviewOverlay({ action, busy, onConfirm, onReject, onClose }) {
+function PendingReviewOverlay({ action, busy, error, onConfirm, onReject, onClose }) {
   const p = action.payload || {};
+  const [record, setRecord] = useState(null);
+  const [loadError, setLoadError] = useState("");
+  const [reload, setReload] = useState(0);
+  const updating = action.type === "patient-update";
+  useEffect(() => {
+    let active = true;
+    setRecord(null); setLoadError("");
+    if (updating) api(`/api/patients/${encodeURIComponent(action.patientId)}`)
+      .then(patient => { if (active) setRecord({ actionId: action.id, patient }); })
+      .catch(e => { if (active) setLoadError(e.message); });
+    return () => { active = false; };
+  }, [updating, action.id, action.patientId, reload]);
+  const patient = record?.actionId === action.id ? record.patient : null;
+  const stale = updating && patient && patient.revision !== action.baseRevision;
   const gender = { male: "男", female: "女", unknown: "待补" }[p.gender] || "待补";
   const identity = [
     ["姓名", p.name],
@@ -98,7 +113,13 @@ function PendingReviewOverlay({ action, busy, onConfirm, onReject, onClose }) {
       <button className="icon-button" aria-label="关闭全屏审核" onClick={onClose}><X size={18} /></button>
     </header>
     <div className="pending-review-body">
-      {clinical && <>
+      {updating && <>
+        {loadError ? <p role="alert">读取当前档案失败：{loadError} <button disabled={busy} onClick={() => setReload(value => value + 1)}>重试读取档案</button></p>
+          : !patient && <p role="status">正在读取当前档案，准备核对变更…</p>}
+        {patient && <PatientProposalComparison patient={patient} proposal={action} />}
+        {stale && <p role="alert" className="error-text">档案在提案后已变化，请关闭并重新生成提案，避免覆盖新记录。</p>}
+      </>}
+      {clinical && !updating && <>
         <section className="pending-review-section">
           <h4>{action.type === "patient-create" ? "患者基本信息" : "身份信息变更"}</h4>
           {action.type === "patient-update" && identityChanges.length
@@ -119,6 +140,7 @@ function PendingReviewOverlay({ action, busy, onConfirm, onReject, onClose }) {
         {p.note && <section className="pending-review-section"><h4>AI 备注（含待核对点）</h4><pre>{p.note}</pre></section>}
       </>}
       {!clinical && <Preview action={action} />}
+      {error && <p role="alert" className="care-error">{error}</p>}
       <section className="pending-review-section pending-review-consequence">
         <h4>确认与拒绝的后果</h4>
         <p>确认执行：{clinical
@@ -129,7 +151,7 @@ function PendingReviewOverlay({ action, busy, onConfirm, onReject, onClose }) {
     </div>
     <footer>
       <button className="secondary" disabled={busy} onClick={onReject}>拒绝</button>
-      <button disabled={busy} onClick={onConfirm}>{busy ? "处理中…" : "确认执行"}</button>
+      <button disabled={busy || (updating && (!patient || stale || Boolean(loadError)))} onClick={onConfirm}>{busy ? "处理中…" : "确认执行"}</button>
     </footer>
   </div>;
 }
@@ -173,6 +195,7 @@ export function PendingTray() {
       if (result.remembered?.length) setRemembered({ key: `${action.id}:${decision}`, memories: result.remembered });
       setRejecting(null); setNote("");
       await load();
+      return true;
     }
     catch (e) { setError(e.message); }
     finally { setBusy(""); }
@@ -201,7 +224,7 @@ export function PendingTray() {
             <button className="text-button" disabled={Boolean(busy)} onClick={() => resolve(a, "reject", false)}>不填了，直接拒绝</button>
           </div>
         </div> : <footer>
-          <button className="text-button" disabled={Boolean(busy)} onClick={() => setReviewing(a)}>全屏审核</button>
+          <button className="text-button" disabled={Boolean(busy)} onClick={() => { setError(""); setReviewing(a); }}>全屏审核</button>
           <button className="secondary" disabled={Boolean(busy)} onClick={() => { setRejecting(a.id); setNote(""); }}>拒绝</button>
           <button disabled={Boolean(busy)} onClick={() => resolve(a, "confirm")}>{busy === a.id ? "处理中…" : "确认执行"}</button>
         </footer>}
@@ -210,8 +233,9 @@ export function PendingTray() {
     {reviewing && <PendingReviewOverlay
       action={actions.find((a) => a.id === reviewing.id) || reviewing}
       busy={Boolean(busy)}
-      onConfirm={() => resolve(reviewing, "confirm").then(() => setReviewing(null)).catch(() => {})}
-      onReject={() => { resolve(reviewing, "reject").then(() => setReviewing(null)).catch(() => {}); }}
+      error={error}
+      onConfirm={() => resolve(reviewing, "confirm").then(ok => { if (ok) setReviewing(null); })}
+      onReject={() => { resolve(reviewing, "reject").then(ok => { if (ok) setReviewing(null); }); }}
       onClose={() => setReviewing(null)}
     />}
     {!!actions.length && <button className="pending-badge" aria-expanded={open} onClick={() => setOpen((v) => !v)}><ClipboardCheck size={18} />待确认<em>{actions.length}</em></button>}

@@ -13,58 +13,7 @@ export const nodeColors = {
   人群: "#8a8271",
   随访: "#5b8b63",
 };
-export function graphSlice(
-  graph,
-  {
-    query = "",
-    type = "",
-    community = "",
-    relation = "",
-    selected = "",
-    limit = 90,
-  } = {},
-) {
-  const search = query.trim().toLowerCase();
-  const allowedEdges = graph.edges.filter(
-    (e) => !relation || e.relationType === relation,
-  );
-  const relatedIds = new Set(allowedEdges.flatMap((e) => [e.from, e.to]));
-  const matches = graph.nodes.filter(
-    (n) =>
-      (!type || n.type === type) &&
-      (!community || n.community === community) &&
-      (!relation || relatedIds.has(n.id)) &&
-      (!search ||
-        [n.label, ...(n.aliases || [])].some((v) =>
-          v.toLowerCase().includes(search),
-        )),
-  );
-  const matchIds = new Set(matches.map((n) => n.id));
-  const neighbors = new Set(
-    allowedEdges
-      .filter((e) => e.from === selected || e.to === selected)
-      .flatMap((e) => [e.from, e.to]),
-  );
-  const candidates = selected
-    ? graph.nodes.filter(
-        (n) => n.id === selected || (neighbors.has(n.id) && matchIds.has(n.id)),
-      )
-    : matches;
-  const nodes = [...candidates]
-    .sort(
-      (a, b) =>
-        (b.id === selected) - (a.id === selected) ||
-        (b.degree || 0) - (a.degree || 0) ||
-        a.id.localeCompare(b.id),
-    )
-    .slice(0, limit);
-  const ids = new Set(nodes.map((n) => n.id));
-  return {
-    nodes,
-    edges: allowedEdges.filter((e) => ids.has(e.from) && ids.has(e.to)),
-    total: candidates.length,
-  };
-}
+export { graphSlice } from "../shared/knowledge-graph-search.mjs";
 // Deterministic force layout: graph topology drives positions, collision forces
 // reserve label space. Computed only when the visible subgraph changes.
 export function layoutGraph(nodes, edges) {

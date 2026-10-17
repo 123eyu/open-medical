@@ -14,10 +14,12 @@ test("patient question UI: new question, follow-up, history, reload and patient 
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  await page.goto(f.origin+"/?view=patients");
  await page.locator(".patient-card",{hasText:"问答测试甲"}).click();
- await page.getByRole("button",{name:"打开病例工作区",exact:true}).click();
+ await page.getByRole("button",{name:"打开问诊工作台",exact:true}).click();
  await page.getByText("问一个新问题",{exact:true}).waitFor();
  async function send(message){
   await page.getByRole("textbox",{name:"医疗工作需求",exact:true}).fill(message);
+  const consent = page.getByRole("checkbox",{name:"本轮允许外发",exact:true});
+  if (await consent.isVisible()) await consent.check();
   await page.getByRole("button",{name:"发送任务",exact:true}).click();
   await page.locator(".patient-question-context").filter({hasText:"继续追问"}).waitFor();
  }
@@ -55,7 +57,7 @@ test("patient question UI: new question, follow-up, history, reload and patient 
  await page.getByRole("button",{name:"患者",exact:true}).click();
  if(await page.getByRole("button",{name:"返回列表",exact:true}).count()) await page.getByRole("button",{name:"返回列表",exact:true}).click();
  await page.locator(".patient-card",{hasText:"问答测试乙"}).click();
- await page.getByRole("button",{name:"打开病例工作区",exact:true}).click();
+ await page.getByRole("button",{name:"打开问诊工作台",exact:true}).click();
  assert.equal(await page.locator(".user-message").count(),0);
  assert.equal(await page.locator(".patient-question-history").count(),0);
  assert.deepEqual(errors,[]);

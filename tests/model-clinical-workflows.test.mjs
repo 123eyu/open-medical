@@ -35,7 +35,7 @@ test('real model: similar-case lookup ends with traceable candidates or explicit
  t.diagnostic(JSON.stringify({comparisons:drafts[0].cases.map(caseForDisplay).map(c=>({reference:c.reference,score:comparisonScore(c.comparison),available:(c.comparison||[]).filter(row=>row.candidateQuote).map(row=>row.dimension)}))}));
  const chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
  if(existsSync(chrome)){
-  const browser=await chromium.launch({executablePath:chrome,headless:true});t.after(()=>browser.close());const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.goto(f.origin+'/?view=patients');await page.locator('.patient-card',{hasText:'合成临床流程患者'}).click();await page.getByRole('button',{name:'打开病例工作区',exact:true}).click();
+  const browser=await chromium.launch({executablePath:chrome,headless:true});t.after(()=>browser.close());const page=await browser.newPage({viewport:{width:1440,height:1000}});await page.goto(f.origin+'/?view=patients');await page.locator('.patient-card',{hasText:'合成临床流程患者'}).click();await page.getByRole('button',{name:'打开问诊工作台',exact:true}).click();
   // Entering a patient workspace starts a new question; select the saved run explicitly.
   const history=page.locator('.patient-question-history');
   await history.locator('summary').click();

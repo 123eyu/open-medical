@@ -35,8 +35,14 @@ test(
     await page.goto(f.origin + "/?view=home");
   await page.locator(".app-navigation").waitFor();
     await openPatient(page, patient.name);
-    await page.getByRole("button", { name: "核对变更", exact: true }).waitFor();
-    // The global queue stays reachable without covering the chart's review action.
+    await page.locator(".pending-badge").waitFor();
+    const review = page.getByRole("dialog", { name: "全屏审核：档案更新", exact: true });
+    const openReview = async () => {
+      await page.locator(".pending-badge").click();
+      await page.getByRole("button", { name: "全屏审核", exact: true }).click();
+      await review.getByText("当前记录", { exact: true }).waitFor();
+    };
+    // The global queue and full review stay reachable at both viewport sizes.
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 });
       const badge = page.locator('.pending-badge');
@@ -50,11 +56,12 @@ test(
       assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width);
       await page.keyboard.press('Escape');
       await queue.waitFor({ state: 'detached' });
-      await page.getByRole('button', { name: '核对变更', exact: true }).click();
-      await page.getByRole('button', { name: '返回核对', exact: true }).click();
+      await openReview();
+      await review.getByRole('button', { name: '关闭全屏审核', exact: true }).click();
+      await page.keyboard.press('Escape');
       const chartUrl = page.url();
-      await page.getByRole('button', { name: '打开病例工作区', exact: true }).click();
-      await page.locator('.display-modes').waitFor();
+      await page.getByRole('button', { name: '打开问诊工作台', exact: true }).click();
+      await page.locator('.composer').waitFor();
       const workHeader = await page.locator('.topbar').boundingBox();
       for (const button of await page.locator('.top-actions button').all()) {
         if (!await button.isVisible()) continue;
@@ -62,16 +69,18 @@ test(
         assert.ok(box.y + box.height <= workHeader.y + workHeader.height + 1, 'workspace controls remain inside the header');
       }
       await page.goto(chartUrl);
-      await page.getByRole('button', { name: '核对变更', exact: true }).waitFor();
+      await page.locator('.pending-badge').waitFor();
     }
     await page.setViewportSize({ width: 1280, height: 900 });
+    await openReview();
     const edited = await f.json(`/api/patients/${patient.id}`, "PATCH", {
       expectedRevision: patient.revision,
       medications: [{ name: "医生最新合成条目" }],
     });
     assert.equal(edited.status, 200);
-    await page.getByRole("button", { name: "核对变更", exact: true }).click();
-    await page.getByRole("button", { name: "确认这些变更并写入", exact: true }).click();
+    const conflictResponse = page.waitForResponse(response => response.url().endsWith(`/api/pending-actions/${proposal.id}/confirm`));
+    await review.getByRole("button", { name: "确认执行", exact: true }).click();
+    assert.equal((await conflictResponse).status(), 409);
     await page
       .locator('[role="alert"]')
       .filter({ hasText: /变化|版本|冲突|重新/ }).first()
@@ -84,22 +93,19 @@ test(
       (await f.json(`/api/patients/${patient.id}`)).data.medications[0].name,
       "医生最新合成条目",
     );
-    assert.equal(
-      await page
-        .getByRole("button", { name: "核对变更", exact: true })
-        .isEnabled(),
-      true,
-    );
+    assert.equal(await review.isVisible(), true);
     assert.deepEqual(errors, []);
-    await page.getByRole("button", { name: "返回核对", exact: true }).click();
-    await page.getByRole("button", { name: "忽略", exact: true }).click();
-    await page
-      .getByRole("button", { name: "核对变更", exact: true })
-      .waitFor({ state: "detached" });
+    await review.getByRole("button", { name: "关闭全屏审核", exact: true }).click();
+    assert.equal(await page.getByRole("button", { name: "全屏审核", exact: true }).isEnabled(), true);
+    await page.getByRole("region", { name: "待确认的操作" }).getByRole("button", { name: "拒绝", exact: true }).click();
+    await page.getByRole("button", { name: "不填了，直接拒绝", exact: true }).click();
+    await page.locator(".pending-badge").waitFor({ state: "detached", timeout: 2000 });
     assert.equal(
       (await f.json(`/api/pending-actions?patientId=${patient.id}&status=rejected`)).data.actions.find(a => a.id === proposal.id)?.status,
       "rejected",
     );
     await page.locator(".pending-badge").waitFor({ state: "detached", timeout: 2000 });
+    await page.reload();
+    assert.equal((await f.json(`/api/patients/${patient.id}`)).data.medications[0].name, "医生最新合成条目");
   },
 );

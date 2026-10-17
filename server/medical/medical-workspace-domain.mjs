@@ -139,6 +139,7 @@ export function createMedicalWorkspaceDomain({
         workspace.patientId ? `当前已关联患者编号：${workspace.patientId}。可调用 read_patient_brief 读取最新档案；不必让医生重新输入已有病史。` : "",
         run.policy?.workflow === "patient-assessment" ? ASSESSMENT_GUIDANCE : "",
         run.policy?.workflow === "similar-case-search" ? SIMILAR_CASE_GUIDANCE : "",
+        run.policy?.workflow === "similar-case-search" && run.policy.searchScope === "local" ? "本轮医生限定仅本地检索：只使用本机患者档案和本地病例库，不进行网上检索。online_case_search 和 literature_fetch 不可用。完成一次 similar_case_search 后直接核对候选并提交 finish_similar_case_search；无候选也提交真实的本地检索结果。" : "",
         run.policy?.presentation === "diagnostic" ? "辅助诊断结果请调用 present_diagnostic_review 整理支持依据、不同点和待补资料，不能把可能诊断当确诊。若只是评估治疗方案，继续用治疗方案评估工具。" : "",
         run.policy?.presentation === "answer" ? "本轮默认是普通问答：直接回答用户问题。只有用户明确要求整理材料、生成文档或修改档案时，才生成对应成果；不要为了展示界面额外创建草稿、目标清单或复核任务。" : "",
         run.policy?.workflow === "trial-eligibility" ? TRIAL_GUIDANCE : "",

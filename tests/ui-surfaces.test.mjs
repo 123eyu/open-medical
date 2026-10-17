@@ -48,13 +48,16 @@ test('secondary diagnostics stay collapsed while actionable care failures and al
   assert.equal(await page.locator('.care-stat').count(),3);
   assert.ok(await page.locator('.care-tabs').evaluate(e=>e.getBoundingClientRect().bottom<innerHeight));
   const patient=(await f.json('/api/patients','POST',{name:'合成缺口审核'})).data;
+  await f.json(`/api/sessions/${patient.sessionId}/files`,'POST',{name:'合成原文.txt',text:'合成原文仍可回看。'});
   await page.goto(f.origin+`/?view=patients&patient=${patient.id}&tab=review`);
-  await page.getByText('过敏史尚未核对。',{exact:true}).waitFor();
+  await page.locator('.detail-head').getByText('过敏史未记录',{exact:true}).waitFor();
   assert.equal(await page.getByRole('region',{name:'待核对记录',exact:true}).count(),0);
   assert.equal(await page.getByRole('region',{name:'检验数值冲突',exact:true}).count(),0);
-  assert.equal(await page.locator('.review-material-section').evaluate(e=>e.open),false);
-  await page.locator('.review-material-section > summary').click();
-  await page.getByRole('button',{name:'打开资料工作区',exact:true}).waitFor();
+  await page.getByRole('navigation',{name:'患者栏目'}).getByRole('button',{name:'资料库',exact:true}).click();
+  await page.getByRole('region',{name:'资料库',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'合成原文.txt',exact:true}).waitFor();
+  await page.getByRole('button',{name:'添加与整理资料 ↗',exact:true}).click();
+  assert.equal(new URL(page.url()).searchParams.get('session'),patient.sessionId);
   await page.goto(f.origin+'/?view=clinical-ref');
   for(const label of ['检验速查','手术编码','不良反应筛查']){
     await page.getByRole('navigation',{name:'速查分类'}).getByRole('button',{name:label,exact:true}).click();

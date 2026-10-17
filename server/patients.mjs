@@ -21,6 +21,7 @@ export class PatientRegistry {
     this.removeSession = removeSession;
     this.onIdentityChanged = onIdentityChanged;
     this.onCreated = onCreated;
+    this.store.db.exec("CREATE TABLE IF NOT EXISTS patient_mutation_requests(patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(patient_id, request_id))");
   }
   all() {
     return this.store.db
@@ -171,6 +172,15 @@ export class PatientRegistry {
         "INVALID_INPUT",
         "更新内容无效",
       );
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const fingerprint = createHash("sha256").update(JSON.stringify(input, (key, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(k => [k, value[k]])) : value)).digest("hex");
+      if (requestId) {
+        const previous = this.store.db.prepare("SELECT fingerprint FROM patient_mutation_requests WHERE patient_id=? AND request_id=?").get(id, requestId);
+        if (previous) {
+          check(previous.fingerprint === fingerprint, "REQUEST_CONFLICT", "同一次保存的内容已变化，请核对已保存结果后重新提交", 409);
+          return { ...patient, counts: this.counts(id) };
+        }
+      }
       check(
         input.expectedRevision === patient.revision,
         "REVISION_CONFLICT",
@@ -249,6 +259,7 @@ export class PatientRegistry {
       this.store.audit(patient.sessionId, "patient.updated", {
         patientId: id,
       });
+      if (requestId) this.store.db.prepare("INSERT INTO patient_mutation_requests VALUES (?,?,?)").run(id, requestId, fingerprint);
       return { ...patient, counts: this.counts(id) };
     });
   }

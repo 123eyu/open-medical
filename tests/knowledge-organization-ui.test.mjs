@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright-core";
 import ExcelJS from "exceljs";
 import { fixture } from "./helpers.mjs";
@@ -86,7 +87,15 @@ test(
   "doctor uploads once, leaves background processing, opens a graph with traceable original",
   { skip: !existsSync(chrome) },
   async (t) => {
-    const f = await fixture(t, { provider: organizerProvider });
+    const transcriptions = [];
+    const f = await fixture(t, { provider: organizerProvider, knowledgeOrganizerOptions: {
+      media: async () => ({ duration: 1, hasAudio: true, hasVideo: false }),
+      audio: async (_path, folder, index) => join(folder, `synthetic-audio-${index}`),
+      transcribeImpl: async (_path, config, start, length) => {
+        transcriptions.push({ model: config.model, baseUrl: config.baseUrl, start, length });
+        return [{ start, end: start + length, text: "合成音频转写恢复验证。", kind: "speech", timing: "segment" }];
+      },
+    } });
     await library(f, "教学资料");
     const browser = await chromium.launch({
       executablePath: chrome,
@@ -162,19 +171,43 @@ test(
     await page.getByRole("button", { name: "关闭溯源", exact: true }).click();
     await page.getByRole("navigation",{name:"知识库工作区"}).getByRole("button",{name:"资料",exact:true}).click();
     await page.getByRole("button",{name:"添加资料",exact:true}).click();
-    await page.getByLabel("导入资料文件").setInputFiles({name:"转写设置验证.wav",mimeType:"audio/wav",buffer:Buffer.from("synthetic-settings-only")});
-    await page.getByText("音视频转写设置",{exact:true}).click();
-    await page
-      .getByRole("button", { name: "转写服务：未配置", exact: true })
-      .click();
-    await page
-      .getByLabel("转写接口地址", { exact: true })
-      .fill("http://127.0.0.1:8765/v1");
-    await page.getByLabel("转写模型", { exact: true }).fill("whisper-1");
-    await page
-      .getByRole("button", { name: "保存转写连接", exact: true })
-      .click();
-    await page.getByText(/转写连接已保存，尚未验证实际转写/).waitFor();
+    const original = Buffer.from("synthetic-audio-with-mocked-decoder");
+    await page.getByLabel("导入资料文件").setInputFiles({name:"转写恢复验证.wav",mimeType:"audio/wav",buffer:original});
+    await page.getByText("音视频转写",{exact:true}).click();
+    await page.getByText(/尚无可用转写连接.*可以先导入音视频对应的文字稿/).waitFor();
+    const uploaded = page.waitForResponse(r => r.url().includes('/api/knowledge/organization?') && r.request().method() === 'POST');
+    await page.getByRole("button",{name:"导入 1 份资料",exact:true}).click();
+    const pending = await (await uploaded).json();
+    let job = await waitJob(f, pending.id);
+    assert.equal(job.status, 'needs_input');
+    assert.match(job.error, /请配置音频转写服务后继续/);
+    assert.deepEqual(readFileSync(job.sourcePath), original);
+    assert.equal(transcriptions.length, 0);
+    const countBefore = f.server.guidelines.list({ collection: '教学资料' }).length;
+    assert.equal(countBefore, 1, 'unconfigured audio cannot become a searchable document');
+    await page.reload();
+    await page.getByRole('status').filter({hasText:/转写恢复验证.wav · 导入未完成：请配置音频转写服务后继续/}).waitFor();
+    assert.equal(f.server.knowledgeOrganizer.get(job.id).status, 'needs_input');
+    assert.deepEqual(readFileSync(f.server.knowledgeOrganizer.get(job.id).sourcePath), original);
+    // Existing configuration API supplies a synthetic adapter; the current UI
+    // offers a transcript fallback instead of a connection form.
+    const configured = await f.json('/api/knowledge/transcription-settings', 'PUT', {
+      provider: 'local', baseUrl: 'http://127.0.0.1:1/v1', model: 'synthetic-transcription',
+    });
+    assert.equal(configured.status, 200);
+    assert.equal(configured.data.transcriptionReady, true);
+    const retry = page.waitForResponse(r => r.url().endsWith(`/api/knowledge/organization/${job.id}/retry`));
+    await page.getByRole('button', {name:'重试导入',exact:true}).click();
+    assert.equal((await retry).status(), 202);
+    job = await waitJob(f, job.id);
+    assert.equal(job.status, 'completed', job.error);
+    assert.deepEqual(readFileSync(job.sourcePath), original);
+    assert.equal(f.server.guidelines.list({ collection: '教学资料' }).length, countBefore + 1);
+    assert.deepEqual(transcriptions, [{ model:'synthetic-transcription', baseUrl:'http://127.0.0.1:1/v1', start:0, length:1 }]);
+    assert.match(f.server.guidelines.get(job.docId).text, /合成音频转写恢复验证/);
+    await page.reload();
+    await page.locator('.kw-documents-table tbody tr', {hasText:'转写恢复验证'}).waitFor();
+    assert.equal(f.server.knowledgeOrganizer.list('教学资料').filter(j => j.fileName === '转写恢复验证.wav').length, 1);
     assert.deepEqual(errors, []);
   },
 );

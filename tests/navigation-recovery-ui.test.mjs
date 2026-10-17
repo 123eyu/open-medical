@@ -175,10 +175,13 @@ test('statistics and clinical scale input changes remove obsolete results', {ski
 });
 
 test('doctor preferences failed save keeps typed changes and can retry successfully', {skip}, async t=>{
-  const {page,origin}=await setup(t);
+  const {page,origin,json}=await setup(t);
   await page.goto(origin);
   await page.locator(".app-navigation").waitFor();
-  await page.getByRole('button',{name:'设置与连接',exact:true}).click();await page.getByRole('button',{name:'医生档案与记忆',exact:true}).click();
+  await page.getByRole('button',{name:'设置与连接',exact:true}).click();
+  await page.getByRole('button',{name:'技能与规则',exact:true}).click();
+  await page.getByRole('button',{name:'学习与记忆',exact:true}).click();
+  await page.getByRole('button',{name:'医生档案与记忆',exact:true}).click();
   const dialog=page.getByRole('dialog');
   await dialog.getByText('结构化偏好表单（高级）',{exact:true}).click();
   await dialog.getByLabel('科室',{exact:true}).fill('合成偏好草稿');
@@ -189,6 +192,11 @@ test('doctor preferences failed save keeps typed changes and can retry successfu
   await page.unroute('**/api/doctor/profile');
   await dialog.getByRole('button',{name:'保存偏好',exact:true}).click();
   await dialog.getByRole('status').filter({hasText:'偏好已保存'}).waitFor();
+  assert.equal((await json('/api/doctor/profile')).data.fields.specialty, '合成偏好草稿');
+  await page.reload();
+  await page.getByRole('button',{name:'医生档案与记忆',exact:true}).click();
+  await page.getByText('结构化偏好表单（高级）',{exact:true}).click();
+  assert.equal(await page.getByRole('dialog').getByLabel('科室',{exact:true}).inputValue(),'合成偏好草稿');
 });
 
 test('research rapid task changes never show files from an earlier slow response', {skip}, async t=>{
@@ -233,7 +241,7 @@ test('business tool directory excludes agent internals and guides document model
   await page.goto(origin+'/?view=tools');
   const card=page.locator('.directory-tools article').filter({has:page.getByRole('heading',{name:'文档与表格',exact:true})});
   await card.getByRole('link',{name:/配置模型/}).click();
-  await page.getByRole('dialog',{name:'切换模型',exact:true}).waitFor();
+  await page.getByRole('dialog',{name:'模型与识别',exact:true}).waitFor();
   await page.keyboard.press('Escape');
   for(const name of ['浏览器','终端与代码','技能与连接','DRG 测算']) assert.equal(await page.getByRole('heading',{name,exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'工作环境',exact:true}).count(),0);

@@ -53,11 +53,13 @@ export const SCENARIOS = [
   await page.locator(".modal-form input").first().fill("验收流程患者");
   await page.locator('.modal-form button:has-text("创建患者档案")').click();
   await page.waitForSelector(".detail-head");
-  // 打开病例工作区
-  await page.locator('button:has-text("打开病例工作区")').click();
+  // 打开问诊工作台
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
   // UI 上传材料
-  await page.locator('.composer input[type="file"]').setInputFiles({
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "附件", exact: true }).click();
+  await (await chooser).setFiles({
     name: "出院记录.txt",
     mimeType: "text/plain",
     buffer: Buffer.from(
@@ -91,7 +93,10 @@ export const SCENARIOS = [
   {
     name: '医生记忆：面板可打开、可新增、列表可见',
     fn: async ({ page, seed: _seed, origin: _origin }) => {
-  await page.getByRole("button",{name:"设置与连接",exact:true}).click();await page.getByRole("button",{name:"医生档案与记忆",exact:true}).click();
+  await page.getByRole("button",{name:"设置与连接",exact:true}).click();
+  await page.getByRole("button",{name:"技能与规则",exact:true}).click();
+  await page.getByRole("button",{name:"学习与记忆",exact:true}).click();
+  await page.getByRole("button",{name:"医生档案与记忆",exact:true}).click();
   await page.waitForSelector(".modal");
   await page
     .locator('.modal .doctor-add input')
@@ -152,7 +157,7 @@ export const SCENARIOS = [
   await page.waitForSelector(".app-navigation");
   await openPatient(page, "退回流转患者");
   await page.waitForSelector(".detail-head");
-  await page.locator('button:has-text("打开病例工作区")').click();
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
   await page.locator(".composer textarea").fill(
     "请整理本患者的病例材料，生成病历时间线，保留来源与行号。",
@@ -251,7 +256,7 @@ export const SCENARIOS = [
   await page.waitForSelector(".app-navigation");
   await openPatient(page, "目标卡患者");
   await page.waitForSelector(".detail-head");
-  await page.locator('button:has-text("打开病例工作区")').click();
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
   // 未配置模型 → 直接用本地档位发起文书整理
   await page.locator(".composer textarea").fill(
@@ -279,7 +284,7 @@ export const SCENARIOS = [
   await page.waitForSelector(".app-navigation");
   await openPatient(page, "记忆标注患者");
   await page.waitForSelector(".detail-head");
-  await page.locator('button:has-text("打开病例工作区")').click();
+  await page.locator('button:has-text("打开问诊工作台")').click();
   await page.waitForSelector(".composer");
   await page.locator(".composer textarea").fill("请整理本患者的病例材料，生成病历时间线。");
   await page.locator(".composer textarea").press("Enter");
@@ -330,7 +335,7 @@ export const SCENARIOS = [
     });
     await openPatient(page, "复核队列患者");
     await page.waitForSelector(".detail-head");
-    await page.locator('button:has-text("打开病例工作区")').click();
+    await page.locator('button:has-text("打开问诊工作台")').click();
     await page.waitForSelector(".composer");
     await page.locator(".composer textarea").fill("请整理本患者的病例材料，生成病历时间线，保留来源与行号。");
     await page.locator(".composer textarea").press("Enter");
@@ -366,7 +371,7 @@ export const SCENARIOS = [
   name: "随访管理：模板应用到患者生成排程",
   fn: async ({ page, seed }) => {
     await seed.json("/api/patients", "POST", { name: "随访模板患者" });
-    await page.getByRole("button",{name:"随访",exact:true}).click();
+    await openTool(page, "随访");
     await page.getByRole("button", { name: "计划与模板", exact: true }).click();
     await page.waitForSelector(".module-view .followup-apply select");
     await page.locator(".module-view .followup-apply select").first().selectOption({ index: 1 });
@@ -471,7 +476,7 @@ export const SCENARIOS = [
     });
     await openPatient(page, "导出患者");
     await page.waitForSelector(".detail-head");
-    await page.locator('button:has-text("打开病例工作区")').click();
+    await page.locator('button:has-text("打开问诊工作台")').click();
     await page.waitForSelector(".composer");
     await page.locator('.head-actions button[title="导出会话"]').click();
     await page.waitForSelector(".modal");

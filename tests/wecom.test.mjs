@@ -127,6 +127,8 @@ test('browser: discover connector, sync, verify family, draft, cancel, submit an
   await openPatient(page, f.patient.name);
   await page.getByRole('button', { name: '沟通与随访', exact: true }).click();
   const panel = page.getByRole('region', { name: '企业微信患者联系' });
+  assert.equal(await panel.locator('details').evaluate(el => el.open), false);
+  await panel.locator('summary').click();
   await f.sync();
   await panel.getByLabel('查找其他客户').fill('合成客户');
   await panel.getByRole('button', { name: '是家属', exact: true }).click();
@@ -147,6 +149,7 @@ test('browser: discover connector, sync, verify family, draft, cancel, submit an
   await page.locator(".app-navigation").waitFor();
   await openPatient(page, f.patient.name);
   await page.getByRole('button', { name: '沟通与随访', exact: true }).click();
+  await panel.locator('summary').click();
   await panel.getByText('已发送 · 不代表已读', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
 });
