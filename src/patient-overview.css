@@ -1,180 +1,266 @@
+.patient-overview {
+  --overview-muted: #69766f;
+  min-width: 0;
+}
 .patient-dashboard .patient-overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
-  gap: 24px 32px;
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
 }
-.patient-overview-grid .overview-story {
-  display: grid;
-  gap: 22px;
-  min-width: 0;
-}
-.patient-dashboard .patient-overview-grid section {
-  min-width: 0;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-}
-.patient-overview-grid h3 {
-  font-size: 17px;
-  margin: 0 0 14px;
-  color: #50685a;
-  font-weight: 500;
-}
-.patient-overview-grid p {
-  margin: 0 0 10px;
-  line-height: 1.85;
-}
-.patient-overview-grid .text-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent-deep);
-  font-size: 14px;
-  text-align: left;
-  white-space: normal;
-}
-.overview-diagnoses ul {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-}
-.overview-diagnoses li {
+.patient-dashboard .patient-overview-grid .overview-card {
   display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 22px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+.patient-overview .overview-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 14px;
-  margin: 8px 0;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.patient-overview .overview-card-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.patient-overview .overview-card-heading h3 svg {
+  color: var(--accent-deep);
+}
+.patient-overview .overview-card-heading > span,
+.patient-overview .overview-meta,
+.patient-overview .overview-lab-list small {
+  color: var(--overview-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.65;
+}
+.patient-overview .overview-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.patient-overview p {
+  margin: 0 0 12px;
+  font-size: var(--reading-size, 16px);
+  line-height: 1.7;
   overflow-wrap: anywhere;
 }
-.overview-diagnoses li span {
-  font-size: var(--reading-size, 18px);
-  font-weight: 600;
+.patient-overview .overview-empty {
+  color: var(--overview-muted);
+  font-size: 15px;
 }
-.overview-diagnoses li small {
-  color: var(--muted);
-  font-size: 13px;
+.patient-overview .overview-status {
+  display: inline-block;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #f1f5f2;
+  color: #52685b;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 400;
 }
-.overview-recent {
-  border-top: 1px solid var(--border);
-  padding-top: 18px !important;
+.patient-overview .overview-diagnosis-list,
+.patient-overview .overview-lab-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px;
 }
-.overview-recent time {
-  display: block;
-  font-size: 14px;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-.overview-attention {
-  min-width: 0;
-  padding: 20px;
-  border-radius: 10px;
-  background: #f0f5eb;
-  border: 1px solid #dce6d5;
-}
-.overview-attention header {
+.patient-overview .overview-diagnosis-list li {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
+  padding: 8px 0;
 }
-.overview-attention h3 {
-  color: #304f3c;
+.patient-overview .overview-diagnosis-list li:first-child {
+  padding-top: 0;
+}
+.patient-overview .overview-diagnosis-list strong {
+  font-size: var(--reading-size, 16px);
+  line-height: 1.6;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.patient-overview .overview-plan h4 {
+  margin: 0 0 8px;
+  font-size: var(--reading-size, 16px);
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.patient-overview .overview-plan .overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.patient-overview .overview-medications p {
+  margin-top: 4px;
+}
+.patient-overview .overview-visit time {
+  display: block;
+  color: var(--overview-muted);
+  font-size: 14px;
   margin-bottom: 8px;
 }
-.overview-attention header > span {
-  color: var(--muted);
-  font-size: 12px;
+.patient-overview .overview-visit p {
+  font-weight: 500;
 }
-.overview-attention ul {
-  padding: 0;
-  margin: 8px 0 0;
-  list-style: none;
+.patient-overview .overview-lab-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
 }
-.overview-attention li + li {
-  border-top: 1px solid #dce6d5;
+.patient-overview .overview-lab-list li:first-child {
+  padding-top: 0;
 }
-.overview-attention li button {
+.patient-overview .overview-lab-list li + li {
+  border-top: 1px solid #edf0ed;
+}
+.patient-overview .overview-lab-list li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.patient-overview .overview-lab-list b {
+  font-size: var(--reading-size, 16px);
+  font-weight: 500;
+}
+.patient-overview .overview-lab-list small {
+  display: block;
+  margin-top: 3px;
+}
+.patient-overview .overview-lab-value {
+  text-align: right;
+}
+.patient-overview .overview-lab-value strong {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.patient-overview .overview-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
+  min-height: 40px;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid #edf0ed;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-size: 14px;
+  text-align: left;
+  white-space: normal;
+}
+.patient-overview button {
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+.patient-overview button:hover {
+  color: var(--accent-deep);
+  background-color: #f4f7f3;
+}
+.patient-overview button:focus-visible {
+  outline: 2px solid var(--accent-deep);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.patient-overview button svg {
+  flex-shrink: 0;
+}
+.patient-overview .overview-attention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #e4dcc8;
+  border-radius: 8px;
+  background: #faf7ef;
+}
+.patient-overview .overview-attention h3 {
+  font-size: 14px;
+  color: #796034;
+  margin: 0;
+}
+.patient-overview .overview-attention button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border: 0;
   background: transparent;
-  color: var(--ink);
-  padding: 10px 0;
+  padding: 6px 0;
   font: inherit;
-  text-align: left;
-}
-.overview-attention li button:hover {
-  color: var(--accent-deep);
-}
-.overview-attention li b {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.patient-overview-grid .overview-treatment,
-.patient-overview-grid .overview-labs {
-  border-top: 1px solid var(--border);
-  padding-top: 22px;
-}
-.overview-plan-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  color: var(--muted);
   font-size: 14px;
+  color: var(--ink);
 }
-.overview-med-summary {
-  margin: 12px 0;
-  line-height: 1.8;
-  color: var(--muted);
-}
-.overview-labs ul {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-}
-.overview-labs li {
+.patient-overview .overview-record-links {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-  overflow-wrap: anywhere;
-}
-.overview-labs li b {
-  font-weight: 500;
-}
-.overview-labs li small {
-  display: block;
-  color: var(--muted);
-}
-.overview-labs li > span {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.overview-record-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-  border-top: 1px solid var(--border);
-  margin-top: 24px;
-  padding-top: 12px;
-}
-.overview-record-links button {
-  display: flex;
-  gap: 10px;
   align-items: center;
-  color: var(--muted);
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 16px;
+  padding: 4px 2px;
 }
-.overview-record-links b {
-  font-variant-numeric: tabular-nums;
+.patient-overview .overview-record-links > span {
+  font-size: 13px;
+  color: var(--overview-muted);
+  margin-right: 4px;
+}
+.patient-overview .overview-record-links button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 6px 4px;
+  color: var(--overview-muted);
+  font: inherit;
+  font-size: 13px;
+}
+.patient-overview .overview-record-links b {
   font-weight: 500;
+  color: var(--ink);
+}
+.patient-overview time,
+.patient-overview b {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .patient-dashboard .patient-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .patient-dashboard .patient-overview-grid .overview-card {
+    padding: 16px 16px 12px;
+  }
+  .patient-overview .overview-record-links {
+    gap: 6px 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .patient-overview button {
+    transition: none;
+  }
 }
 .medical-shell .patient-dashboard .chart-heading {
   padding-bottom: 16px;
@@ -220,22 +306,4 @@
 }
 .medical-shell .has-patient .patient-section-tabs {
   margin: 8px 0 16px;
-}
-@media (max-width: 1000px) {
-  .patient-dashboard .patient-overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 22px;
-  }
-  .overview-attention {
-    grid-row: 2;
-  }
-}
-@media (max-width: 600px) {
-  .medical-shell .patient-dashboard {
-    padding: 18px 14px;
-  }
-  .overview-labs li {
-    flex-wrap: wrap;
-    gap: 6px;
-  }
 }

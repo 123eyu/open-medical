@@ -1,4 +1,10 @@
-import { ArrowUpRight } from "lucide-react";
+import {
+  ArrowUpRight,
+  Activity,
+  CalendarDays,
+  ClipboardList,
+  Pill,
+} from "lucide-react";
 import {
   clinicalDiagnoses,
   diagnosisStatus,
@@ -6,12 +12,16 @@ import {
 } from "../shared/diagnoses.mjs";
 import "./patient-overview.css";
 
-export function PatientOverview({
-  patient,
-  session,
-  groups,
-  onNavigate,
-}) {
+function OverviewLink({ children, onClick }) {
+  return (
+    <button className="text-button overview-link" onClick={onClick}>
+      {children}
+      <ArrowUpRight size={14} aria-hidden="true" />
+    </button>
+  );
+}
+
+export function PatientOverview({ patient, session, groups, onNavigate }) {
   const diagnoses = clinicalDiagnoses(patient.diagnoses);
   const visits = [...(patient.visits || [])].sort((a, b) =>
     String(b.date || "").localeCompare(String(a.date || "")),
@@ -24,173 +34,217 @@ export function PatientOverview({
       ),
     )
     .slice(0, 3);
-  const counts = patient.counts || {};
+  const medications = patient.medications || [];
+  const activeMeds = medications.filter((m) => m.status === "active");
   const plan = patient.treatmentPlan;
+  const counts = patient.counts || {};
   const pending = [
     ["到期随访", counts.dueFollowups, "followups"],
     ["未处理消息", counts.unprocessedMessages, "messages"],
   ].filter(([, count]) => count > 0);
+
   return (
-    <>
-      <div className="overview-brief patient-overview-grid">
-        <div className="overview-story">
-          <section className="overview-diagnoses">
-            <h3>诊断摘要 <small>确诊与疑似 · 显示 {diagnoses.length} 项</small></h3>
+    <div className="patient-overview">
+      {pending.length > 0 && (
+        <aside className="overview-attention" aria-label="待处理事项">
+          <h3>需要处理</h3>
+          {pending.map(([label, count, tab]) => (
+            <button key={tab} onClick={() => onNavigate(tab)}>
+              <span>{label}</span>
+              <b>{count}</b>
+              <ArrowUpRight size={14} aria-hidden="true" />
+            </button>
+          ))}
+        </aside>
+      )}
+
+      <div className="patient-overview-grid">
+        <section
+          className="overview-card overview-diagnoses"
+          aria-label="诊断摘要"
+        >
+          <header className="overview-card-heading">
+            <h3>
+              <ClipboardList size={18} aria-hidden="true" />
+              诊断摘要
+            </h3>
+            <span>{diagnoses.length} 项</span>
+          </header>
+          <div className="overview-card-body">
             {diagnoses.length ? (
-              <ul>
-                {diagnoses.map((d, i) => (
+              <ul className="overview-diagnosis-list">
+                {diagnoses.slice(0, 4).map((d, i) => (
                   <li key={i}>
-                    <span>{typeof d === "string" ? d : d.name}</span>
-                    <small>{DIAGNOSIS_STATUS_SHORT[diagnosisStatus(d)]}</small>
+                    <strong>{typeof d === "string" ? d : d.name}</strong>
+                    <span className="overview-status">
+                      {DIAGNOSIS_STATUS_SHORT[diagnosisStatus(d)]}
+                    </span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p>尚未登记诊断</p>
-            )}
-            <button
-              className="text-button"
-              onClick={() => onNavigate("diagnoses")}
-            >
-              查看完整诊断与病史 <ArrowUpRight size={14} />
-            </button>
-          </section>
-          <section className="overview-recent">
-            <h3>近期记录</h3>
-            {visits[0] ? (
-              <p>
-                <time>{visits[0].date || "日期未记录"}</time>
-                {visits[0].reason}
+              <p className="overview-empty">
+                尚未登记诊断，可在诊断与病史中补充。
               </p>
-            ) : (
-              <p>尚无就诊记录</p>
             )}
-            <button
-              className="text-button"
-              onClick={() => onNavigate("visits")}
-            >
-              查看就诊经过 <ArrowUpRight size={14} />
-            </button>
-          </section>
-        </div>
-        {pending.length > 0 && <aside className="overview-attention" aria-label="待处理事项">
-          <header>
-            <h3>需要处理</h3>
-            <span>按已记录事项</span>
-          </header>
-          {pending.length ? (
-            <ul>
-              {pending.map(([label, count, tab]) => (
-                <li key={label}>
-                  <button onClick={() => onNavigate(tab)}>
-                    <span>{label}</span>
-                    <b>
-                      {count}
-                      <ArrowUpRight size={14} />
-                    </b>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>暂无以上类型的待处理事项。</p>
-          )}
-        </aside>}
-        <section className="overview-treatment">
-          <h3>当前用药与方案</h3>
-          {(() => {
-            const meds = patient.medications || [];
-            const active = meds.filter((m) => m.status === "active");
-            const names = (active.length ? active : meds)
-              .map((m) => m.name || m.drug || "")
-              .filter(Boolean)
-              .slice(0, 4)
-              .join(" · ");
-            if (!meds.length)
-              return <p>暂无用药记录；已保存的方案会显示在这里。</p>;
-            return (
-              <p>
-                {names || "已保存用药记录"}
-                {meds.length > 4 ? ` 等 ${meds.length} 条` : ""}
-                {plan?.title ? `（方案：${plan.title}）` : ""}
+            {diagnoses.length > 4 && (
+              <p className="overview-meta">
+                另有 {diagnoses.length - 4} 项，查看完整诊断了解详情
               </p>
-            );
-          })()}
-          {plan && (
-            <div className="overview-plan-meta">
-              <span>
-                {
-                  { active: "进行中", paused: "已暂停", completed: "已完成" }[
-                    plan.status
-                  ]
-                }
-              </span>
-              {plan.reviewDate && <span>下次复评 · {plan.reviewDate}</span>}
-            </div>
-          )}
-          <div className="overview-med-summary">
-            {
-              (patient.medications || []).filter((m) => m.status === "active")
-                .length
-            }{" "}
-            项用药记录标为正在使用
+            )}
           </div>
-          <button
-            className="text-button"
-            onClick={() => onNavigate("medications")}
-          >
-            查看用药记录与预后 <ArrowUpRight size={14} />
-          </button>
+          <OverviewLink onClick={() => onNavigate("diagnoses")}>
+            查看完整诊断与病史
+          </OverviewLink>
         </section>
-        <section className="overview-labs">
-          <h3>最近检验</h3>
-          {labs.length ? (
-            <ul>
-              {labs.map((g) => (
-                <li key={g.key}>
-                  <div>
-                    <b>{g.item}</b>
-                    <small>{g.records.at(-1)?.date || "日期未记录"}</small>
-                  </div>
-                  <span>
-                    {g.conflict
-                      ? `${g.records.slice(-3).map((r) => r.value).join(" / ")}${g.records.length > 3 ? " 等" : ""} ${g.unit || ""}（同日多值）`
-                      : `${g.records.at(-1)?.value} ${g.unit || "单位未记录"}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>尚无检验记录</p>
-          )}
-          <button className="text-button" onClick={() => onNavigate("labs")}>
-            查看全部检验与趋势 <ArrowUpRight size={14} />
-          </button>
-          <small
-            className="muted"
-            title="风险提示仅覆盖内置规则；检验名称、单位不匹配时不套用阈值，未提示不代表无风险。"
-          >
-            ⓘ 异常提示范围说明
-          </small>
+
+        <section
+          className="overview-card overview-treatment"
+          aria-label="当前用药与方案"
+        >
+          <header className="overview-card-heading">
+            <h3>
+              <Pill size={18} aria-hidden="true" />
+              当前用药与方案
+            </h3>
+            {plan && (
+              <span className="overview-status">
+                {{ active: "进行中", paused: "已暂停", completed: "已完成" }[
+                  plan.status
+                ] || "状态未记录"}
+              </span>
+            )}
+          </header>
+          <div className="overview-card-body">
+            {plan && (
+              <div className="overview-plan">
+                <h4>{plan.title || "已保存治疗方案"}</h4>
+                {plan.reviewDate && (
+                  <p className="overview-meta">
+                    下次复评 <time>{plan.reviewDate}</time>
+                  </p>
+                )}
+              </div>
+            )}
+            {activeMeds.length ? (
+              <div className="overview-medications">
+                <span className="overview-meta">
+                  正在使用 · {activeMeds.length} 项
+                </span>
+                <p>
+                  {activeMeds
+                    .slice(0, 4)
+                    .map((m) => m.name || m.drug || "未命名用药")
+                    .join("、")}
+                  {activeMeds.length > 4 ? ` 等 ${activeMeds.length} 项` : ""}
+                </p>
+              </div>
+            ) : (
+              <p className="overview-empty">
+                {medications.length
+                  ? `已保存 ${medications.length} 项用药记录，暂无标记为正在使用的用药。`
+                  : "尚无用药记录"}
+              </p>
+            )}
+            {!plan && <p className="overview-meta">尚未建立治疗方案</p>}
+          </div>
+          <OverviewLink onClick={() => onNavigate("medications")}>
+            查看用药记录与预后
+          </OverviewLink>
+        </section>
+
+        <section
+          className="overview-card overview-recent"
+          aria-label="最近就诊"
+        >
+          <header className="overview-card-heading">
+            <h3>
+              <CalendarDays size={18} aria-hidden="true" />
+              最近就诊
+            </h3>
+            <span>{visits.length} 次记录</span>
+          </header>
+          <div className="overview-card-body">
+            {visits[0] ? (
+              <div className="overview-visit">
+                <time>{visits[0].date || "日期未记录"}</time>
+                <p>{visits[0].reason || "就诊原因未记录"}</p>
+              </div>
+            ) : (
+              <p className="overview-empty">
+                尚无就诊记录，可在就诊经过中补充。
+              </p>
+            )}
+          </div>
+          <OverviewLink onClick={() => onNavigate("visits")}>
+            查看就诊经过
+          </OverviewLink>
+        </section>
+
+        <section className="overview-card overview-labs" aria-label="最近检验">
+          <header className="overview-card-heading">
+            <h3>
+              <Activity size={18} aria-hidden="true" />
+              最近检验
+            </h3>
+            <span>{labs.length ? `最近 ${labs.length} 项` : "暂无记录"}</span>
+          </header>
+          <div className="overview-card-body">
+            {labs.length ? (
+              <ul className="overview-lab-list">
+                {labs.map((g) => {
+                  const latest = g.records.at(-1);
+                  const latestValues = [
+                    ...new Set(
+                      g.records
+                        .filter((r) => r.date === latest?.date)
+                        .map((r) => r.value),
+                    ),
+                  ];
+                  return (
+                    <li key={g.key}>
+                      <div>
+                        <b>{g.item}</b>
+                        <small>
+                          {latest?.date || "日期未记录"}
+                          {g.conflict && " · 含同日不同结果"}
+                        </small>
+                      </div>
+                      <div className="overview-lab-value">
+                        <strong>{latestValues.join(" / ")}</strong>
+                        <small>{g.unit || "单位未记录"}</small>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="overview-empty">
+                补充检验资料后，在这里查看最近结果。
+              </p>
+            )}
+          </div>
+          <OverviewLink onClick={() => onNavigate("labs")}>
+            查看全部检验与趋势
+          </OverviewLink>
         </section>
       </div>
+
       <nav className="overview-record-links" aria-label="档案内容导航">
+        <span>档案资料</span>
         {[
           ["诊断", diagnoses.length, "diagnoses"],
-          ["用药记录", patient.medications?.length || 0, "medications"],
+          ["用药记录", medications.length, "medications"],
           ["就诊记录", visits.length, "visits"],
           ["资料文件", session.files?.length || 0, "library"],
         ].map(([label, count, tab]) => (
-          <button
-            className="text-button"
-            key={tab}
-            onClick={() => onNavigate(tab)}
-          >
+          <button key={tab} onClick={() => onNavigate(tab)}>
             {label}
             <b>{count}</b>
+            {tab === "library" && <ArrowUpRight size={14} aria-hidden="true" />}
           </button>
         ))}
       </nav>
-    </>
+    </div>
   );
 }

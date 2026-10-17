@@ -43,6 +43,18 @@ test('patient chart opens a complete visual dashboard with interactive trends, t
   const panel=page.getByRole('region',{name:'患者资料面板'});
   await panel.getByRole('heading',{name:'患者概览'}).waitFor();
   assert.equal(await panel.locator('.chart-history').count(),0);
+  assert.match(await panel.getByRole('region',{name:'当前用药与方案'}).innerText(),/合成用药A/);
+  assert.doesNotMatch(await panel.getByRole('region',{name:'当前用药与方案'}).innerText(),/合成用药B/);
+  await panel.screenshot({path:'output/patient-overview-desktop.png'});
+  for (const width of [820,390]) {
+    await page.setViewportSize({width,height:1000});
+    assert.ok(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    await panel.screenshot({path:`output/patient-overview-${width}.png`});
+  }
+  await page.setViewportSize({width:1440,height:1100});
+  await panel.getByRole('button',{name:'查看完整诊断与病史'}).click();
+  await panel.getByRole('heading',{name:'诊断与病史',exact:true}).waitFor();
+
   const tabs=page.getByRole('navigation',{name:'患者栏目'});
   await tabs.getByRole('button',{name:'诊断与病史',exact:true}).click();
   assert.equal(await tabs.getByRole('button',{name:'资料核对',exact:true}).count(),0);
@@ -118,4 +130,41 @@ test('lab layout prioritizes monitored/conflicting/repeated groups and obeys sav
   assert.ok(layout.collapsed.has(key('B')));
   assert.equal(dashboardLabLayout(labs,{compare:[]}).comparison.length,0);
   assert.equal(labs.length,4);
+});
+
+
+test('overview shows a saved plan without medication and separates current lab results from historical conflicts', {skip:!existsSync(chrome)}, async t => {
+  const f = await fixture(t);
+  const {data:p} = await f.json('/api/patients','POST',{
+    name:'概览布局验收',
+    treatmentPlan:{title:'术后康复随访方案',status:'active',reviewDate:'2026-10-24'},
+    labs:[
+      {item:'指标',value:1,unit:'U/L',date:'2026-01-01'},
+      {item:'指标',value:2,unit:'U/L',date:'2026-01-01'},
+      {item:'指标',value:0,unit:'U/L',date:'2026-02-01'},
+    ],
+  });
+  assert.ok(p.id);
+  const browser = await chromium.launch({executablePath:chrome,headless:true});
+  t.after(()=>browser.close());
+  const page = await browser.newPage({viewport:{width:1440,height:1000}});
+  await page.goto(`${f.origin}/?view=patients&patient=${p.id}&tab=overview`);
+  const panel = page.getByRole('region',{name:'患者资料面板'});
+  await panel.getByRole('heading',{name:'患者概览',exact:true}).waitFor();
+  const treatment = panel.getByRole('region',{name:'当前用药与方案'});
+  assert.match(await treatment.innerText(),/术后康复随访方案/);
+  assert.match(await treatment.innerText(),/2026-10-24/);
+  assert.match(await treatment.innerText(),/尚无用药记录/);
+  assert.equal(await panel.locator('.overview-lab-value strong').innerText(),'0');
+  assert.match(await panel.getByRole('region',{name:'最近检验'}).innerText(),/含同日不同结果/);
+  assert.equal(await panel.getByRole('complementary',{name:'待处理事项'}).count(),0);
+  const diagnosis = await panel.getByRole('region',{name:'诊断摘要'}).boundingBox();
+  const plan = await treatment.boundingBox();
+  const visit = await panel.getByRole('region',{name:'最近就诊'}).boundingBox();
+  const labs = await panel.getByRole('region',{name:'最近检验'}).boundingBox();
+  assert.equal(diagnosis.y,plan.y);
+  assert.equal(visit.y,labs.y);
+  await panel.screenshot({path:'output/patient-overview-plan.png'});
+  await treatment.getByRole('button',{name:'查看用药记录与预后'}).click();
+  await panel.getByRole('heading',{name:'治疗方案与预后',exact:true}).waitFor();
 });
