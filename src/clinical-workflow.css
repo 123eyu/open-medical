@@ -706,3 +706,16 @@
 .trial-patient-context p { margin:6px 0 0; }
 .trial-hub .trial-ai .module-head { margin-bottom:8px; }
 .trial-hub .trial-ai .module-head h2 { font-size:21px; margin:0; }
+
+.patient-mobile-identity { display:none; }
+@media (max-width:700px) {
+  .medical-shell .patient-mobile-identity { display:flex; position:sticky; top:-12px; z-index:6; gap:12px; flex-wrap:wrap; background:var(--paper,#fafbf8); border-bottom:1px solid var(--border); padding:10px 0; font-size:16px; }
+}
+.lab-plot-scroll { overflow-x:auto; max-width:100%; }
+.lab-plot-scroll svg { min-width:420px; width:100%; }
+.large-text .lab-plot-scroll svg { min-width:560px; }
+.chart-labs .lab-plot-scroll svg text { font-size:19px; }
+.large-text .chart-labs .lab-plot-scroll svg text { font-size:23px; }
+.plan-conflict { border:1px solid var(--border); padding:16px; }
+.plan-conflict p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.plan-conflict > div { border-bottom:1px solid var(--border); padding:10px 0; }

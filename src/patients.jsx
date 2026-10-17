@@ -573,6 +573,7 @@ export function PatientsView({
       )}
       {detail && session && (
         <>
+          <div className="patient-mobile-identity" aria-label="当前患者身份"><b>{detail.name}</b><span>{detail.patientNumber || '未编号'}{detail.archived ? ' · 已归档' : ''}</span></div>
           <div className="detail-head">
             <span className="patient-line"><button className="text-button patient-back" onClick={()=>{patientGeneration.current++;setPatientLoading(false);onLocationChange?.();setDetail(null);setSession(null);}}>← 返回列表</button>
               <small className="muted" style={{alignSelf:"center"}}>患者管理 /</small>

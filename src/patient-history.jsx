@@ -3,6 +3,7 @@ import { ArrowUpRight, CalendarDays, Pencil, Search, Stethoscope } from 'lucide-
 import { DIAGNOSIS_STATUS_LABELS, DIAGNOSIS_STATUS_SHORT, diagnosisSources, groupDiagnoses } from '../shared/diagnoses.mjs';
 import { dashboardHistory } from '../shared/patient-dashboard.mjs';
 import { api } from './agent-runtime';
+import { useClinicalDraft } from './clinical-drafts';
 import { SUMMARY_FIELDS, SUMMARY_LIMIT, parseClinicalSummary, formatClinicalSummary } from '../shared/clinical-summary.mjs';
 import './patient-history.css';
 
@@ -20,7 +21,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [allVisits, setAllVisits] = useState(false);
-  const [editor, setEditor] = useState(null);
+  const [editor, setEditor] = useClinicalDraft(patient.id, "clinicalSummary", null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
@@ -42,13 +43,13 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
     if (file && navigate) onNavigate('library', { focusFile: file.id });
     return !!file;
   };
-  const editSummary = () => { setEditor({ current:concise?.current || '', problems:concise?.problems || '', course:concise?.course || '', source:summary?.source || '' }); setError(''); };
+  const editSummary = () => { setEditor(editor || { _revision:patient.revision, current:concise?.current || '', problems:concise?.problems || '', course:concise?.course || '', source:summary?.source || '' }); setError(''); };
   const saveSummary = async event => {
     event.preventDefault();
     if (inFlight.current) return;
     inFlight.current = true; setBusy(true); setError('');
     try {
-      await api(`/api/patients/${patient.id}`, 'PATCH', { expectedRevision:patient.revision, clinicalSummary:{text:formatClinicalSummary(editor),source:editor.source.trim()} });
+      await api(`/api/patients/${patient.id}`, 'PATCH', { expectedRevision:editor._revision, clinicalSummary:{text:formatClinicalSummary(editor),source:editor.source.trim()} });
       await onChanged?.(); setEditor(null);
     } catch (err) { setError(err.message); }
     finally { inFlight.current = false; setBusy(false); }

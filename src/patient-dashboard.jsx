@@ -10,6 +10,7 @@ import { ClinicalPanel } from './patient-clinical';
 import { hasClinicalDraft } from './clinical-drafts';
 import { TreatmentPanel } from './patient-treatment';
 import { PatientHistory } from './patient-history';
+import { diagnosisSources } from '../shared/diagnoses.mjs';
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../shared/clinical-summary.mjs';
 
 // 从病程/诊断备注里提取引用的原文文件名（与「查看原文」跳转共用）。
@@ -32,12 +33,12 @@ function LabPlot({ group, compact = false }) {
   const unique = [...new Map(points.map(p=>[`${p.date}|${p.value}`,p])).values()];
   // 同日多值时不连线：并列数值之间没有先后，连了就是假趋势。
   const line = dates.length > 1 && !group.conflict;
-  return <svg viewBox={`0 0 ${width} 194`} role="img" aria-label={`${group.item} ${group.unit || '单位未记录'} 检验趋势，${points.length} 次记录${line ? '' : '，散点展示'}`}>
+  return <div className="lab-plot-scroll" tabIndex={0} aria-label="检验图，可横向滚动"><svg viewBox={`0 0 ${width} 194`} role="img" aria-label={`${group.item} ${group.unit || '单位未记录'} 检验趋势，${points.length} 次记录${line ? '' : '，散点展示'}`}>
     {[low,(low+high)/2,high].map((n,i)=><g key={i}><line x1="60" x2={right} y1={150-i*57.5} y2={150-i*57.5} stroke="var(--border)"/><text x="49" y={154-i*57.5} textAnchor="end">{short(n)}</text></g>)}
     {line && <polyline fill="none" stroke="var(--accent)" strokeWidth="2.5" points={unique.map(p=>`${x(p)},${y(p)}`).join(' ')} />}
-    {unique.map((p,i)=><circle key={i} cx={x(p)} cy={y(p)} r="4" fill="var(--accent)"><title>{p.date}：{p.value} {group.unit || '单位未记录'}；{p.source || '来源未记录'}</title></circle>)}
+    {unique.map((p,i)=><circle key={i} cx={x(p)} cy={y(p)} r="4" fill="var(--accent)"><title>{p.date}：{p.value} {group.unit || '单位未记录'}；{diagnosisSources(p).join('；') || '来源未记录'}{p.note ? `；备注：${p.note}` : ''}</title></circle>)}
     {dates.length > 1 ? <><text x="60" y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
-  </svg>;
+  </svg></div>;
 }
 export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, view = "overview", focusFile = null, onChanged, onError }) {
   const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
@@ -129,7 +130,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
         <thead><tr><th>检验项目 / 单位</th>{comparisonDates.map(date=><th key={date}>{date}</th>)}</tr></thead>
         <tbody>{layout.comparison.map(g=><tr key={g.key}><th>{g.item}<small>{g.unit || '单位未记录'}</small></th>{comparisonDates.map(date=>{
           const records = g.records.filter(r=>(r.date || '日期未记录') === date);
-          return <td key={date} title={records.map(r=>r.source || '来源未记录').join('；')}>{records.length ? records.map(r=>r.value).join(' / ') : '—'}</td>;
+          return <td key={date} title={records.map(r=>diagnosisSources(r).join('；') || '来源未记录').join('；')}>{records.length ? records.map(r=>r.value).join(' / ') : '—'}</td>;
         })}</tr>)}</tbody>
       </table></div>}
       <h3 className="lab-section-title">逐项趋势与来源</h3><div className="chart-lab-grid">{layout.visible.map(group=>{
@@ -137,7 +138,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
         const latest = group.records.at(-1);
         return <article className="chart-lab-card" key={group.key} aria-label={`${group.item} ${group.unit || '单位未记录'}`}>
           <header><div><h4>{group.item}</h4><small>{group.unit || '单位未记录'} · {group.records.length} 次记录</small></div>
-            <div className="chart-lab-latest"><b>{group.conflict ? '同日有不同数值' : latest?.value}</b><small>{latest?.date || '日期未记录'}</small></div>
+            <div className="chart-lab-latest"><b>{group.latestConflict ? '同日有不同数值' : latest?.value}</b><small>{latest?.date || '日期未记录'}</small></div>
           </header>
           <details className="chart-lab-actions"><summary>对照与展示</summary>
             <button className="text-button" disabled={displayBusy} onClick={()=>saveDisplay({order:[group.key, ...layout.groups.map(g=>g.key).filter(k=>k!==group.key)]})}>排在最前</button>
@@ -148,10 +149,10 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
           </details>
           {!collapsed && <>
             {group.canPlot ? <LabPlot group={group}/> : <p className="chart-empty">缺少有效日期或数值，请核对明细。</p>}
-            {group.conflict && <p className="chart-lab-hint">同日存在不同数值，已保留全部记录与来源。</p>}
+            {group.conflict && <p className="chart-lab-hint">{group.conflictDates.join('、')} 存在同日不同数值，已保留全部记录与来源。</p>}
             {group.distinctDates === 1 && <p className="chart-lab-hint">目前只有一天的记录，还连不成趋势线。</p>}
             {!group.unit && <p className="chart-lab-hint">单位未记录，纵轴只表示数值相对高低。</p>}
-            <details className="chart-lab-records"><summary>全部记录与来源 · {group.records.length} 条</summary><div className="chart-table-wrap"><table><caption>{group.item} · 全部记录</caption><thead><tr><th>日期</th><th>结果</th><th>单位</th><th>来源</th></tr></thead><tbody>{group.records.toReversed().map((r,i)=><tr key={i}><td>{r.date || '日期未记录'}</td><td><b>{r.value}</b></td><td>{r.unit || '未记录'}</td><td>{r.source || '来源未记录'}</td></tr>)}</tbody></table></div></details>
+            <details className="chart-lab-records"><summary>全部记录与来源 · {group.records.length} 条</summary><div className="chart-table-wrap"><table><caption>{group.item} · 全部记录</caption><thead><tr><th>日期</th><th>结果</th><th>单位</th><th>来源</th><th>备注</th></tr></thead><tbody>{group.records.toReversed().map((r,i)=><tr key={i}><td>{r.date || '日期未记录'}</td><td><b>{r.value}</b></td><td>{r.unit || '未记录'}</td><td>{diagnosisSources(r).join('；') || '来源未记录'}</td><td>{r.note || '—'}</td></tr>)}</tbody></table></div></details>
           </>}
         </article>;
       })}</div>

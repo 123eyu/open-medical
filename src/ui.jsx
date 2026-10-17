@@ -263,7 +263,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
   const p = detail || patient;
   const allergies = (p.allergies || []).map((a) => (typeof a === "string" ? a : a.substance || a.name || "")).filter(Boolean);
   const diagnoses = (p.diagnoses || []).map((d) => (typeof d === "string" ? d : d.name || d.diagnosis || "")).filter(Boolean);
-  const meds = (p.medications || []).filter((m) => (typeof m === "string" ? true : m.status !== "stopped"));
+  const meds = p.medications || [];
   const counts = p.counts || {};
   return (
     <div className={`patient-summary ${compact ? "compact" : ""}`}>
@@ -286,10 +286,11 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
       <div className="ps-grid">
         <div className="ps-col">
           <h5>用药记录（{meds.length}）</h5>
+          {!!meds.length && <span className="ps-empty">当前在用 {meds.filter(m=>m.status === "active").length} 条 · 已停用 {meds.filter(m=>m.status === "stopped").length} 条</span>}
           {meds.length ? (
             meds.slice(0, 4).map((m, i) => {
               const name = typeof m === "string" ? m : `${m.name || ""}${m.dose ? ` ${m.dose}` : ""}${m.frequency ? ` ${m.frequency}` : ""}`;
-              return <span className="med-chip" key={i}>{name}</span>;
+              return <span className="med-chip" key={i}>{name} · {m.status === "active" ? "正在使用" : m.status === "stopped" ? "已停用" : "状态未记录"}</span>;
             })
           ) : (
             <span className="ps-empty">暂无用药记录</span>

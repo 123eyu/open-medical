@@ -70,6 +70,7 @@
 .treatment-latest small { display:block; margin-top:5px; font-size:11px; }
 .treatment-trends svg[role=img] { display:block; width:100%; margin:16px 0 5px; }
 .treatment-trends svg[role=img] text { font-size:12px; fill:var(--treatment-muted); font-variant-numeric:tabular-nums; }
+.large-text .treatment-trends svg[role=img] text { font-size:18px; }
 .treatment-muted { color:var(--treatment-muted); font-size:12px; line-height:1.85; margin:12px 0 16px; }
 .treatment-outcome { background:#f1f4ec; border-color:#e1e7d9; }
 .treatment-review-date { font-size:12px; color:var(--treatment-green); }

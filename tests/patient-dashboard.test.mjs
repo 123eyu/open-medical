@@ -67,7 +67,7 @@ test('patient chart opens a complete visual dashboard with interactive trends, t
   const otherUnit = panel.getByRole('article',{name:'验收指标 mg/L',exact:true});
   const conflict = panel.getByRole('article',{name:'冲突指标 U/L',exact:true});
   await otherUnit.getByText(/还连不成趋势线/).waitFor();
-  assert.match(await conflict.innerText(),/同日存在不同数值/);
+  assert.match(await conflict.innerText(),/2026-01-01 存在同日不同数值/);
   await conflict.getByText('全部记录与来源 · 2 条').click();
   assert.equal(await conflict.getByRole('table').locator('tbody tr').count(),2);
   assert.match(await panel.locator('.chart-lab-comparison').innerText(),/0/);

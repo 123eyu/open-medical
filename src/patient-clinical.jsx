@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "./agent-runtime";
-import { localCalendarDate } from "../shared/calendar-date.mjs";
 import { DIAGNOSIS_STATUS_SHORT, diagnosisStatus } from "../shared/diagnoses.mjs";
 import { Plus, X, Loader2, Search, Star, Share2 } from "lucide-react";
 import { ShareWizard } from "./share-wizard";
@@ -23,13 +22,16 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const [icdQuery, setIcdQuery] = useClinicalDraft(detail.id, "icd", "");
   const [icdResults, setIcdResults] = useState([]);
   const [newDiagnosis, setNewDiagnosis] = useClinicalDraft(detail.id, "diagnosis", "");
-  const [newMed, setNewMed] = useClinicalDraft(detail.id, "medication", { name: "", dose: "", frequency: "", status: "unknown" });
+  const [diagnosisMeta, setDiagnosisMeta] = useClinicalDraft(detail.id, "diagnosisMeta", { status: "needs_review", date: "", source: "" });
+  const [medEdit, setMedEdit] = useClinicalDraft(detail.id, "medEdit", null);
+  const [labError, setLabError] = useState("");
+  const [newMed, setNewMed] = useClinicalDraft(detail.id, "medication", { name: "", dose: "", frequency: "", status: "unknown", source: "" });
   const [newAllergy, setNewAllergy] = useClinicalDraft(detail.id, "allergy", "");
   const [newLab, setNewLab] = useClinicalDraft(detail.id, "lab", {
     item: "",
     value: "",
     unit: "",
-    date: "",
+    date: "", source: "", note: "",
   });
   const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "" });
 
@@ -75,19 +77,20 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
     if (
       !(await saveDiagnoses([
         ...draft.diagnoses,
-        { code, name, date: localCalendarDate() },
+        { code, name, ...diagnosisMeta },
       ]))
     )
       return;
     searchVersion.current++;
     setNewDiagnosis("");
+    setDiagnosisMeta({ status: "needs_review", date: "", source: "" });
     setIcdQuery("");
     setIcdResults([]);
   };
   const addMedication = async () => {
     if (!newMed.name.trim()) return;
     if (!(await saveMedications([...draft.medications, { ...newMed }]))) return;
-    setNewMed({ name: "", dose: "", frequency: "", status: "unknown" });
+    setNewMed({ name: "", dose: "", frequency: "", status: "unknown", source: "" });
   };
   const addAllergy = async () => {
     const text = newAllergy.trim();
@@ -96,14 +99,17 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
     setNewAllergy("");
   };
   const addLab = async () => {
+    setLabError("");
     const value = Number(newLab.value);
     if (
       !newLab.item.trim() ||
       !newLab.date ||
       !newLab.value.trim() ||
       !Number.isFinite(value)
-    )
+    ) {
+      setLabError("此处仅支持精确数值（如 0、6.2）。阳性、阴性及 <0.01 等结果暂不支持；请保留原文于资料库，不要去掉比较符或改成精确值。输入已保留。");
       return;
+    }
     if (
       !(await saveLabs([
         ...draft.labs,
@@ -112,11 +118,12 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           value,
           ...(newLab.unit ? { unit: newLab.unit } : {}),
           date: newLab.date,
+          source: newLab.source, note: newLab.note,
         },
       ]))
     )
       return;
-    setNewLab({ item: "", value: "", unit: "", date: "" });
+    setNewLab({ item: "", value: "", unit: "", date: "", source: "", note: "" });
   };
   const addVisit = async () => {
     if (!newVisit.date || !newVisit.reason.trim()) return;
@@ -167,6 +174,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
                 {d.date ? ` · ${fmtDate(d.date)}` : ""}
                 {d.note ? ` · ${d.note}` : ""}
               </span>
+              <details><summary>补充诊断来源与日期</summary><form onSubmit={async e=>{e.preventDefault();const data=new FormData(e.currentTarget);await saveDiagnoses(draft.diagnoses.map((item,i)=>i===index?{...item,date:data.get('date'),source:data.get('source')}:item));}}>
+                <label>原诊断日期<input name="date" type="date" defaultValue={d.date || ''}/></label><label>诊断来源<input name="source" maxLength={200} defaultValue={d.source || ''}/></label><button type="submit">保存诊断补充</button>
+              </form></details>
               <select
                 aria-label={`${d.name}诊断状态`}
                 value={diagnosisStatus(d)}
@@ -206,6 +216,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             placeholder="或直接填写诊断名称"
             onChange={(e) => setNewDiagnosis(e.target.value)}
           />
+          <label>诊断状态<select aria-label="新增诊断状态" value={diagnosisMeta.status} onChange={e=>setDiagnosisMeta({...diagnosisMeta,status:e.target.value})}>{Object.entries(DIAGNOSIS_STATUS_SHORT).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+          <label>原诊断日期（未知可留空）<input type="date" value={diagnosisMeta.date} onChange={e=>setDiagnosisMeta({...diagnosisMeta,date:e.target.value})}/></label>
+          <label>诊断来源<input maxLength={200} value={diagnosisMeta.source} onChange={e=>setDiagnosisMeta({...diagnosisMeta,source:e.target.value})}/></label>
           <button
             className="secondary"
             onClick={() => addDiagnosis("", newDiagnosis)}
@@ -276,6 +289,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
                 {m.dose ? ` · ${m.dose}` : ""}
                 {m.frequency ? ` · ${m.frequency}` : ""}
               </span>
+              <button className="text-button" onClick={()=>setMedEdit({index, value:{...m}, revision:detail.revision})}>更正用药</button>
               <select aria-label={`${m.name}用药状态`} value={m.status || "unknown"} onChange={(e) => saveMedications(draft.medications.map((item, i) => i === index ? { ...item, status: e.target.value } : item))}>
                 <option value="unknown">状态未记录</option><option value="active">目前在用</option><option value="stopped">已停用</option>
               </select>
@@ -294,6 +308,13 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           ))}
           {!draft.medications.length && <li className="muted">未记录用药。</li>}
         </ul>
+        {medEdit && <form aria-label="更正用药" onSubmit={async e=>{e.preventDefault();if(medEdit.revision!==detail.revision){onError?.('档案已变化，请取消本次更正并重新核对原记录。');return;}if(await saveMedications(draft.medications.map((m,i)=>i===medEdit.index?medEdit.value:m)))setMedEdit(null);}}>
+          <p>更正 {medEdit.value.name} · 保留原用药状态与其他资料</p>
+          <label>更正剂量<input maxLength={60} value={medEdit.value.dose || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,dose:e.target.value}})}/></label>
+          <label>更正频次<input maxLength={60} value={medEdit.value.frequency || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,frequency:e.target.value}})}/></label>
+          <label>更正处方来源<input maxLength={200} value={medEdit.value.source || ''} onChange={e=>setMedEdit({...medEdit,value:{...medEdit.value,source:e.target.value}})}/></label>
+          <button type="button" onClick={()=>setMedEdit(null)}>取消更正</button><button type="submit">保存用药更正</button>
+        </form>}
         <div className="clinical-add clinical-add-med">
           <input
             value={newMed.name}
@@ -312,6 +333,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
               setNewMed({ ...newMed, frequency: e.target.value })
             }
           />
+          <label>处方来源<input maxLength={200} value={newMed.source} onChange={e=>setNewMed({...newMed,source:e.target.value})}/></label>
           <select aria-label="新增用药状态" value={newMed.status} onChange={(e) => setNewMed({ ...newMed, status: e.target.value })}><option value="unknown">状态未记录</option><option value="active">目前在用</option><option value="stopped">已停用</option></select>
           <button
             className="secondary"
@@ -325,6 +347,8 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
 
       {(!section || section === 'labs') && <section>
         <h3>检验记录</h3>
+        <p id="lab-value-help">仅录入精确数值；定性结果及带比较符的结果请保留原始报告。</p>
+        {labError && <p role="alert" className="error">{labError}</p>}
         <ul className="clinical-rows">
           {draft.labs.slice(-12).map((l, index, visible) => {
             const realIndex = draft.labs.length - visible.length + index;
@@ -357,6 +381,8 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <input
             value={newLab.value}
             placeholder="数值"
+            aria-describedby="lab-value-help"
+            aria-invalid={!!labError}
             inputMode="decimal"
             onChange={(e) => setNewLab({ ...newLab, value: e.target.value })}
           />
@@ -370,6 +396,8 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             value={newLab.date}
             onChange={(e) => setNewLab({ ...newLab, date: e.target.value })}
           />
+          <label>检验来源<input maxLength={200} value={newLab.source} onChange={e=>setNewLab({...newLab,source:e.target.value})}/></label>
+          <label>检验备注<input maxLength={500} value={newLab.note} onChange={e=>setNewLab({...newLab,note:e.target.value})}/></label>
           <button
             className="secondary"
             onClick={addLab}
