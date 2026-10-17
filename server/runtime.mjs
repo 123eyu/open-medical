@@ -408,7 +408,7 @@ export class MedicalRuntime {
     let seq = 0;
     let text = "";
     let lastPersist = 0,
-      persistedLength = 0;
+      persistedLength = 0, checkpointTimer;
     const artifacts = [];
     // W5 交付事实：仅记录运行时已发生的回执（沙箱/子代理），供交付钩子
     // 在完成点核对；不推断、不采信模型的自述。
@@ -439,8 +439,15 @@ export class MedicalRuntime {
           }
         });
       if (checkpoint) {
+        clearTimeout(checkpointTimer); checkpointTimer = null;
         lastPersist = Date.now();
         persistedLength = text.length;
+      } else if (!checkpointTimer) {
+        checkpointTimer = setTimeout(() => {
+          checkpointTimer = null;
+          this.store.mutate(sessionId, s => { s.runs.find(r => r.id === run.id).partial = text; });
+          lastPersist = Date.now(); persistedLength = text.length;
+        }, Math.max(1, 200 - (Date.now() - lastPersist)));
       }
       try {
         notify(event);
@@ -949,6 +956,7 @@ export class MedicalRuntime {
       });
       return { runId: run.id, status, error: message };
     } finally {
+      clearTimeout(checkpointTimer);
       if (this.active.get(sessionId) === handle) this.active.delete(sessionId);
     }
   }

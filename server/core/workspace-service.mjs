@@ -2080,7 +2080,12 @@ export class WorkspaceService {
     );
     let partial = "",
       last = 0,
-      runtimeRegistry;
+      runtimeRegistry, checkpointTimer;
+    const persistPartial = () => {
+      clearTimeout(checkpointTimer); checkpointTimer = null;
+      this.store.update(id, w => { w.runs.find(r => r.id === run.id).partial = partial; });
+      last = Date.now();
+    };
     const emit = (type, payload) => {
       if (type === "message.delta") partial += payload.text;
       if (["tool.failed", "tool.complete"].includes(type))
@@ -2097,10 +2102,9 @@ export class WorkspaceService {
         });
       const event = this.store.event(id, run.id, type, payload);
       if (type !== "message.delta" || Date.now() - last >= 200) {
-        this.store.update(id, (w) => {
-          w.runs.find((r) => r.id === run.id).partial = partial;
-        });
-        last = Date.now();
+        persistPartial();
+      } else if (!checkpointTimer) {
+        checkpointTimer = setTimeout(persistPartial, Math.max(1, 200 - (Date.now() - last)));
       }
       try {
         notify(event);
@@ -2618,7 +2622,9 @@ export class WorkspaceService {
             : "failed";
       const timedOut = [error, error?.cause, error?.cause?.cause].some(cause => cause?.name === "TimeoutError");
       const message =
-        timedOut
+        status === "cancelled" ? "任务已由你停止，原问题和已生成的部分内容已保留，可载入后重试。"
+          : status === "interrupted" ? "服务中断，任务尚未完成，已保留原问题和部分内容。"
+          : timedOut
           ? `模型连续 ${Math.round((this.provider.timeoutMs || 90000) / 1000)} 秒未响应，本次任务未完成。请在模型设置中测试连接；本机模型请确认模型已加载、内存充足，或减少材料后重试。已产生的内容仍作为未完成草稿保留。`
           : error instanceof AppError
           ? error.message
@@ -2644,6 +2650,7 @@ export class WorkspaceService {
       return { status, error: message };
     } finally {
       clearTimeout(deadline);
+      clearTimeout(checkpointTimer);
       await this.teams
         .get(id)
         ?.close({

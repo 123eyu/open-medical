@@ -901,7 +901,9 @@ function App() {
                               );
                               if (original) {
                                 setDraft(original.content);
+                                pendingWorkflowRef.current = r.policy?.workflow || "";
                                 setConsent(false);
+                                if (r.fileIds.some(id => !session.files.some(f => f.id === id))) setError("原任务的部分材料已删除，本次重试只载入仍存在的材料，请核对依据范围。");
                                 setFileSelection((prev) => ({
                                   ...prev,
                                   [activeId]: r.fileIds.filter((id) =>

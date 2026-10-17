@@ -380,8 +380,10 @@ export async function runTool(
     });
   }
   if (name === "review_medication_safety") {
-    const medicationLines = lines.filter((l) =>
-      /药|片|胶囊|注射|mg|毫克|ml|毫升|用法|bid|qd/i.test(l.quote),
+    const evidenceLines = sources.some(s => s.id.startsWith('patient-record:'))
+      ? lines.filter(l => l.sourceName !== '本轮输入') : lines;
+    const medicationLines = evidenceLines.filter((l) =>
+      /药|片|胶囊|注射|mg|毫克|ml|毫升|用法|频次|每日|途径|bid|qd/i.test(l.quote),
     );
     const fields = [
       ["年龄", /\d+\s*岁|年龄/],
@@ -393,7 +395,7 @@ export async function runTool(
       ["合并用药", /合并用药|同时服用/],
     ];
     const information = fields.map(([name, regex]) => {
-      const matches = lines.filter((l) => regex.test(l.quote));
+      const matches = evidenceLines.filter((l) => regex.test(l.quote));
       const unavailable =
         !matches.length ||
         matches.every((l) =>
@@ -416,7 +418,7 @@ export async function runTool(
         "由药师核查适应证、剂量、禁忌及相互作用",
         "记录复核人和待进一步确认的事项",
       ],
-      limitations: ["仅检测信息是否出现，没有执行药物相互作用或剂量计算。"],
+      limitations: [`本次核对范围：${sources.map(s => s.name).join("、")}。范围外资料未核对，未明确不等于患者档案中不存在。`, "仅检测信息是否出现，没有执行药物相互作用或剂量计算。"],
     });
   }
   if (name === "draft_treatment_review") {

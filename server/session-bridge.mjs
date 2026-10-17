@@ -61,12 +61,13 @@ const resolveMode = (mode) => {
 export class SessionBridge {
   // store：旧医疗会话存储；runtime：旧医疗引擎；service：统一内核；
   // sessionsRoot：会话工作区自动目录的父目录（数据库目录下）。
-  constructor(store, runtime, service, { sessionsRoot, skills = null, doctor = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
+  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
     Object.assign(this, {
       store,
       runtime,
       service,
       sessionsRoot,
+      patientRecord,
       skills,
       doctor,
       plugins: new Map(plugins.map((p) => [p.definition.function.name, p])),
@@ -754,6 +755,17 @@ export class SessionBridge {
       },
     ];
   }
+  localPatientSource(patientId) {
+    const p = this.patientRecord(patientId);
+    const text = [
+      `患者档案（登记资料，修订 ${p.revision || 0}）`,
+      p.birthYear ? `出生年：${p.birthYear}` : '出生年：未记录',
+      `过敏史：${p.allergies?.length ? p.allergies.join('；') : p.allergyStatus === 'none_known' ? '无已知过敏' : '未记录'}`,
+      ...(p.medications || []).map(m => `药物：${m.name}\n剂量：${m.dose || '未记录'}\n频次：${m.frequency || '未记录'}\n途径：${m.route || '未记录'}\n用药状态：${({active:'正在使用',stopped:'已停用',unknown:'未记录'})[m.status] || '未记录'}`),
+      ...(p.labs || []).map(l => `${l.date || '日期未记录'} ${l.item} ${l.value} ${l.unit || ''}`),
+    ].join('\n');
+    return { id: `patient-record:${patientId}`, name: '当前患者已登记档案', text, hash: hashText(text) };
+  }
   // 返回 {kind:"workspace", handle} | {kind:"legacy", handle}；本地规则
   // 模式返回 {kind:"local", plan}，由 executeSend 同步执行。
   prepareSend(id, body) {
@@ -821,7 +833,10 @@ export class SessionBridge {
           sessionId: id,
           policy,
           message,
-          sources: this.buildSources(w, message, this.selectMaterials(w, body.fileIds)),
+          sources: [
+            ...this.buildSources(w, message, this.selectMaterials(w, body.fileIds)),
+            ...(policy.intent === "medication_safety" && w.patientId && this.patientRecord ? [this.localPatientSource(w.patientId)] : []),
+          ],
           fileIds: this.selectMaterials(w, body.fileIds),
           requestId: body.requestId || randomUUID(),
         },

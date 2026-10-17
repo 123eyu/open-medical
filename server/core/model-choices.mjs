@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { check } from "../errors.mjs";
 const identity = (c) =>
   createHash("sha256").update(JSON.stringify(c)).digest("hex");
+const publicEndpoint = (value) => {
+  try { const url = new URL(value); return `${url.origin}${url.pathname}`; }
+  catch { return "地址待核对"; }
+};
 export class ModelChoices {
   constructor(settings, profiles, { fetchImpl = fetch } = {}) {
     Object.assign(this, { settings, profiles, fetchImpl });
@@ -39,6 +43,7 @@ export class ModelChoices {
   }
   async list() {
     const local = new Map();
+    let discovery = { status: "empty", message: "本机服务可达，尚无已下载模型。" };
     try {
       const response = await this.fetchImpl("http://127.0.0.1:11434/api/tags", {
         signal: AbortSignal.timeout(2000),
@@ -70,18 +75,21 @@ export class ModelChoices {
             expiresAt: Date.now() + 300000,
           });
         }
+      if (local.size) discovery = { status: "ready", message: `已发现 ${local.size} 个本机模型；图片能力尚未确认。` };
     } catch {
-      /* Local model discovery is optional and never changes the active connection. */
+      discovery = { status: "unavailable", message: "本机模型服务不可达或发现超时，请启动服务后刷新；已保存连接仍可选择。" };
     }
     this.local = local;
     return {
+      discovery,
       choices: [...this.existing(), ...local.values()].map(
-        ({ name, config, current }) => ({
+        ({ name, config, current, expiresAt }) => ({
           id: identity(config),
           name,
           current: Boolean(current),
           local: config.provider === "local",
-          vision: config.vision === true,
+          vision: expiresAt ? null : config.vision === true,
+          baseUrl: publicEndpoint(config.baseUrl),
         }),
       ),
     };

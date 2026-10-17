@@ -109,7 +109,7 @@ export function KnowledgeSearch({ collection, onRead, onAsk }) {
       {result && (
         <>
           <div className="kw-section-heading">
-            <h3>找到 {result.hits.length} 条相关片段</h3>
+            <h3>找到 {result.count ?? result.hits.length} 条相关片段{result.count > result.hits.length ? `（当前显示前 ${result.hits.length} 条，请缩小检索范围查看更多）` : ""}</h3>
             {onAsk && (
               <button
                 className="secondary"

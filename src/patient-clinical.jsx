@@ -391,11 +391,12 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             placeholder="单位"
             onChange={(e) => setNewLab({ ...newLab, unit: e.target.value })}
           />
-          <input
+          <label>检验日期（采样日，必填）<input
             type="date"
+            required
             value={newLab.date}
             onChange={(e) => setNewLab({ ...newLab, date: e.target.value })}
-          />
+          /></label>
           <label>检验来源<input maxLength={200} value={newLab.source} onChange={e=>setNewLab({...newLab,source:e.target.value})}/></label>
           <label>检验备注<input maxLength={500} value={newLab.note} onChange={e=>setNewLab({...newLab,note:e.target.value})}/></label>
           <button

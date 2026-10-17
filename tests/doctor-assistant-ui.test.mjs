@@ -102,12 +102,12 @@ test('model picker uses one dialog and switches saved connections only after con
   await page.goto(f.origin + '/?view=settings'); await page.getByRole('button', { name: '选择模型', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '模型与识别' }); await dialog.getByLabel('任务使用的模型').waitFor();
   assert.ok(await dialog.locator('.model-settings-body > section').evaluate(e => e.clientWidth > e.closest('dialog').clientWidth * .8));
-  assert.equal(await page.getByRole('dialog').count(), 1); assert.equal(await dialog.locator('input[type=password]').count(), 0);
-  await dialog.getByLabel('任务使用的模型').selectOption({ label: 'second-model · shared' });
+  assert.equal(await page.getByRole('dialog').count(), 1); assert.equal(await dialog.locator('input[type=password]:visible').count(), 0);
+  await dialog.getByLabel('任务使用的模型').selectOption({ label: 'second-model · shared · https://synthetic-model.invalid/v1' });
   assert.equal(await dialog.getByRole('button', { name: '使用所选模型' }).isDisabled(), true);
   assert.ok(await dialog.getByLabel('允许此模型处理我的任务资料').evaluate(e => e.getBoundingClientRect().width < 40));
   await dialog.getByLabel('允许此模型处理我的任务资料').check();
-  await dialog.getByRole('button', { name: '使用所选模型' }).click(); await dialog.getByText('已启用，下一次任务使用所选模型。').waitFor();
+  await dialog.getByRole('button', { name: '使用所选模型' }).click(); await dialog.getByText('已保存并启用，下一次任务使用所选模型。').waitFor();
   assert.equal((await f.json('/api/model-settings')).data.model, 'second-model');
   await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'detached' });
 });

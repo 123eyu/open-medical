@@ -30,6 +30,7 @@ export class ModelSettings {
     try { url = new URL(body.baseUrl.trim()); } catch { throw new AppError('MODEL_SETTINGS', '接口地址格式无效', 400); }
     check(!url.username && !url.password && !url.search && !url.hash, 'MODEL_SETTINGS', '接口地址不能包含账号、密码、查询参数或片段');
     check(url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)), 'MODEL_SETTINGS', '请使用 HTTPS；本地模型允许回环 HTTP 地址');
+    check(body.provider !== 'local' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname), 'MODEL_SETTINGS', '本机模型只能使用本机回环地址；远端服务请选择对应接口协议并确认资料处理授权');
     const baseUrl = url.href.replace(/\/$/, '');
     const existing = this.provider(), previous = this.public();
     check(body.apiKey === undefined || (typeof body.apiKey === 'string' && body.apiKey.length <= 8192), 'MODEL_SETTINGS', '密钥格式无效');
@@ -44,17 +45,19 @@ export class ModelSettings {
     return config;
   }
   save(config) { this.vault.set(key, config); this.saved = config; return this.provider(); }
-  async test(config) {
+  async test(config, { signal } = {}) {
     validateBudget(config);
     const start = Date.now();
+    const deadline = AbortSignal.timeout(30000);
+    const probeSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     const p = createProvider({ ...config, timeoutMs: Math.min(config.timeoutMs, 30000), maxTokens: 256 });
     const run = async (id, fn) => {
       const began = Date.now();
-      try { return { id, ok: true, message: await fn(), durationMs: Date.now() - began }; }
+      try { probeSignal.throwIfAborted(); return { id, ok: true, message: await fn(), durationMs: Date.now() - began }; }
       catch (error) { return { id, ok: false, message: error instanceof AppError ? error.message : '请求失败或超时', durationMs: Date.now() - began }; }
     };
     const text = await run('text', async () => {
-      const result = await p.complete([{ role: 'user', content: 'Reply with OK.' }], [], { signal: AbortSignal.timeout(30000) });
+      const result = await p.complete([{ role: 'user', content: 'Reply with OK.' }], [], { signal: probeSignal });
       check(Boolean(result?.message?.content), 'MODEL_TEST', '模型未返回文本');
       return '文本生成正常';
     });
@@ -63,12 +66,12 @@ export class ModelSettings {
     // failures are reported, not fatal, so text-only models remain usable.
     const tools = await run('tools', async () => {
       const tool = { type: 'function', function: { name: 'report_ready', description: 'Report readiness status.', parameters: { type: 'object', properties: { status: { type: 'string', enum: ['ready'] } }, required: ['status'], additionalProperties: false } } };
-      const result = await p.complete([{ role: 'user', content: 'Call the report_ready tool with status "ready". Do not answer in text.' }], [tool], { signal: AbortSignal.timeout(30000) });
+      const result = await p.complete([{ role: 'user', content: 'Call the report_ready tool with status "ready". Do not answer in text.' }], [tool], { signal: probeSignal });
       check(result?.message?.tool_calls?.some((call) => call.function?.name === 'report_ready'), 'MODEL_TEST', '该模型不支持工具调用，Agent 能力将受限');
       return '工具调用正常';
     });
     const json = await run('json', async () => {
-      const result = await p.complete([{ role: 'user', content: 'Return only a JSON object {"ok": true} with no other text.' }], [], { signal: AbortSignal.timeout(30000) });
+      const result = await p.complete([{ role: 'user', content: 'Return only a JSON object {"ok": true} with no other text.' }], [], { signal: probeSignal });
       const raw = String(result?.message?.content || '').trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
       let value;
       try { value = JSON.parse(raw); } catch { throw new AppError('MODEL_TEST', '未能输出有效 JSON，自动分诊等结构化功能可能不稳定'); }

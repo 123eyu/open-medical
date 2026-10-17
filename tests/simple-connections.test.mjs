@@ -152,7 +152,8 @@ test("model picker uses only known connections, keeps credentials server-side an
   );
   const list = await picker.list();
   assert.equal(list.choices.length, 3);
-  assert.doesNotMatch(JSON.stringify(list), /private-key|baseUrl/);
+  assert.doesNotMatch(JSON.stringify(list), /private-key|apiKey/);
+  assert.equal(list.choices[0].baseUrl, "https://models.example/v1");
   assert.equal(picker.resolve(list.choices[0].id).apiKey, "private-key");
   assert.equal(picker.resolve(list.choices[2].id).provider, "local");
   profiles = { second: { ...profiles.second, apiKey: "rotated" } };

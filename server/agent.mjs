@@ -240,6 +240,13 @@ export function createServer(options = {}) {
       timeoutMs: options.timeoutMs,
     });
   const models = new ModelSettings(store.db, vaultDir, initialProvider);
+  const probeModel = async (candidate, res) => {
+    const controller = new AbortController();
+    const cancel = () => { if (!res.writableEnded) controller.abort(); };
+    res.on("close", cancel);
+    try { return await models.test(candidate, { signal: controller.signal }); }
+    finally { res.removeListener("close", cancel); }
+  };
   const jev = new JevSettings(models.vault);
   let provider = models.provider();
   // The doctor's own skills (extension center) are materialized here.
@@ -573,6 +580,7 @@ export function createServer(options = {}) {
   mkdirSync(sessionsRoot, { recursive: true, mode: 0o700 });
   const sessionBridge = new SessionBridge(store, runtime, workspaces, {
     sessionsRoot,
+    patientRecord: id => patients.row(id),
     skills,
     doctor,
     plugins: [
@@ -1702,7 +1710,7 @@ export function createServer(options = {}) {
       if (["/api/model-choices/select", "/api/model-choices/test"].includes(path) && req.method === "POST") {
         const input = await body(req);
         const candidate = modelChoices.resolve(input.id);
-        if (path.endsWith('/test')) return send(res, 200, await track(models.test(candidate)));
+        if (path.endsWith('/test')) return send(res, 200, await track(probeModel(candidate, res)));
         check(runtime.active.size === 0 && workspaces.active.size === 0, 'MODEL_BUSY', '有任务正在运行，请等待结束后切换模型', 409);
         check(candidate.provider === 'local' || input.consent === true, 'MODEL_CONSENT', '请确认允许模型处理任务资料');
         swapProvider(models.save(candidate));
@@ -1727,7 +1735,7 @@ export function createServer(options = {}) {
         return send(
           res,
           200,
-          await track(models.test(models.candidate(input))),
+          await track(probeModel(models.candidate(input), res)),
         );
       }
       // OCR 设置：识别策略 + 本机识别服务（PaddleOCR）+ 可选专用识别模型；
@@ -2364,12 +2372,11 @@ export function createServer(options = {}) {
         const close = () => {
           if (!res.writableEnded) {
             disconnected = true;
-            sessionBridge.cancel(id);
           }
         };
         res.on("close", close);
         const heartbeat = setInterval(() => {
-          if (!res.writableEnded) res.write(": heartbeat\n\n");
+          if (!disconnected && !res.writableEnded) res.write(": heartbeat\n\n");
         }, 15000);
         try {
           await track(

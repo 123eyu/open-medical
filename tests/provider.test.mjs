@@ -302,7 +302,7 @@ test("provider timeout aborts hanging response; invalid tool completion is rejec
   });
   await assert.rejects(() => invalid.complete([], []), /结束状态/);
 });
-test("browser disconnect aborts provider work and durable run is cancelled", async (t) => {
+test("browser disconnect preserves provider work; explicit stop cancels and retains partial output", async (t) => {
   let began, finished;
   const started = new Promise((r) => (began = r)),
     stopped = new Promise((r) => (finished = r));
@@ -345,8 +345,17 @@ test("browser disconnect aborts provider work and durable run is cancelled", asy
   const reader = response.body.getReader();
   await reader.read();
   abort.abort();
+  let running;
+  for (let i = 0; i < 100; i++) {
+    running = (await f.json(`/api/sessions/${s.id}`)).data;
+    if (running.runs[0].partial.includes('部分结果')) break;
+    await new Promise(r => setTimeout(r, 10));
+  }
+  assert.equal(running.runs[0].status, "running");
+  assert.match(running.runs[0].partial, /部分结果/);
+  assert.equal((await f.json(`/api/chat/${s.id}/cancel`, "POST", {})).data.cancelled, true);
   await stopped;
-  for (let i = 0; i < 50 && f.server.runtime.active.size; i++)
+  for (let i = 0; i < 50 && (f.server.runtime.active.size || f.server.workspaces.active.size); i++)
     await new Promise((r) => setTimeout(r, 5));
   const state = (await f.json(`/api/sessions/${s.id}`)).data;
   assert.equal(state.runs[0].status, "cancelled");

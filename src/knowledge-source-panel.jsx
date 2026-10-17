@@ -55,7 +55,8 @@ export function KnowledgeSourcePanel({ contextKey }) {
     api(`/api/knowledge/${encodeURIComponent(request.id || "")}`)
       .then((doc) => {
         if (!alive) return;
-        const range = request.highlight;
+        const stale = Boolean(request.sourceHash && request.sourceHash !== doc.sha256);
+        const range = stale ? null : request.highlight;
         if (
           range &&
           (!Number.isInteger(range.startLine) ||
@@ -68,9 +69,7 @@ export function KnowledgeSourcePanel({ contextKey }) {
         setReader({
           doc,
           highlight: range || null,
-          stale: Boolean(
-            request.sourceHash && request.sourceHash !== doc.sha256,
-          ),
+          stale,
         });
       })
       .catch((e) => {

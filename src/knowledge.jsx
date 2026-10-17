@@ -25,6 +25,7 @@ export function KnowledgeView({
     }),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
+    [refreshError, setRefreshError] = useState(""),
     [notice, setNotice] = useState("");
   const [reader, setReader] = useState(initialCitation),
     [importing, setImporting] = useState(false),
@@ -65,6 +66,7 @@ export function KnowledgeView({
       setData(jobs);
     }
     setLoading(false);
+    setRefreshError("");
   }, [collection]);
   useEffect(() => {
     alive.current = true;
@@ -76,7 +78,7 @@ export function KnowledgeView({
         await refresh();
       } catch (e) {
         if (alive.current) {
-          setError(e.message);
+          setRefreshError(e.message);
           setLoading(false);
         }
       } finally {
@@ -107,7 +109,7 @@ export function KnowledgeView({
   };
   const openReader = async (id, highlight) => {
     if (highlight) {
-      openKnowledgeSource({ id, highlight, sourceHash: highlight.sourceHash });
+      openKnowledgeSource({ id, highlight, sourceHash: highlight.sourceHash || highlight.sha256 });
       return;
     }
     setError("");
@@ -147,7 +149,7 @@ export function KnowledgeView({
           .slice(0, 6)
           .map(
             (h) =>
-              `${h.docTitle}（${h.docId}）第 ${h.startLine}–${h.endLine} 行`,
+              `${h.docTitle}（${h.docId}）第 ${h.startLine}–${h.endLine} 行，检索时内容哈希：${h.sha256 || "未记录"}`,
           )
           .join("；") || "暂无"
       }。`,
@@ -213,9 +215,9 @@ export function KnowledgeView({
               )}
             </div>
           ))}
-          {error && (
+          {(error || refreshError) && (
             <p className="form-error" role="alert">
-              {error}{" "}
+              {error || refreshError}{" "}
               <button
                 className="text-button"
                 onClick={() => perform(async () => {})}

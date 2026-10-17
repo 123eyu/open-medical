@@ -361,9 +361,7 @@ export function TaskDirectory({
                 ? "执行中"
                 : x.pending
                     ? `${x.pending} 项待审批`
-                    : x.status === "failed"
-                      ? "执行失败"
-                      : ""}
+                    : ({ failed: "执行失败", cancelled: "已停止", interrupted: "已中断", completed: "已完成" }[x.lastRunStatus || x.status] || "")}
             </em>
           </button>
         ))}
