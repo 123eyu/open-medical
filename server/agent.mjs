@@ -934,6 +934,7 @@ export function createServer(options = {}) {
       if (path === "/api/bootstrap" && req.method === "GET")
         return send(res, 200, {
           token: secret,
+          demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
           // 应用，显式声明医疗能力可用（前端 medicalEnabled 优先读
           // capabilities，patientsEnabled 仅为旧客户端兼容回退）。
@@ -1880,6 +1881,12 @@ export function createServer(options = {}) {
       if (path === "/api/backup/status" && req.method === "GET") return send(res, 200, backups.status());
       if (path === "/api/backup/run" && req.method === "POST") return send(res, 201, backups.run());
       // 示例患者包：一键装载/删除，全部虚构、独立标签，永不触碰真实档案。
+      if (path === "/api/demo-entry" && req.method === "PUT") {
+        const { hidden } = await body(req);
+        check(typeof hidden === "boolean", "INVALID_PREFERENCE", "入口显示状态必须为布尔值");
+        store.db.prepare("INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run("ui:demo-entry-hidden", String(hidden));
+        return send(res, 200, { hidden });
+      }
       if (path === "/api/demo-pack" && req.method === "GET") return send(res, 200, demoPack.status());
       if (path === "/api/demo-pack" && req.method === "POST") return send(res, 201, await demoPack.seed());
       if (path === "/api/demo-pack" && req.method === "DELETE") return send(res, 200, await demoPack.clear());

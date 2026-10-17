@@ -4,7 +4,7 @@ import { api } from "./agent-runtime";
 import { DEMO_SCENARIOS } from "../shared/demo-experience.mjs";
 import "./demo-experience.css";
 
-export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged }) {
+export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged, entryHidden, preferenceBusy, onEntryHiddenChange }) {
   const [state, setState] = useState(null);
   const [group, setGroup] = useState("临床与患者");
   const [busy, setBusy] = useState("");
@@ -50,7 +50,8 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
     next: "会先打开示例材料与任务要求。核对后发送，可继续追问、调整草稿和查看成果。",
   })) : DEMO_SCENARIOS.filter(s => s.group === group);
   return <main id="main" className="demo-experience work-directory">
-    <header className="directory-heading"><div><span className="agent-eyebrow">从一份现成资料开始</span><h1>示例体验</h1><p>选一个场景，材料会自动准备好。看看数据，试着问一句，再继续操作。</p></div></header>
+    <header className="directory-heading"><div><span className="agent-eyebrow">从一份现成资料开始</span><h1>示例体验</h1><p>选一个场景，材料会自动准备好。看看数据，试着问一句，再继续操作。</p></div><button className="text-button" disabled={preferenceBusy} onClick={() => onEntryHiddenChange(!entryHidden)}>{entryHidden ? "显示入口" : "隐藏入口"}</button></header>
+    {entryHidden && <p role="status">侧栏和首页入口已隐藏，可在设置中恢复。示例资料仍然保留。</p>}
     <section className="demo-welcome" aria-label="示例数据管理">
       <BookOpen size={25}/><div><b>{state?.installed ? "示例资料已就位，可以随时接着体验" : "不用上传资料，也能开始第一项任务"}</b><p>3 位虚构患者 · 原始病历与检验 · 随访问卷 · 消息草稿 · 知识库 · 病例与试验方案 · 研究 CSV</p><small>浏览与本地计算无需模型；AI 问答使用你配置的模型，发送前仍可核对材料和外发许可。</small></div>
       <button className="primary" disabled={Boolean(busy)} onClick={() => run("prepare", async () => { await prepare(); setNotice("示例已准备好。请选择下方场景；重复准备不会覆盖已编辑的数据。"); })}>{busy === "prepare" ? <Loader2 size={16} className="spin"/> : null}{state?.installed ? "补齐示例资料" : "准备全部示例"}</button>

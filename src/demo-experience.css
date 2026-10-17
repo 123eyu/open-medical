@@ -17,3 +17,8 @@
 .hub-demo-entry { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 18px 20px; border: 1px solid #cdded4; border-radius: 12px; background: #f3f8f4; margin: 18px 0; }
 .hub-demo-entry p { margin: 5px 0 0; color: #52635a; font-size: 13px; }
 @media (max-width: 680px) { .demo-scenarios { grid-template-columns: 1fr; } .demo-welcome, .hub-demo-entry { align-items: flex-start; flex-direction: column; } .demo-experience .doctor-tabs { overflow-x: auto; } }
+
+.medical-shell .demo-nav-entry { grid-template-columns: minmax(0, 1fr) 36px; align-items: center; margin-bottom: 8px; }
+.medical-shell .demo-nav-entry .demo-nav-hide { justify-content: center; padding: 8px; min-height: 36px; color: var(--muted, #68756f); }
+.demo-experience .directory-heading { align-items: flex-start; gap: 16px; }
+.demo-experience .directory-heading > button { flex-shrink: 0; }

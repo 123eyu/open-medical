@@ -515,6 +515,18 @@ function App() {
     writeLocation(next, location);
     setViewState(next);
   };
+  const [demoPreferenceBusy, setDemoPreferenceBusy] = useState(false);
+  const [demoPreferenceError, setDemoPreferenceError] = useState("");
+  const setDemoEntryHidden = async (hidden) => {
+    if (demoPreferenceBusy) return;
+    setDemoPreferenceBusy(true);
+    setDemoPreferenceError("");
+    try {
+      const preference = await api("/api/demo-entry", "PUT", { hidden });
+      setConfig(current => ({ ...current, demoEntryHidden: preference.hidden }));
+    } catch (error) { setDemoPreferenceError(error.message); }
+    finally { setDemoPreferenceBusy(false); }
+  };
   const [displayMode, setDisplayMode] = useState("work");
   const [workspaceDisplay, setWorkspaceDisplay] = useState("work");
   // 字号三档：off/large/xlarge；旧的 "true" 值视为 large。
@@ -1442,15 +1454,17 @@ function App() {
           />
         )}
         <aside className={`app-navigation ${sidebar ? "open" : ""}`}>
+          {medical && !config?.demoEntryHidden && <nav className="medical-quick demo-nav-entry" aria-label="示例体验">
+            <button aria-current={view === "examples" ? "page" : undefined} className={view === "examples" ? "active" : ""} onClick={() => navigate("examples")}><BookOpen size={17}/><span>示例体验</span></button>
+            <button className="demo-nav-hide" aria-label="隐藏示例体验入口" title="隐藏入口，可在设置中恢复" disabled={demoPreferenceBusy} onClick={() => setDemoEntryHidden(true)}><X size={15}/></button>
+          </nav>}
+          {demoPreferenceError && <p role="alert" className="error-text">{demoPreferenceError}</p>}
           <button className="new-session agent-new-task" aria-label="新建任务" aria-current={view === "home" ? "page" : undefined} onClick={startNewTask}>
             <Plus size={20}/><span>新建任务</span>
           </button>
           {medical && <div className="medical-quick-wrap">
             <nav className="medical-quick" aria-label="主要业务">
               {[["patients", "患者", Stethoscope], ["agenda", "今日待办", CalendarClock], ["knowledge", "知识库", BookOpen]].map(([id,label,Icon]) => <button key={id} aria-current={view === id ? "page" : undefined} className={view === id ? "active" : ""} onClick={() => id === "patients" ? openPatient({ navigationKey: Date.now() }) : navigate(id)}><Icon size={17}/><span>{label}</span></button>)}
-            </nav>
-            <nav className="medical-quick" aria-label="示例体验">
-              <button aria-current={view === "examples" ? "page" : undefined} className={view === "examples" ? "active" : ""} onClick={() => navigate("examples")}><BookOpen size={17}/><span>示例体验</span></button>
             </nav>
             <nav className="medical-quick" aria-label="资料与工具">
               <button aria-current={TOOL_VIEWS.includes(view) ? "page" : undefined} className={TOOL_VIEWS.includes(view) ? "active" : ""} onClick={() => navigate("tools")}><Search size={17}/><span>资料与工具</span></button>
@@ -1490,7 +1504,7 @@ function App() {
                 </div> : <div className="loading-state" role="status">
                   <Loader2 className="spin" />正在连接本地运行时…
                 </div>}
-              </main>) : view === "examples" && medical ? <DemoExperience flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <AppSettingsView config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
+              </main>) : view === "examples" && medical ? <DemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <AppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
             <WorkspacesView
               key={`ws-${homeKey}-${workspaceTarget?.id || ""}-${workspaceTarget?.create || ""}`}
               config={config}
@@ -1542,6 +1556,7 @@ function App() {
           ) : view !== "workbench" ? (
             <WorkbenchHome
               key={homeKey}
+              demoEntryHidden={Boolean(config?.demoEntryHidden)}
               draftState={homeDraft}
               onDraftChange={setHomeDraft}
               view={view}

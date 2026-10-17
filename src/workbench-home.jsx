@@ -338,6 +338,7 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
 }
 
 export function WorkbenchHome({
+  demoEntryHidden = false,
   view,
   config,
   sessions,
@@ -601,7 +602,7 @@ export function WorkbenchHome({
       )}
       {isHome ? (
         <>
-      <section className="hub-demo-entry"><div><b>第一次使用？从默认示例开始</b><p>无需上传资料，直接体验患者问答、随访、知识检索和科研工具。</p></div><button type="button" className="primary" disabled={starting || uploading} onClick={() => onView("examples")}>选择示例体验</button></section>
+      {!demoEntryHidden && <section className="hub-demo-entry"><div><b>第一次使用？从默认示例开始</b><p>无需上传资料，直接体验患者问答、随访、知识检索和科研工具。</p></div><button type="button" className="primary" disabled={starting || uploading} onClick={() => onView("examples")}>选择示例体验</button></section>}
       <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
           <BackupStatus />
           <section className="hub-intro hub-intro-compact">
