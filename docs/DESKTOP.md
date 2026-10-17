@@ -30,6 +30,8 @@ npm run package:win
 
 输出：`release/Open Medical-darwin-arm64/Open Medical.app`（当前 Apple Silicon 构建）或 `release/Open Medical-win32-x64`。Intel Mac 需要在相应架构环境构建并验证。本地试用包未做 Apple Developer ID 公证，不是已完成签名分发的正式安装包；Windows 包也尚未做代码签名。
 
+macOS 打包或刷新桌面运行时成功后，会整理 `output/` 中已识别的 `previous*.app` 回退副本，保留版本最新的一份。正在使用、生成不足一小时或包含本地数据的副本会保留；候选构建、`release/`、已安装应用和其他产物不在清理范围内。进程占用检查失败时跳过清理。可运行 `npm run desktop:prune` 预览，或在验证安装成功后运行 `npm run desktop:prune -- --apply` 清理；用 `--keep=2` 等参数增加保留数量。
+
 界面复用工作台；渲染进程开启 Chromium sandbox 和 context isolation，不提供 Node API，不允许 webview 或任意页面导航。所有窗口只访问自己启动的随机 loopback 端口。外部 HTTPS 链接由系统浏览器打开。参考 [Electron 安全建议](https://www.electronjs.org/docs/latest/tutorial/security)。
 
 数据保存在 `~/Library/Application Support/Open Medical/medical.sqlite`，模型配置为同目录 `model.env`，首次创建权限 0600。菜单“工作台 → 编辑模型配置”打开文本编辑器，填写 AI_PROVIDER 和对应模型密钥后通过“重启以应用配置”生效。此配置与开发版项目 `.env` 分离；打包明确排除项目数据库、密钥、测试材料和截图。

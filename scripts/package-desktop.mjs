@@ -10,6 +10,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { argument, reserveCandidateOutput, prohibited, captureSource, sourceManifestName, inventory, sealCandidate } from "./desktop-candidate.mjs";
 import { execFileSync } from "node:child_process";
+import { pruneAfterDesktopBuild } from "./prune-desktop-backups.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const arg = (name) => argument(process.argv.slice(2), name);
@@ -189,3 +190,4 @@ try {
 } finally {
   await rm(stage, { recursive: true, force: true });
 }
+await pruneAfterDesktopBuild(root);
