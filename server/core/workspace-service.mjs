@@ -2616,8 +2616,11 @@ export class WorkspaceService {
           : controller.signal.aborted
             ? "cancelled"
             : "failed";
+      const timedOut = [error, error?.cause, error?.cause?.cause].some(cause => cause?.name === "TimeoutError");
       const message =
-        error instanceof AppError
+        timedOut
+          ? `模型连续 ${Math.round((this.provider.timeoutMs || 90000) / 1000)} 秒未响应，本次任务未完成。请在模型设置中测试连接；本机模型请确认模型已加载、内存充足，或减少材料后重试。已产生的内容仍作为未完成草稿保留。`
+          : error instanceof AppError
           ? error.message
           : "执行失败，请检查模型和文件配置";
       this.store.update(id, (w) =>
@@ -2634,7 +2637,7 @@ export class WorkspaceService {
       );
       emit(status === "cancelled" ? "run.cancelled" : "error", {
         status,
-        code: error instanceof AppError ? error.code : "INTERNAL",
+        code: timedOut ? "PROVIDER_TIMEOUT" : error instanceof AppError ? error.code : "INTERNAL",
         error: message,
       });
       this.notify(id, run.id, status);

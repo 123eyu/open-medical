@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { chromium } from 'playwright-core';
+import { fixture } from './helpers.mjs';
+const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+test('mobile patient navigation stays usable and medication additions survive section changes', {skip:!existsSync(chrome)}, async t => {
+  const f = await fixture(t);
+  const p = (await f.json('/api/patients','POST',{name:'合成草稿患者'})).data;
+  const browser = await chromium.launch({executablePath:chrome,headless:true});
+  t.after(()=>browser.close());
+  const page = await browser.newPage({viewport:{width:390,height:844}});
+  await page.goto(`${f.origin}/?view=patients&patient=${p.id}&tab=medications`);
+  const nav = page.getByRole('navigation',{name:'患者工作内容'});
+  await nav.waitFor();
+  assert.ok((await nav.boundingBox()).height >= 44);
+  assert.match(await page.title(), /合成草稿患者/);
+  await page.getByRole('button',{name:'编辑用药与过敏',exact:true}).click();
+  await page.getByPlaceholder('药名',{exact:true}).fill('合成测试药');
+  await page.getByPlaceholder('剂量',{exact:true}).fill('测试剂量');
+  await page.getByRole('button',{name:'诊断与病史',exact:true}).click();
+  await page.getByRole('button',{name:'治疗与预后',exact:true}).click();
+  assert.equal(await page.getByPlaceholder('药名',{exact:true}).inputValue(), '合成测试药');
+  assert.equal(await page.getByPlaceholder('剂量',{exact:true}).inputValue(), '测试剂量');
+  assert.equal((await f.json(`/api/patients/${p.id}`)).data.medications.length, 0);
+  await page.locator('.clinical-add-med').getByRole('button',{name:'添加',exact:true}).click();
+  await page.waitForFunction(() => document.querySelector('input[placeholder="药名"]')?.value === '');
+  assert.equal((await f.json(`/api/patients/${p.id}`)).data.medications[0].name,'合成测试药');
+  await page.getByRole('button',{name:'诊断与病史',exact:true}).click();
+  await page.getByRole('button',{name:'治疗与预后',exact:true}).click();
+  await page.getByRole('button',{name:'编辑用药与过敏',exact:true}).click();
+  assert.equal(await page.getByPlaceholder('药名',{exact:true}).inputValue(), '');
+});

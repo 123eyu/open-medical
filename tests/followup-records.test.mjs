@@ -73,3 +73,17 @@ test("follow-up history pagination is exact and newest-first across more than 10
   const other = (await f.json("/api/patients", "POST", { name: "另一合成患者" })).data;
   assert.equal((await f.json(`/api/reminders?patientId=${other.id}&status=done`)).data.total, 0);
 });
+
+test("unreachable contact needs an explicit next action and preserves a reason without creating a reminder", async t => {
+  const f = await setup(t);
+  const path = `/api/patients/${f.p.id}/followup-records`;
+  const payload = {requestId: "retry-decision", status:"unreachable", note:"未接听"};
+  const missing = await f.json(path, "POST", payload);
+  assert.equal(missing.status, 400);
+  assert.equal((await f.json(`/api/reminders?patientId=${f.p.id}`)).data.counts.pending, 0);
+  const saved = await f.json(path, "POST", {...payload, noRetryReason:"由既有每周计划继续联系"});
+  assert.equal(saved.status, 201);
+  assert.equal(saved.data.outcome.noRetryReason, "由既有每周计划继续联系");
+  assert.equal(f.server.followups.list(f.p.id).length, 0);
+  assert.equal((await f.json(path, "POST", {...payload, noRetryReason:"另一原因"})).status, 409);
+});

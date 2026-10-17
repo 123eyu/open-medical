@@ -7,6 +7,7 @@ import { PatientMaterialLibrary } from './patient-material-library';
 import { api } from './agent-runtime';
 import './patient-dashboard.css';
 import { ClinicalPanel } from './patient-clinical';
+import { hasClinicalDraft } from './clinical-drafts';
 import { TreatmentPanel } from './patient-treatment';
 import { PatientHistory } from './patient-history';
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../shared/clinical-summary.mjs';
@@ -39,7 +40,7 @@ function LabPlot({ group, compact = false }) {
   </svg>;
 }
 export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, view = "overview", focusFile = null, onChanged, onError }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
   const titles = {overview:'患者概览',diagnoses:'诊断与病史',medications:'治疗方案与预后',labs:'检验趋势',visits:'就诊经过',library:'资料库'};
   const [display, setDisplay] = useState(patient.labDisplay || { revision: 0 });
   const [displayBusy, setDisplayBusy] = useState(false);

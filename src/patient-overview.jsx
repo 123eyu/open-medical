@@ -134,7 +134,7 @@ export function PatientOverview({ patient, session, groups, onNavigate }) {
                 <p>
                   {activeMeds
                     .slice(0, 4)
-                    .map((m) => m.name || m.drug || "未命名用药")
+                    .map((m) => [m.name || m.drug || "未命名用药", m.dose, m.frequency].filter(Boolean).join(" · "))
                     .join("、")}
                   {activeMeds.length > 4 ? ` 等 ${activeMeds.length} 项` : ""}
                 </p>

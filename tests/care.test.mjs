@@ -292,6 +292,14 @@ test("follow-up replies attach to the latest sent step, paused plans keep collec
   assert.equal(f.care.campaign(first.id).steps[0].status, "no_reply");
   const noReply = f.care.alerts({ status: "open" }).alerts.filter((a) => a.reason.includes("未收到回复"));
   assert.equal(noReply.length, 1);
+  const pending = (await f.json(`/api/reminders?patientId=${f.patient.id}&status=pending`)).data.reminders;
+  const unanswered = pending.find(r => r.source?.campaignId === first.id);
+  assert.ok(unanswered, "automated non-response remains visible for doctor review");
+  assert.equal(unanswered.outcome, undefined, "automation must not invent a clinician closure");
+  assert.equal(unanswered.attempt.status, "unreachable");
+  assert.equal((await f.json(`/api/reminders/${unanswered.id}/complete`, "POST", {status:"unreachable",note:"电话仍未接"})).status, 400);
+  assert.equal((await f.json(`/api/reminders/${unanswered.id}/complete`, "POST", {status:"unreachable",note:"电话仍未接",noRetryReason:"由门诊既有计划联系"})).status, 200);
+
   // A step that came due while its plan was paused is skipped on resume, not sent late.
   clock.now += 2 * 86400000;
   await f.json(`/api/care/campaigns/${second.id}/resume`, "POST", {});

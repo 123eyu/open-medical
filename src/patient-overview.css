@@ -307,3 +307,10 @@
 .medical-shell .has-patient .patient-section-tabs {
   margin: 8px 0 16px;
 }
+
+/* Patient navigation remains reachable when the page exceeds the viewport. */
+.medical-shell .patient-area-tabs,
+.medical-shell .patient-section-tabs {
+  flex-shrink: 0;
+  min-height: 44px;
+}

@@ -886,7 +886,7 @@ export function WorkbenchHome({
                     onChange={(e) => onConsentChange(e.target.checked)}
                     disabled={starting}
                   />
-                  本轮允许外发
+                  {config?.provider === "local" ? "本轮允许本机模型与已启用的联网工具" : "本轮允许外发"}
                 </label>
               )}
               <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !prompt.trim() || (Boolean(patientId) && !data) || (consentRequired && !consent))}>

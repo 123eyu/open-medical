@@ -422,6 +422,7 @@ export function PatientsView({
         <div className="toolbar-actions">
           <button className="secondary" onClick={() => setModal("import-labs")}>导入检验结果</button>
           <button className="secondary" onClick={() => setModal("group-suggest")}>生成分组建议</button>
+          <button className="secondary" onClick={() => setModal("manual-patient")}>手动建档</button>
           <button className="primary" onClick={() => setModal("new-patient")}><UserPlus size={15}/> 上传资料建档</button>
         </div>
       </div>}

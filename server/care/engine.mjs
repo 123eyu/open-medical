@@ -624,8 +624,8 @@ export class CareEngine {
       requestId: `care-${c.id}-${step.id}-noreply`, title: `${c.name} · 第${step.dayOffset}天`.slice(0, 100), status: "unreachable", contactMethod: "wecom",
       contactedAt: step.sentAt, note: `发送后 ${c.replyWindowHours} 小时内未收到回复${uncertain}。`,
       source: { kind: "campaign", campaignId: c.id, stepId: step.id, messageIds: [] },
-    });
-    this.updateStep(c.id, step.id, { status: "no_reply", recordedAt: iso(this.now()), result: { summary: `未回复${uncertain}`, needsDoctor: false, recordId: record.id } });
+    }, { pendingReview: true });
+    this.updateStep(c.id, step.id, { status: "no_reply", recordedAt: iso(this.now()), result: { summary: `未回复${uncertain}，待医生登记后续安排`, needsDoctor: true, recordId: record.id } });
     this.createAlert({ patientId: c.patientId, level: "attention", key: `campaign:${c.id}:${step.id}:noreply`, reason: `随访「${c.name}」第 ${step.dayOffset} 天未收到回复${uncertain}，建议电话联系` });
   }
 

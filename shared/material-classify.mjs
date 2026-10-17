@@ -18,6 +18,10 @@ const normalize = (value) => String(value || "").toLowerCase();
 export function classifyMaterial({ name, text } = {}) {
   const hayName = normalize(name);
   const hayText = normalize(text).slice(0, 6000);
+  // A generic chart title remains a chart even when it contains lab results.
+  if (/病历/.test(hayName) && !/住院|入院|出院|影像报告|检验报告|化验报告|生化报告|超声报告|病理报告/.test(hayName))
+    return { category: "门诊病历", reason: "文件名含「病历」" };
+
   for (const source of [
     { haystack: hayName, field: "文件名" },
     { haystack: hayText, field: "正文" },
@@ -52,32 +56,26 @@ const DATE_RE = /(\d{4})\s*[-年/.]\s*(\d{1,2})\s*[-月/.]\s*(\d{1,2})/;
 const COMPACT14_RE = /(?:^|\D)(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])\d{6}(?:\D|$)/;
 const COMPACT8_RE = /(?:^|\D)(20\d{2})(0[1-9]|1[0-2])([0-2]\d|3[01])(?:\D|$)/;
 
-function compactDate(source) {
-  for (const pattern of [COMPACT14_RE, COMPACT8_RE]) {
-    const match = source.match(pattern);
-    if (!match) continue;
-    const [, y, m, d] = match;
-    const iso = `${y}-${m}-${d}`;
-    if (Number.isFinite(Date.parse(iso))) return iso;
-  }
-  return null;
+function validDate(match) {
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const year = Number(y), month = Number(m), day = Number(d);
+  const iso = `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const time = Date.parse(iso);
+  return year >= 1900 && year <= 2100 && Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === iso ? iso : null;
 }
 
-// Best-effort document date from the file name, then the text head; the
-// doctor always confirms the final value in the folder view.
+// Body dates need an explicit document/encounter label. A diagnosis or birth
+// date is not the date of this document; ambiguity is left for doctor review.
 export function suggestDocumentDate({ name, text } = {}) {
-  const fromName = compactDate(normalize(name));
+  const filename = normalize(name);
+  const fromName = validDate(filename.match(DATE_RE)) || validDate(filename.match(COMPACT14_RE)) || validDate(filename.match(COMPACT8_RE));
   if (fromName) return fromName;
-  for (const source of [normalize(name), normalize(text).slice(0, 3000)]) {
-    const match = source.match(DATE_RE);
-    if (!match) continue;
-    const [, y, m, d] = match;
-    const year = Number(y), month = Number(m), day = Number(d);
-    if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) continue;
-    const iso = `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    if (Number.isFinite(Date.parse(iso))) return iso;
-  }
-  return null;
+  const body = normalize(text).slice(0, 6000);
+  const documentDates = [...body.matchAll(new RegExp(`(?:报告日期|报告时间|检验日期|检验时间|检查日期|检查时间|就诊日期|就诊时间|门诊日期|记录日期|出院日期|入院日期|文书日期)[：:\\s]*${DATE_RE.source}`, "g"))]
+    .map(validDate).filter(Boolean);
+  const unique = [...new Set(documentDates)];
+  return unique.length === 1 ? unique[0] : null;
 }
 
 // Apply on ingestion and after OCR; legacy explicit categories count as manual.

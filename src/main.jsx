@@ -532,7 +532,7 @@ function App() {
   // 字号三档：off/large/xlarge；旧的 "true" 值视为 large。
   const [textScale, setTextScale] = useState(() => {
     const v = localStorage.getItem("om.largeText");
-    return v === "true" ? "large" : v === "xlarge" ? "xlarge" : "off";
+    return v === "true" || v === "large" ? "large" : v === "xlarge" ? "xlarge" : "off";
   });
   const [workspaceTarget, setWorkspaceTarget] = useState(initialLocation.view === "workspaces" ? { id: initialLocation.id, panel: initialLocation.tab } : null);
   const [projectTool, setProjectTool] = useState("");
@@ -688,6 +688,24 @@ function App() {
     setListError(missing.length ? `${missing.join("、")}列表暂时无法更新，已保留此前读取的数据。` : "");
     return tasks.status === "fulfilled" ? tasks.value.sessions : sessions;
   };
+
+  useEffect(() => {
+    if (!config) return;
+    let refreshing = false;
+    const refresh = async () => {
+      if (document.hidden || refreshing) return;
+      refreshing = true;
+      try { await refreshList(); } finally { refreshing = false; }
+    };
+    const timer = setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [config]);
 
   const load = async (id) => {
     const version = ++generation.current;
@@ -1300,9 +1318,9 @@ function App() {
   useEffect(() => {
     if (config)
       document.title = medical
-        ? `${VIEW_LABELS[view] || "医疗工作台"} · Open Medical`
+        ? `${view === "patients" && patientRoute.id ? `${patientsList.find(p => p.id === patientRoute.id)?.name || "患者"} · ${VIEW_LABELS[view]}` : VIEW_LABELS[view] || "医疗工作台"} · Open Medical`
         : `${VIEW_LABELS[view] || "通用工作台"} · Open Agent`;
-  }, [config, medical, view]);
+  }, [config, medical, view, patientRoute.id, patientsList]);
   // 桌面壳(Windows)用系统窗口按钮覆盖层时,顶栏兼作窗口拖拽区;类名挂在
   // html 上供 v6-layout.css 门控,浏览器与 macOS(无覆盖层)不会有该类。
   useEffect(() => {
@@ -2200,7 +2218,7 @@ function App() {
                             checked={consent}
                             onChange={(e) => setConsent(e.target.checked)}
                           />
-                          本轮允许外发
+                          {config?.provider === "local" ? "本轮允许本机模型与已启用的联网工具" : "本轮允许外发"}
                         </label>
                       )}
                       {busy && (

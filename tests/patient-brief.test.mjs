@@ -42,7 +42,7 @@ test("previsit brief follows recorded contact outcomes without mistaking acknowl
   const reminder = f.server.followups.reminders({ patientId: p.id })[0];
   f.server.followups.ackReminder(reminder.id);
   assert.equal((await f.json(`/api/patients/${p.id}/brief`)).data.outcomes.length, 0);
-  const result = await f.json(`/api/reminders/${reminder.id}/complete`, "POST", { status: "unreachable", note: "合成患者未接听，尚未获知近况" });
+  const result = await f.json(`/api/reminders/${reminder.id}/complete`, "POST", { status: "unreachable", note: "合成患者未接听，尚未获知近况", noRetryReason: "由原计划继续联系" });
   assert.equal(result.status, 200);
   const brief = (await f.json(`/api/patients/${p.id}/brief`)).data;
   assert.equal(brief.outcomes[0].status, "unreachable");

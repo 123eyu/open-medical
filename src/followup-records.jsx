@@ -130,6 +130,7 @@ export function FollowupRecords({
       checkedItems: [],
       nextDueAt: "",
       nextName: "后续随访",
+      noRetryReason: "",
     });
   };
   return (
@@ -271,7 +272,7 @@ export function FollowupRecords({
                       record.outcome.contactedAt || record.outcome.recordedAt,
                     )}
                   </strong>
-                  <p className="followup-note">{record.outcome.note}</p>
+                  <p className="followup-note">{record.outcome.note}{record.outcome.noRetryReason ? `；未另行安排：${record.outcome.noRetryReason}` : ""}</p>
                   {record.outcome.contactMethod &&
                     record.outcome.contactMethod !== "unspecified" && (
                       <small>
@@ -355,7 +356,7 @@ export function FollowupRecords({
                   onClick={async () => {
                     try {
                       await onOpenTask(record.sessionId, {
-                        draft: `请基于本患者随访记录继续整理后续工作，保留来源，结论待医生复核。\n来源：随访记录 ${record.id}，登记时间 ${record.outcome.recordedAt}。\n联系结果：${outcomeLabels[record.outcome.status]}。\n已核对条目：${record.outcome.checkedItems.join("、") || "未勾选"}。\n医生登记原文：\n${record.outcome.note}\n临床反馈（医生登记）：${JSON.stringify(record.outcome.clinical || {})}\n后续补充（最近 3 条，共 ${record.outcome.addenda?.length || 0} 条）：${
+                        draft: `请基于本患者随访记录继续整理后续工作，保留来源，结论待医生复核。\n来源：随访记录 ${record.id}，登记时间 ${record.outcome.recordedAt}。\n联系结果：${outcomeLabels[record.outcome.status]}。\n已核对条目：${record.outcome.checkedItems.join("、") || "未勾选"}。\n医生登记原文：\n${record.outcome.note}${record.outcome.noRetryReason ? `；未另行安排：${record.outcome.noRetryReason}` : ""}\n临床反馈（医生登记）：${JSON.stringify(record.outcome.clinical || {})}\n后续补充（最近 3 条，共 ${record.outcome.addenda?.length || 0} 条）：${
                           (record.outcome.addenda || [])
                             .slice(-3)
                             .map(
@@ -609,7 +610,7 @@ export function FollowupRecords({
               />
             </label>
             <label>
-              下次随访时间（可选；另建单次提醒，原有周期计划保留）
+              {form.status === "unreachable" ? "下次联系时间（或填写不再另行安排的原因）" : "下次随访时间（可选；另建单次提醒，原有周期计划保留）"}
               <input
                 type="datetime-local"
                 value={form.nextDueAt}
@@ -618,6 +619,10 @@ export function FollowupRecords({
                 }
               />
             </label>
+            {form.status === "unreachable" && !form.nextDueAt && <label>
+              不再另行安排的原因
+              <textarea required maxLength={1000} value={form.noRetryReason || ""} onChange={e => setForm({ ...form, noRetryReason: e.target.value })} placeholder="例如：由原周期计划继续联系，并说明具体安排" />
+            </label>}
             {form.nextDueAt && (
               <label>
                 下次随访名称

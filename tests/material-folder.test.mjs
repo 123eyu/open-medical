@@ -86,3 +86,15 @@ test("automatic classification updates after recognition but preserves manual co
   assert.equal(classifyMaterial({name:"IMG.jpg",text:"出院记录：复查血常规，完善CT检查，附用药清单"}).category,"住院记录");
   assert.equal(groupMaterials([{name:"血常规.txt",text:""}])[0].category,"检验报告");
 });
+
+test("chart materials do not take dates from historical diagnoses and invalid calendar days", () => {
+  const chart = { name: "示例病历.md", text: "2018-03-01 诊断高血压。\n就诊日期：2026-10-17\n血常规与肝功检查见附件。" };
+  assert.equal(classifyMaterial(chart).category, "门诊病历");
+  assert.equal(suggestDocumentDate(chart), "2026-10-17");
+  assert.equal(suggestDocumentDate({text:"2018-03-01 诊断高血压。2026-10-17 随访。"}), null);
+  assert.equal(suggestDocumentDate({text:"入院日期：2026-10-01\n出院日期：2026-10-17"}), null);
+  assert.equal(suggestDocumentDate({text:"报告日期： 2026-02-30"}), null);
+  assert.equal(suggestDocumentDate({name:"IMG_20260230.jpg"}), null);
+  assert.equal(suggestDocumentDate({text:"报告日期： 2024-02-29"}), "2024-02-29");
+  assert.equal(classifyMaterial({name:"病历附件-影像报告.pdf",text:"血常规"}).category, "影像报告");
+});

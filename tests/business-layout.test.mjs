@@ -11,7 +11,7 @@ test('business shell keeps patient access, isolates care/assistance and persists
  const page=await browser.newPage({viewport:{width:1440,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(f.origin);
  const nav=page.getByRole('navigation',{name:'主要业务'});await nav.waitFor();
- assert.deepEqual(await nav.getByRole('button').allTextContents(),['今日待办','患者','知识库']);
+ assert.deepEqual(await nav.getByRole('button').allTextContents(),['患者','今日待办','知识库']);
  await nav.getByRole('button',{name:'知识库',exact:true}).click();
  await page.getByRole('heading',{name:'知识库',exact:true}).waitFor();
  assert.equal(await page.getByRole('navigation',{name:'当前位置'}).count(),0);
@@ -31,13 +31,13 @@ test('business shell keeps patient access, isolates care/assistance and persists
  const panel=page.getByRole('region',{name:'患者资料面板'});await panel.waitFor();
  assert.equal(await page.getByRole('region',{name:'诊前速览'}).count(),0);
  assert.equal(await page.getByRole('button',{name:'自动整理病例',exact:true}).count(),0);
- assert.ok(await panel.locator('.overview-brief section > p').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=18));
- await page.getByRole('button',{name:'Aa · 大字模式',exact:true}).click();
- assert.ok(await panel.locator('.overview-brief section > p').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=22));
+ assert.ok(await panel.locator('.overview-diagnosis-list strong').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=18));
+ await page.getByRole('button',{name:'Aa · 切换字号（标准/大/特大）',exact:true}).click();
+ assert.ok(await panel.locator('.overview-diagnosis-list strong').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=22));
  await page.getByRole('button',{name:'沟通与随访',exact:true}).click();
  await page.getByRole('button',{name:'随访计划',exact:true}).click();await page.getByRole('region',{name:'随访结果登记'}).waitFor();
  await page.getByRole('button',{name:'诊疗辅助',exact:true}).click();await page.getByRole('region',{name:'患者诊疗辅助面板'}).waitFor();
- await page.getByRole('button',{name:'患者档案',exact:true}).click();await panel.waitFor();
+ await page.getByRole('navigation',{name:'患者工作内容'}).getByRole('button',{name:'病历',exact:true}).click();await panel.waitFor();
  await page.screenshot({path:'output/business-patient-large.png'});
  await nav.getByRole('button',{name:'患者',exact:true}).click();await page.locator('.patient-card').waitFor();
  await page.screenshot({path:'output/business-patient-list.png'});
@@ -47,7 +47,7 @@ test('business shell keeps patient access, isolates care/assistance and persists
  await page.getByRole('button',{name:'计划与模板',exact:true}).click();await page.getByRole('heading',{name:'应用随访模板'}).waitFor();
  await page.getByRole('button',{name:'随访待办',exact:true}).click();await page.screenshot({path:'output/business-followups.png'});
  await openTool(page, '临床试验');await page.getByRole('heading',{name:'临床试验入组初筛'}).waitFor();await page.screenshot({path:'output/business-research.png'});
- await page.reload();await page.getByRole('button',{name:'Aa · 恢复标准字号',exact:true}).waitFor();
+ await page.reload();await page.getByRole('button',{name:'Aa · 切换字号（标准/大/特大）',exact:true}).waitFor();await page.locator('.medical-shell.large-text').waitFor();
  await nav.getByRole('button',{name:'患者',exact:true}).click();await page.locator('.patient-card').click();await panel.waitFor();
  await page.setViewportSize({width:820,height:1000});assert.ok(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1));await page.screenshot({path:'output/business-patient-narrow.png'});
  assert.deepEqual(errors,[]);assert.equal((await f.json(`/api/patients/${p.id}`)).data.note,'合成病史：按资料记录就诊经过，不产生额外临床判断。');

@@ -664,12 +664,12 @@ export class FollowUpManager {
       .run(id);
     return { ok: true };
   }
-  recordContact(patientId, input = {}) {
+  recordContact(patientId, input = {}, { pendingReview = false } = {}) {
     identifier(patientId);
     return sqliteTransaction(this.store.db, () => {
       const patient = this.patientRow(patientId);
       const id = input.requestId ? `contact_${identifier(input.requestId)}` : randomUUID();
-      const fingerprint = createHash("sha256").update(JSON.stringify({ title: input.title || "", status: input.status, note: input.note, contactedAt: input.contactedAt || "", nextDueAt: input.nextDueAt || "", nextName: input.nextName || "", contactMethod:input.contactMethod || "", clinical:input.clinical || {} })).digest("hex");
+      const fingerprint = createHash("sha256").update(JSON.stringify({ pendingReview, title: input.title || "", status: input.status, note: input.note, contactedAt: input.contactedAt || "", nextDueAt: input.nextDueAt || "", nextName: input.nextName || "", noRetryReason: input.noRetryReason || "", contactMethod:input.contactMethod || "", clinical:input.clinical || {} })).digest("hex");
       const existing = this.store.db.prepare("SELECT data FROM reminders WHERE id=?").get(id);
       if (existing) {
         const record = JSON.parse(existing.data);
@@ -681,7 +681,21 @@ export class FollowUpManager {
       const source = input.source?.kind ? { ...input.source } : { kind: "manual" };
       check(Object.hasOwn(CONTACT_SOURCES, source.kind), "INVALID_INPUT", "联系来源无效");
       const record = { id, requestFingerprint: fingerprint, patientId, sessionId: patient.sessionId, title: input.title ? string(input.title, "联系主题", 100) : "主动联系记录", checklist: [], detail: CONTACT_SOURCES[source.kind], source, followUpId: null };
+      // Automated lack of reply is an observation, not a doctor's decision to
+      // close follow-up. Keep a pending item until the doctor records an outcome.
+      if (pendingReview) {
+        check(source.kind === "campaign" && input.status === "unreachable", "INVALID_INPUT", "仅自动随访未回复可进入待登记");
+        const note = string(input.note, "联系记录", 5000);
+        const contactedAt = Date.parse(input.contactedAt);
+        check(Number.isFinite(contactedAt) && contactedAt <= this.now() + 60000, "INVALID_INPUT", "联系时间无效");
+        record.attempt = { status: "unreachable", note, contactedAt: new Date(contactedAt).toISOString(), recordedAt: new Date(this.now()).toISOString() };
+        record.detail = `${note} 请由医生核对并登记后续安排。`;
+      }
       this.store.db.prepare("INSERT INTO reminders VALUES (?,?,?,?,?,?)").run(record.id, patientId, "manual-contact", this.now(), "pending", JSON.stringify(record));
+      if (pendingReview) {
+        this.store.audit(patient.sessionId, "followup.awaiting_review", { reminderId: record.id });
+        return record;
+      }
       return this.completeReminder(record.id, input);
     });
   }
@@ -741,6 +755,9 @@ export class FollowUpManager {
         "INVALID_INPUT",
         "核对条目须来自本次随访清单",
       );
+      const noRetryReason = input.noRetryReason ? string(input.noRetryReason, "不再另行安排的原因", 1000) : "";
+      check(input.status !== "unreachable" || input.nextDueAt || noRetryReason,
+        "FOLLOWUP_NEXT_ACTION_REQUIRED", "未联系上：请安排下次联系时间，或明确填写不再另行安排的原因。");
       let nextJob = null;
       if (input.nextDueAt) {
         nextJob = this.create(patient.id, {
@@ -760,6 +777,7 @@ export class FollowUpManager {
       check(input.status === "completed" || (!checkedItems.length && !Object.keys(clinical).length),"INVALID_INPUT","未联系上或拒绝随访时，不能勾选已核实项目或填写本次临床反馈；请在联系记录中说明。");
       reminder.outcome = {
         contactMethod, clinical,
+        ...(input.status === "unreachable" && !nextJob ? { noRetryReason } : {}),
         status: input.status,
         note,
         checkedItems,

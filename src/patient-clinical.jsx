@@ -5,6 +5,8 @@ import { DIAGNOSIS_STATUS_SHORT, diagnosisStatus } from "../shared/diagnoses.mjs
 import { Plus, X, Loader2, Search, Star, Share2 } from "lucide-react";
 import { ShareWizard } from "./share-wizard";
 
+import { useClinicalDraft } from "./clinical-drafts";
+
 const fmtDate = (value) => (value ? String(value).slice(0, 10) : "");
 
 // Structured clinical data panel for one patient: diagnoses (with ICD-10
@@ -18,18 +20,18 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   useEffect(() => {
     setDraft(normalize(detail));
   }, [detail.id, detail.revision]);
-  const [icdQuery, setIcdQuery] = useState("");
+  const [icdQuery, setIcdQuery] = useClinicalDraft(detail.id, "icd", "");
   const [icdResults, setIcdResults] = useState([]);
-  const [newDiagnosis, setNewDiagnosis] = useState("");
-  const [newMed, setNewMed] = useState({ name: "", dose: "", frequency: "", status: "unknown" });
-  const [newAllergy, setNewAllergy] = useState("");
-  const [newLab, setNewLab] = useState({
+  const [newDiagnosis, setNewDiagnosis] = useClinicalDraft(detail.id, "diagnosis", "");
+  const [newMed, setNewMed] = useClinicalDraft(detail.id, "medication", { name: "", dose: "", frequency: "", status: "unknown" });
+  const [newAllergy, setNewAllergy] = useClinicalDraft(detail.id, "allergy", "");
+  const [newLab, setNewLab] = useClinicalDraft(detail.id, "lab", {
     item: "",
     value: "",
     unit: "",
     date: "",
   });
-  const [newVisit, setNewVisit] = useState({ date: "", reason: "" });
+  const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "" });
 
   const patch = async (fields) => {
     if (inFlight.current) return false;
@@ -236,6 +238,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             <span className="hint-tag allergy" key={item}>
               {item}
               <button
+                aria-label={`移除过敏原 ${item}`}
                 onClick={() =>
                   saveAllergies(draft.allergies.filter((a) => a !== item))
                 }
@@ -441,7 +444,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <Share2 size={14} /> 脱敏分享 / 导出
         </button>
         <span className="muted">
-          每处修改立即保存；「脱敏分享」先预览打码结果再导出，文件不含姓名、电话与确切年龄。
+          已有记录的修改立即保存；新增内容须点击「添加」，切换栏目时暂存于本页，关闭或刷新前请完成添加。「脱敏分享」先预览打码结果再导出，文件不含姓名、电话与确切年龄。
         </span>
       </div>
       {casePanel && <div className="clinical-case-save">
