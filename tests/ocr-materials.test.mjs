@@ -70,6 +70,7 @@ test("医生修正识别文本：替换正文、记录修正时间、重算质�
   await f.json(`/api/sessions/${session.id}/files/${file.id}/prepare`, "POST", {});
 
   const edited = await f.json(`/api/sessions/${session.id}/files/${file.id}/text`, "PUT", {
+    expectedRevision: (await f.json(`/api/sessions/${session.id}`)).data.files.find(x=>x.id===file.id).revision || 0,
     text: "修正后的合成记录：2026年3月2日出院，血红蛋白 105 g/L，建议门诊随访复查。",
   });
   assert.equal(edited.status, 200);
@@ -113,7 +114,7 @@ test("OCR immediately classifies anonymous uploads and re-recognition preserves 
   assert.equal(prepared.data.file.category,"检验报告");
   assert.equal(prepared.data.file.categorySource,"auto");
   assert.equal((await f.json(`/api/sessions/${session.id}`)).data.files[0].category,"检验报告");
-  await f.json(`${path}/meta`,"PATCH",{category:"住院记录"});
+  await f.json(`${path}/meta`,"PATCH",{expectedRevision:prepared.data.file.revision,category:"住院记录"});
   const repeated = await f.json(`${path}/prepare`,"POST",{force:true});
   assert.equal(repeated.data.file.category,"住院记录");
   assert.equal(repeated.data.file.categorySource,"manual");

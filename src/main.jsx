@@ -1214,8 +1214,8 @@ function App() {
       setError(err.message);
     }
   };
-  const navigate = (next) => {
-    setView(next);
+  const navigate = (next, location = {}) => {
+    setView(next, location);
     setSidebar(false);
     setNotice("");
     refreshList().catch((err) => setError(err.message));
@@ -1257,8 +1257,7 @@ function App() {
   };
   const openPatient = (route = {}) => {
     setPatientRoute(route);
-    navigate("patients");
-    writeLocation("patients", { id: route.id, tab: route.tab, replace: true });
+    navigate("patients", { id: route.id, tab: route.id ? route.tab || "overview" : undefined });
   };
   const openTask = async (id, options = {}) => {
     pendingWorkflowRef.current = options.workflow || "";

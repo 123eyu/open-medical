@@ -13,6 +13,7 @@ const fmtDate = (value) => (value ? String(value).slice(0, 10) : "");
 // saved; export produces a de-identified JSON for research.
 export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const [draft, setDraft] = useState(() => normalize(detail));
+  const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const searchVersion = useRef(0);
@@ -48,7 +49,10 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       await onChanged();
       return true;
     } catch (err) {
-      onError?.(err.message);
+      if (err.code === "REVISION_CONFLICT") {
+        setConflict(true);
+        onError?.("档案已被另一窗口更新。输入已保留，请载入最新记录后核对并重新添加。");
+      } else onError?.(err.message);
       return false;
     } finally {
       inFlight.current = false;
@@ -163,6 +167,12 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       className="detail-panel clinical-panel"
       aria-busy={saving}
     >
+      {conflict && <section aria-label="临床记录版本核对"><p role="alert">档案版本已变化，尚未保存本次修改。新增输入已保留。</p><button type="button" onClick={async()=>{
+        setSaving(true);
+        try { await onChanged(); setConflict(false); onError?.(""); }
+        catch (err) { onError?.(`读取最新记录失败：${err.message}。输入仍保留，可重试。`); }
+        finally { setSaving(false); }
+      }}>保留输入并载入最新记录</button></section>}
       {(!section || section === 'diagnoses') && <section>
         <h3>诊断 {saving && <Loader2 className="spin" size={13} />}</h3>
         <ul className="clinical-rows">
@@ -439,6 +449,8 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
         <div className="clinical-add clinical-add-med">
           <input
             type="date"
+            aria-label="就诊日期（必填）"
+            required
             value={newVisit.date}
             onChange={(e) => setNewVisit({ ...newVisit, date: e.target.value })}
           />

@@ -20,7 +20,7 @@ test("clinical summaries share diagnosis scope without promoting findings or unr
 });
 
 test(
-  "library preserves file context, metadata and edit cancellation; appointments restore and follow-up drafts survive section switches",
+  "library preserves file context, metadata and edit cancellation; appointments restore and follow-up drafts survive moving between the merged plan and record sections",
   { skip: !existsSync(chrome) },
   async (t) => {
     const f = await fixture(t);
@@ -51,6 +51,7 @@ test(
     ).data;
     assert.ok(image.id, "image fixture was accepted");
     await f.json(`/api/sessions/${p.sessionId}/files/${image.id}/text`, "PUT", {
+      expectedRevision: image.revision || 0,
       text: "第二份原始识别文字。",
     });
     const browser = await chromium.launch({
@@ -68,7 +69,7 @@ test(
     await page.getByRole("heading", { name: "诊断摘要" }).waitFor();
     assert.match(
       await page.locator(".overview-diagnoses").innerText(),
-      /确诊与疑似 · 2 项/,
+      /诊断摘要\s+2 项\s+确认病\s+确诊\s+疑似病\s+疑似待排/,
     );
     await page.getByRole("button", { name: "检验趋势", exact: true }).click();
     const row = page.locator(".chart-lab-comparison tbody tr").first();
@@ -106,8 +107,9 @@ test(
     await reader.getByRole("button", { name: "取消", exact: true }).click();
     assert.match(await reader.innerText(), /第二份原始识别文字/);
     assert.doesNotMatch(await reader.innerText(), /未保存的改动/);
-    mkdirSync("output/playwright", { recursive: true });
-    await page.screenshot({ path: "output/playwright/workflow-library.png" });
+    const evidenceDir = process.env.EVIDENCE_DIR || "output/playwright";
+    mkdirSync(evidenceDir, { recursive: true });
+    await page.screenshot({ path: `${evidenceDir}/workflow-library.png` });
     await page.goto(
       `${f.origin}/?view=patients&patient=${p.id}&tab=appointments`,
     );
@@ -128,9 +130,9 @@ test(
     await editor
       .getByRole("textbox", { name: "随访记录", exact: true })
       .fill("合成联系记录，保留当前填写内容。");
-    const sections = page.getByRole("navigation", { name: "患者随访内容" });
-    await sections.getByRole("button", { name: /提醒计划/ }).click();
-    await sections.getByRole("button", { name: "待办与记录" }).click();
+    // Plans and records now share one scrolling page instead of nested tabs.
+    await page.getByRole("heading", { name: /提醒计划（/ }).scrollIntoViewIfNeeded();
+    await editor.scrollIntoViewIfNeeded();
     assert.equal(
       await editor.getByRole("textbox", { name: "随访记录", exact: true }).inputValue(),
       "合成联系记录，保留当前填写内容。",

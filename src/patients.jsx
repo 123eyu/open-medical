@@ -90,7 +90,7 @@ export function PatientsView({
   initialImport = false,
 }) {
   const panelRoot = useRef(null);
-  const listScroll = useRef(0);
+  const listScroll = useRef(window.history.state?.patientListScroll || 0);
   const [patients, setPatients] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listFailed, setListFailed] = useState(false);
@@ -108,7 +108,14 @@ export function PatientsView({
   };
   const [patientLoading, setPatientLoading] = useState(false);
   useEffect(() => { if (detail) onLocationChange?.(detail.id, tab); }, [detail?.id, tab]);
-  useEffect(() => { panelRoot.current?.scrollTo({ top: detail ? 0 : listScroll.current }); }, [detail?.id]);
+  useEffect(() => {
+    if (detail || !listLoading) panelRoot.current?.scrollTo({ top: detail ? 0 : listScroll.current });
+  }, [detail?.id, listLoading]);
+  const rememberListScroll = () => {
+    if (detail || listLoading || patientLoading || new URLSearchParams(window.location.search).has("patient")) return;
+    listScroll.current = panelRoot.current?.scrollTop || 0;
+    window.history.replaceState({ ...window.history.state, patientListScroll: listScroll.current }, "", window.location.href);
+  };
   const [messages, setMessages] = useState([]);
   const [followups, setFollowups] = useState([]);
   const [risks, setRisks] = useState([]);
@@ -389,7 +396,7 @@ export function PatientsView({
     </div>
   );
   return (
-    <section ref={panelRoot} id="main" className={`patients-view ${detail ? "has-patient" : ""}`} aria-label="患者档案">
+    <section ref={panelRoot} onScroll={rememberListScroll} id="main" className={`patients-view ${detail ? "has-patient" : ""}`} aria-label="患者档案">
       {!detail && <div className="patients-toolbar">
         <div><h2>患者管理</h2><span className="muted">{patients.filter(p => !p.archived).length} 位在管患者</span></div>
         <div className="toolbar-actions">

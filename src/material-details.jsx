@@ -41,6 +41,9 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
   const [mode, setMode] = useState('compare');
   const [editing, setEditing] = useState(false);
   const [draftText, setDraftText] = useState('');
+  const [editRevision, setEditRevision] = useState(0);
+  const [conflict, setConflict] = useState(null);
+  const [editError, setEditError] = useState('');
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState(null);
   const [zoomScale, setZoomScale] = useState(1);
@@ -53,6 +56,7 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
   if (!e) return <details open={initiallyOpen || undefined}><summary>查看文字内容</summary><pre>{file.text || '暂无可读取文字'}</pre></details>;
   const images = e.type === 'image' ? [{ artifactId: e.artifactId }] : e.pageImages || [];
   const label = e.type === 'image' ? '图片 · 已保存原图 · 可本地 OCR / 视觉读取'
+    : e.type === 'text' ? '文本材料 · 已由医生修正'
     : e.type === 'docx_text' ? 'Word 抽取文本 · 未保存原件'
     : e.type === 'xlsx_text' ? 'Excel 抽取文本 · 保留工作表与单元格 · 未保存原件'
     : `PDF · ${e.pageCount} 页 · ${images.length ? `${images.length} 页扫描图可读取` : '抽取文本'} · 未保存 PDF 原件`;
@@ -74,20 +78,32 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
     finally { setBusy(false); }
   };
   const saveText = async () => {
-    setBusy(true);
+    setBusy(true); setEditError('');
     try {
-      await api(`/api/sessions/${sessionId}/files/${file.id}/text`, 'PUT', { text: draftText });
+      await api(`/api/sessions/${sessionId}/files/${file.id}/text`, 'PUT', { text: draftText, expectedRevision: editRevision });
       setEditing(false);
       onChanged?.();
-    } catch (error) { onError?.(error.message); }
+    } catch (error) {
+      setEditError(error.message);
+      if (error.code === 'REVISION_CONFLICT') {
+        try {
+          const session = await api(`/api/sessions/${sessionId}`);
+          const latest = session.files.find(f=>f.id === file.id);
+          if (!latest) throw new Error('资料已移除');
+          setConflict(latest);
+        } catch (loadError) { setEditError(`${error.message}；读取失败：${loadError.message}。修正草稿已保留，可再次保存以重试。`); }
+      }
+    }
     finally { setBusy(false); }
   };
   const textPane = editing
     ? <div className="ocr-text-edit">
       <textarea value={draftText} onChange={(event) => setDraftText(event.target.value)} rows={14} aria-label={`修正 ${file.name} 的识别文本`} />
       <small>直接修改识别文字后保存；行号可能变化，已保存档案中的来源引用不会自动更新。</small>
-      <div><button className="primary" disabled={busy || !draftText.trim()} onClick={saveText}>保存修正</button>
-        <button className="secondary" disabled={busy} onClick={() => { setEditing(false); setDraftText(''); }}>取消</button></div>
+      {editError && <p role="alert" className="error">{editError}</p>}
+      {conflict && <section aria-label="识别文字版本核对"><h4>最新文字（只读）</h4><pre>{conflict.text}</pre><p>上方保留本地草稿。请对照最新文字合并，尤其核对否定词；确认后仍需保存修正。</p><button disabled={busy} onClick={()=>{setEditRevision(conflict.revision || 0);setConflict(null);setEditError('');}}>已核对最新文字，继续编辑</button></section>}
+      <div><button className="primary" disabled={busy || !!conflict || !draftText.trim()} onClick={saveText}>保存修正</button>
+        <button className="secondary" disabled={busy} onClick={() => { setEditing(false); setDraftText(''); setConflict(null); setEditError(''); }}>取消</button></div>
     </div>
     : null;
 
@@ -152,7 +168,7 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
       {visionSupported
         ? <button className="secondary" disabled={busy} onClick={reprepare}>用识别模型重新识别并整理</button>
         : <small className="muted">暂无可用的图片识别模型；可在模型设置中勾选「此模型支持图片」，或在「文字识别（OCR）」中配置专用识别模型后重新识别。</small>}
-      {!editing && <button className="text-button" disabled={busy} onClick={() => { setDraftText(file.text || ''); setEditing(true); setOpen(true); }}>修正文字</button>}
+      {!editing && <button className="text-button" disabled={busy} onClick={() => { setDraftText(file.text || ''); setEditRevision(file.revision || 0); setConflict(null); setEditError(''); setEditing(true); setOpen(true); }}>修正文字</button>}
     </div>}
     {zoom && <div className="ocr-lightbox" role="dialog" aria-label={`查看 ${zoom.name} 原图`} onClick={() => { setZoom(null); setZoomScale(1); }}
       onWheel={(event) => setZoomScale((s) => Math.min(5, Math.max(0.5, s * (event.deltaY < 0 ? 1.15 : 0.87))))}>

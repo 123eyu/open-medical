@@ -1,3 +1,4 @@
+import { medicationInformation } from '../shared/medication-information.mjs';
 import { randomUUID, createHash } from "node:crypto";
 import { check, string } from "./errors.mjs";
 export { medicalPolicy } from "../shared/medical.mjs";
@@ -382,31 +383,7 @@ export async function runTool(
   if (name === "review_medication_safety") {
     const evidenceLines = sources.some(s => s.id.startsWith('patient-record:'))
       ? lines.filter(l => l.sourceName !== '本轮输入') : lines;
-    const medicationLines = evidenceLines.filter((l) =>
-      /药|片|胶囊|注射|mg|毫克|ml|毫升|用法|频次|每日|途径|bid|qd/i.test(l.quote),
-    );
-    const fields = [
-      ["年龄", /\d+\s*岁|年龄/],
-      ["药品通用名及规格", /通用名|规格|\d+\s*(mg|毫克)/i],
-      ["用法、频次和途径", /频次|口服|静脉|每日|bid|qd/i],
-      ["过敏史", /过敏/],
-      ["肾功能信息", /肌酐|eGFR|肾功能/i],
-      ["肝功能信息", /ALT|AST|肝功能/i],
-      ["合并用药", /合并用药|同时服用/],
-    ];
-    const information = fields.map(([name, regex]) => {
-      const matches = evidenceLines.filter((l) => regex.test(l.quote));
-      const unavailable =
-        !matches.length ||
-        matches.every((l) =>
-          /未记录|未知|未提供|不详|待补|未查|未测/.test(l.quote),
-        );
-      return {
-        name,
-        status: unavailable ? "未明确" : "材料中有记载",
-        sources: matches,
-      };
-    });
+    const { information, matches: medicationLines } = medicationInformation(evidenceLines);
     return artifact("medication_review", "用药信息核对", {
       matches: medicationLines,
       information,
@@ -418,7 +395,7 @@ export async function runTool(
         "由药师核查适应证、剂量、禁忌及相互作用",
         "记录复核人和待进一步确认的事项",
       ],
-      limitations: [`本次核对范围：${sources.map(s => s.name).join("、")}。范围外资料未核对，未明确不等于患者档案中不存在。`, "仅检测信息是否出现，没有执行药物相互作用或剂量计算。"],
+      limitations: ["仅检测登记信息是否完整，没有执行药物相互作用或剂量计算。", `本次核对范围：${sources.map(s => s.name).join("、")}。范围外资料未核对，未明确不等于患者档案中不存在。`, "各药分别核对；原文候选保留否定与时态，不代表正在使用。出生年不能确定精确周岁。"],
     });
   }
   if (name === "draft_treatment_review") {

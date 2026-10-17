@@ -27,6 +27,9 @@ export function PatientMaterialLibrary({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
+  const [pendingMeta, setPendingMeta] = useState(null);
+  const [latestMeta, setLatestMeta] = useState(null);
+  const [metaError, setMetaError] = useState("");
   const groups = groupMaterials(files);
   const shown = groups
     .map((group) => ({
@@ -43,7 +46,7 @@ export function PatientMaterialLibrary({
     );
   const visible = shown.flatMap((group) => group.files);
   const selected = visible.find((file) => file.id === selectedId) || visible[0];
-  const locked = editing || saving;
+  const locked = editing || saving || !!pendingMeta;
   useEffect(() => {
     if (focusFile) {
       setQuery("");
@@ -53,17 +56,27 @@ export function PatientMaterialLibrary({
   }, [focusFile]);
   const saveMeta = async (file, patch) => {
     setSaving(true);
-    setNotice("");
+    setNotice(""); setMetaError("");
+    setPendingMeta({file, patch});
     try {
       await api(
         `/api/sessions/${sessionId}/files/${file.id}/meta`,
         "PATCH",
-        patch,
+        {...patch, expectedRevision: file.revision || 0},
       );
-      await onChanged?.();
+      setPendingMeta(null); setLatestMeta(null);
       setNotice("资料信息已保存");
+      await onChanged?.();
     } catch (error) {
-      onError?.(error.message);
+      setMetaError(error.message);
+      if (error.code === 'REVISION_CONFLICT') {
+        try {
+          const session = await api(`/api/sessions/${sessionId}`);
+          const latest = session.files.find(f=>f.id === file.id);
+          if (!latest) throw new Error('资料已移除');
+          setLatestMeta(latest);
+        } catch (loadError) { setMetaError(`${error.message}；读取失败：${loadError.message}。修改已保留，可重试。`); }
+      }
     } finally {
       setSaving(false);
     }
@@ -107,7 +120,15 @@ export function PatientMaterialLibrary({
           {notice}
         </p>
       )}
-      {locked && (
+      {metaError && <p className="error" role="alert">{metaError}</p>}
+      {pendingMeta && !saving && <section aria-label="资料信息版本核对">
+        <h4>{pendingMeta.file.name} · 待保存修改</h4>
+        <p>本地：{Object.entries(pendingMeta.patch).map(([k,v])=>`${k === 'documentDate' ? '日期' : '类型'}：${v || '清空'}`).join('；')}</p>
+        {latestMeta && <p>最新：{latestMeta.category || '未分类'} · {latestMeta.documentDate || '日期未记录'}</p>}
+        <button onClick={()=>saveMeta(latestMeta || pendingMeta.file,pendingMeta.patch)}>{latestMeta ? '核对后保存本地修改' : '重试保存资料信息'}</button>
+        <button onClick={async()=>{try {await onChanged?.();setPendingMeta(null);setLatestMeta(null);setMetaError('');}catch(e){setMetaError(e.message);}}}>放弃本次修改并载入最新资料</button>
+      </section>}
+      {(editing || saving) && (
         <p className="muted" role="status">
           {editing ? "请保存或取消文字修正后再切换资料。" : "正在保存资料信息…"}
         </p>

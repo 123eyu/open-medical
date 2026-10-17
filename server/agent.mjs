@@ -1247,7 +1247,7 @@ export function createServer(options = {}) {
             }
             if (parts.length === 6 && parts[5] === "text" && req.method === "PUT") {
               const input = await body(req);
-              const file = sessionBridge.updateMaterialText(id, identifier(parts[4]), input.text);
+              const file = sessionBridge.updateMaterialText(id, identifier(parts[4]), input.text, input.expectedRevision);
               const outcome = { file, refresh: null, refreshError: null };
               if (input.refreshRecord === true) {
                 try {

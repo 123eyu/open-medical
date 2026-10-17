@@ -27,6 +27,14 @@ export function writeLocation(view, { id, tab, replace = false } = {}) {
   url.searchParams.set("view", view);
   if (id) url.searchParams.set(view === "patients" ? "patient" : view === "workspaces" ? "workspace" : "session", id);
   if (tab) url.searchParams.set("tab", tab);
-  if (url.href !== window.location.href)
-    window.history[replace ? "replaceState" : "pushState"](null, "", url);
+  // Filling the default patient tab is URL normalization, not a new visit.
+  // In particular, restoring a legacy no-tab URL must retain the forward stack.
+  const current = readLocation();
+  const samePatientPage = view === "patients" && current.view === view &&
+    (current.id || "") === (id || "") &&
+    (current.tab || "overview") === (tab || "overview");
+  if (url.href !== window.location.href) {
+    const replaceEntry = replace || samePatientPage;
+    window.history[replaceEntry ? "replaceState" : "pushState"](replaceEntry ? window.history.state : null, "", url);
+  }
 }

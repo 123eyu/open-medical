@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 export const STATUS = {
@@ -29,10 +29,11 @@ export function Badge({ status }) {
 }
 export function Modal({ title, onClose, children, wide = false }) {
   const ref = useRef();
+  // Capture before child autoFocus runs during commit.
+  const [previous] = useState(() => document.activeElement);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
-    const previous = document.activeElement;
     ref.current?.focus();
     const key = (e) => {
       if (e.key === "Escape") closeRef.current();
@@ -57,7 +58,7 @@ export function Modal({ title, onClose, children, wide = false }) {
       document.removeEventListener("keydown", key);
       previous?.focus();
     };
-  }, []);
+  }, [previous]);
   return (
     <div
       className="modal-backdrop"

@@ -102,6 +102,11 @@ export function artifactLines(artifact) {
       ...(artifact.infoGaps || []).map((x) => `信息缺口：${x}`),
       ...(artifact.questions || []).map((q) => `建议核对：${q}`),
     ];
+  if (artifact.type === "medication_review" && artifact.information)
+    return artifact.information.flatMap(field=>[
+      `${field.name}：${field.status}${field.note ? `（${field.note}）` : ''}`,
+      ...field.sources.map(source=>`${source.sourceName}${source.line ? ` L${source.line}` : ''}：${source.quote}`),
+    ]);
   if (artifact.matches)
     return artifact.matches.map(
       (m) => `${m.sourceName}${m.line ? ` L${m.line}` : ""}：${m.quote || "仅题录，未取得原文"}`,

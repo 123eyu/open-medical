@@ -24,6 +24,8 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
   const [editor, setEditor] = useClinicalDraft(patient.id, "clinicalSummary", null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [conflict, setConflict] = useState(null);
+  const [choices, setChoices] = useState({});
   const inFlight = useRef(false);
   const history = dashboardHistory(patient).toReversed();
   const visits = allVisits ? history : history.slice(0, 4);
@@ -51,7 +53,13 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
     try {
       await api(`/api/patients/${patient.id}`, 'PATCH', { expectedRevision:editor._revision, clinicalSummary:{text:formatClinicalSummary(editor),source:editor.source.trim()} });
       await onChanged?.(); setEditor(null);
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err.message);
+      if (err.code === 'REVISION_CONFLICT') {
+        try { setConflict(await api(`/api/patients/${patient.id}`)); setChoices({}); }
+        catch (loadError) { setError(`${err.message}；读取最新档案失败：${loadError.message}。草稿已保留，可再次保存以重试核对。`); }
+      }
+    }
     finally { inFlight.current = false; setBusy(false); }
   };
   return <div className="patient-history-workspace">
@@ -65,7 +73,21 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
             {summary?.text && !concise && <details><summary>参考既有病史记录</summary><p className="clinical-summary-text">{summary.text}</p></details>}
             <label>病史摘要来源<textarea rows={2} maxLength={2000} required value={editor.source} onChange={e=>setEditor({...editor,source:e.target.value})} placeholder="填写原始病历、报告或本次问诊记录的出处"/></label>
             {error && <p className="error" role="alert">{error}</p>}
-            <footer><button type="button" className="secondary" onClick={()=>setEditor(null)}>取消</button><button type="submit" disabled={SUMMARY_FIELDS.some(([key])=>!editor[key].trim()) || !editor.source.trim()}>{busy ? '正在保存…' : '保存摘要'}</button></footer>
+            {conflict && <section aria-label="摘要版本核对">
+              <h4>最新摘要与本地草稿</h4><p>核对后继续编辑，仍需再次保存。其他档案内容不会被本次摘要修改。</p>
+              {[...SUMMARY_FIELDS, ['source','病史摘要来源']].map(([key,label])=>{
+                const latest = key === 'source' ? conflict.clinicalSummary?.source : parseClinicalSummary(conflict.clinicalSummary?.text)?.[key];
+                return <div key={key}><b>{label}</b><p>最新：{latest || '未记录'}</p><p>草稿：{editor[key]}</p><label>{label}保留版本<select value={choices[key] || 'local'} onChange={e=>setChoices({...choices,[key]:e.target.value})}><option value="local">保留本地草稿</option><option value="latest">采用最新记录</option></select></label></div>;
+              })}
+              {conflict.clinicalSummary?.text && !parseClinicalSummary(conflict.clinicalSummary.text) && <p className="clinical-summary-text">最新原记录：{conflict.clinicalSummary.text}</p>}
+              <button type="button" onClick={()=>{
+                const latest = {...parseClinicalSummary(conflict.clinicalSummary?.text),source:conflict.clinicalSummary?.source};
+                const next = {...editor,_revision:conflict.revision};
+                for (const [key] of [...SUMMARY_FIELDS,['source']]) if (choices[key] === 'latest') next[key] = latest[key] || '';
+                setEditor(next);setConflict(null);setError('');
+              }}>确认摘要选择并继续编辑</button>
+            </section>}
+            <footer><button type="button" className="secondary" onClick={()=>{setEditor(null);setConflict(null);}}>取消</button><button type="submit" disabled={!!conflict || SUMMARY_FIELDS.some(([key])=>!editor[key].trim()) || !editor.source.trim()}>{busy ? '正在保存…' : '保存摘要'}</button></footer>
           </fieldset></form> : <>
             {concise ? <dl className="history-snapshot">{SUMMARY_FIELDS.map(([key,label])=><div key={key}><dt>{label}</dt><dd className="clinical-summary-text">{concise[key]}</dd></div>)}</dl> : <>
               <dl className="history-snapshot">

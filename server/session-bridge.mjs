@@ -332,6 +332,7 @@ export class SessionBridge {
     check(!this.service.active.has(id), "RUN_ACTIVE", "执行期间不能变更材料", 409);
     const file = (workspace.materials || []).find(file => file.id === fileId);
     check(file, "NOT_FOUND", "材料不存在", 404);
+    const originalRevision = file.revision || 0;
     const images = file.extraction?.type === "image"
       ? [{ artifactId: file.extraction.artifactId }]
       : file.extraction?.pageImages || [];
@@ -412,6 +413,8 @@ export class SessionBridge {
     this.service.store.update(id, current => {
       const target = current.materials.find(item => item.id === fileId);
       check(target, "NOT_FOUND", "材料已移除", 404);
+      check((target.revision || 0) === originalRevision, "REVISION_CONFLICT", "识别期间资料已变化，请核对最新文字后重试", 409);
+      target.revision = originalRevision + 1;
       // Preserve original artifact ownership and hash; OCR is a derived, cached view.
       if (force && target.extraction.ocr?.status === "ready") {
         target.extraction.ocrPrevious = {
@@ -492,7 +495,7 @@ export class SessionBridge {
     return changed;
   }
   // 医生在对照视图里直接修正识别文本：与重新识别同权重，重算质量并刷新索引。
-  updateMaterialText(id, fileId, text) {
+  updateMaterialText(id, fileId, text, expectedRevision) {
     this.requireSessionWorkspace(id);
     check(!this.service.active.has(id), "RUN_ACTIVE", "执行期间不能变更材料", 409);
     const value = string(text, "识别文本", 400000);
@@ -500,9 +503,12 @@ export class SessionBridge {
     this.service.store.update(id, current => {
       const target = current.materials.find(item => item.id === fileId);
       check(target, "NOT_FOUND", "材料不存在", 404);
+      check(expectedRevision === (target.revision || 0), "REVISION_CONFLICT", "资料已变化，请核对最新文字；本地修正尚未保存", 409);
+      target.revision = (target.revision || 0) + 1;
       target.text = value;
       target.hash = hashText(value);
       Object.assign(target, autoClassifyMaterial(target));
+      target.extraction ||= { type: "text" };
       target.extraction.edited = { at: iso() };
       const quality = assessOcrQuality(value);
       if (target.extraction.ocr) target.extraction.ocr.quality = quality;
@@ -520,6 +526,8 @@ export class SessionBridge {
     this.service.store.update(id, (current) => {
       const target = (current.materials || []).find((item) => item.id === fileId);
       check(target, "NOT_FOUND", "材料不存在", 404);
+      check(input.expectedRevision === (target.revision || 0), "REVISION_CONFLICT", "资料已变化，请核对最新类型与日期；本地修改尚未保存", 409);
+      target.revision = (target.revision || 0) + 1;
       if (input.category !== undefined) {
         check((input.category === "" || MATERIAL_CATEGORIES.includes(input.category)), "INVALID_INPUT", "资料类型无效");
         target.category = input.category;

@@ -55,6 +55,7 @@ test("file meta API accepts confirmed category and date, rejects invalid values"
   assert.equal(file.categorySource, "auto");
   // 确认分类与日期。
   const confirmed = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", {
+    expectedRevision: file.revision || 0,
     category: "检验报告",
     documentDate: "2026-09-01",
   });
@@ -62,14 +63,14 @@ test("file meta API accepts confirmed category and date, rejects invalid values"
   assert.equal(confirmed.data.category, "检验报告");
   assert.equal(confirmed.data.documentDate, "2026-09-01");
   // 非法值拒绝。
-  const badCategory = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { category: "随手写" });
+  const badCategory = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { expectedRevision: confirmed.data.revision, category: "随手写" });
   assert.equal(badCategory.status, 400);
-  const badDate = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { documentDate: "09-01" });
+  const badDate = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { expectedRevision: confirmed.data.revision, documentDate: "09-01" });
   assert.equal(badDate.status, 400);
   const missing = await f.json(`/api/sessions/${patient.sessionId}/files/nope/meta`, "PATCH", { category: "检验报告" });
   assert.equal(missing.status, 404);
   // 清空日期允许(留空回到上传时间排序)。
-  const cleared = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { documentDate: "" });
+  const cleared = await f.json(`/api/sessions/${patient.sessionId}/files/${file.id}/meta`, "PATCH", { expectedRevision: confirmed.data.revision, documentDate: "" });
   assert.equal(cleared.status, 200);
   assert.equal(cleared.data.documentDate, "");
 });
@@ -112,8 +113,8 @@ test("material dates reconcile all sources; calendar errors and foreign files ne
   const b = (await f.json("/api/patients", "POST", { name: "虚构资料乙" })).data;
   const file = (await f.json(`/api/sessions/${a.sessionId}/files`, "POST", {name:"病理报告.txt", text:"虚构正文"})).data;
   const path = `/api/sessions/${a.sessionId}/files/${file.id}/meta`;
-  assert.equal((await f.json(path, "PATCH", {documentDate:"2024-02-29"})).status, 200);
-  assert.equal((await f.json(path, "PATCH", {documentDate:"2026-02-30", category:"其他"})).status, 400);
+  assert.equal((await f.json(path, "PATCH", {expectedRevision:0,documentDate:"2024-02-29"})).status, 200);
+  assert.equal((await f.json(path, "PATCH", {expectedRevision:1,documentDate:"2026-02-30", category:"其他"})).status, 400);
   assert.equal((await f.json(`/api/sessions/${b.sessionId}/files/${file.id}/meta`, "PATCH", {category:"其他"})).status, 404);
   const saved = (await f.json(`/api/sessions/${a.sessionId}`)).data.files[0];
   assert.equal(saved.documentDate,"2024-02-29"); assert.equal(saved.category,"病理报告");

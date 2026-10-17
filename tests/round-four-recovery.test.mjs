@@ -46,7 +46,8 @@ test('local medication check reads the associated patient record and preserves u
   const source=art.matches.filter(m=>m.sourceName==='当前患者已登记档案');
   assert.ok(source.some(m=>m.quote.includes(p.id===a.id?'5mg':'7mg')));
   assert.ok(source.every(m=>m.sourceId===`patient-record:${p.id}` && /^[a-f0-9]{64}$/.test(m.hash)));
-  assert.ok(!art.missing.includes('用法、频次和途径'));
+  assert.ok(art.information.some(row=>row.name.endsWith(' · 频次') && row.status==='材料中有记载'));
+  assert.ok(art.missing.some(name=>name.endsWith(' · 途径')));
   assert.ok(source.some(m=>m.quote.includes(p.id===a.id?'每日一次':'每周一次')));
   assert.ok(art.missing.includes('过敏史'));
   assert.doesNotMatch(JSON.stringify(art),p.id===a.id?/虚构药乙|7mg/:/虚构药甲|5mg/);
