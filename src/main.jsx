@@ -60,7 +60,8 @@ import { importMaterial, uploadScannedPages, uploadProgressText } from "./import
 import { TaskCenter } from "./task-center";
 import { PatientsView } from "./patients";
 import { WorkspacesView } from "./workspaces";
-import { WorkbenchHome } from "./workbench-home";
+import { DemoExperience } from "./demo-experience";
+import { WorkbenchHome, MEDICAL_WORKFLOWS } from "./workbench-home";
 import { CommandPalette, usePaletteHotkey } from "./command-palette";
 import { RichMessage } from "./workbench/message";
 import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
@@ -1448,6 +1449,9 @@ function App() {
             <nav className="medical-quick" aria-label="主要业务">
               {[["patients", "患者", Stethoscope], ["agenda", "今日待办", CalendarClock], ["knowledge", "知识库", BookOpen]].map(([id,label,Icon]) => <button key={id} aria-current={view === id ? "page" : undefined} className={view === id ? "active" : ""} onClick={() => id === "patients" ? openPatient({ navigationKey: Date.now() }) : navigate(id)}><Icon size={17}/><span>{label}</span></button>)}
             </nav>
+            <nav className="medical-quick" aria-label="示例体验">
+              <button aria-current={view === "examples" ? "page" : undefined} className={view === "examples" ? "active" : ""} onClick={() => navigate("examples")}><BookOpen size={17}/><span>示例体验</span></button>
+            </nav>
             <nav className="medical-quick" aria-label="资料与工具">
               <button aria-current={TOOL_VIEWS.includes(view) ? "page" : undefined} className={TOOL_VIEWS.includes(view) ? "active" : ""} onClick={() => navigate("tools")}><Search size={17}/><span>资料与工具</span></button>
             </nav>
@@ -1486,7 +1490,7 @@ function App() {
                 </div> : <div className="loading-state" role="status">
                   <Loader2 className="spin" />正在连接本地运行时…
                 </div>}
-              </main>) : view === "settings" && config ? <AppSettingsView config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
+              </main>) : view === "examples" && medical ? <DemoExperience flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <AppSettingsView config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
             <WorkspacesView
               key={`ws-${homeKey}-${workspaceTarget?.id || ""}-${workspaceTarget?.create || ""}`}
               config={config}

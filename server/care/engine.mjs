@@ -406,14 +406,14 @@ export class CareEngine {
 
   // ---------- alerts ----------
   // `key` dedupes alerts that are not about a single message (campaign steps).
-  createAlert({ patientId, messageId = null, level, reason, flags = [], key = null }) {
+  createAlert({ patientId, messageId = null, level, reason, flags = [], key = null, localOnly = false }) {
     const existing = key
       ? this.db.prepare("SELECT id FROM care_alerts WHERE json_extract(data,'$.key')=? AND status<>'resolved'").get(key)
       : messageId && this.db.prepare("SELECT id FROM care_alerts WHERE message_id=? AND json_extract(data,'$.key') IS NULL AND status<>'resolved'").get(messageId);
     if (existing) return this.alert(existing.id);
     const id = randomUUID(), time = iso(this.now());
     this.db.prepare("INSERT INTO care_alerts(id,patient_id,message_id,level,reason,status,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
-      .run(id, patientId, messageId, level, String(reason).slice(0, 500), "open", JSON.stringify({ flags, notified: [], ...(key ? { key } : {}) }), time, time);
+      .run(id, patientId, messageId, level, String(reason).slice(0, 500), "open", JSON.stringify({ flags, localOnly, notified: [], ...(key ? { key } : {}) }), time, time);
     this.store.audit(patientId ? this.patients.row(patientId).sessionId : null, "care.alert.created", { alertId: id, level, messageId });
     this.track(this.notifyAlert(id));
     return this.alert(id);
@@ -426,6 +426,7 @@ export class CareEngine {
   }
   async notifyAlert(id, escalation = false) {
     const alert = this.alert(id);
+    if (alert.localOnly) return { ok: true, detail: "仅工作台内的演示提醒，不发送通知" };
     const userIds = this.settings().alerts.notifyUserIds;
     const text = `${escalation ? "【仍未处理】" : ""}【${alert.level === "urgent" ? "紧急" : "需关注"}】患者 ${alert.patientName || "未关联"}：${alert.reason}${alert.messageText ? `\n消息：${alert.messageText.slice(0, 200)}` : ""}\n请在工作台「患者消息」查看处理。`;
     const result = await this.channels.notify(userIds, text);
@@ -452,6 +453,7 @@ export class CareEngine {
     const rows = this.db.prepare("SELECT id, data FROM care_alerts WHERE status='open' AND created_at<=?").all(cutoff);
     for (const row of rows) {
       const data = JSON.parse(row.data);
+      if (data.localOnly) continue;
       const escalations = (data.notified || []).filter((n) => n.escalation);
       if (escalations.length >= 3 || (escalations.length && Date.parse(escalations.at(-1).at) > this.now() - minutes * 60000)) continue;
       this.db.prepare("UPDATE care_alerts SET data=json_set(data,'$.escalatedAt',?) WHERE id=?").run(iso(this.now()), row.id);

@@ -1,3 +1,4 @@
+import { DEMO_DRG, DEMO_DRG_CSV } from "../shared/demo-experience.mjs";
 import { useEffect, useState } from "react";
 import { api } from "./agent-runtime";
 import { Calculator, FileSpreadsheet, Loader2, Settings2 } from "lucide-react";
@@ -116,6 +117,8 @@ export function DrgView() {
           </p>
         )}
 
+        <button className="secondary" disabled={busy} onClick={() => { setCaseForm({ ...DEMO_DRG }); setCsvText(DEMO_DRG_CSV); setError(""); }}>填入示例病例（单例与批量）</button>
+        <p className="muted">虚构数据，可修改诊断、费用后重新计算。</p>
         <section className="followups-section">
           <h3>
             <Calculator size={14} /> 单例分组

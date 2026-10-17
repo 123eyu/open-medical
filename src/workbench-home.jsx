@@ -79,37 +79,10 @@ function BackupStatus() {
     {error && <span role="alert">{error}</span>}
   </p>;
 }
-function DemoPackCard({ onChanged }) {
-  const [state, setState] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const load = () => api("/api/demo-pack").then(setState).catch(() => {});
-  useEffect(() => { load(); }, []);
-  if (!state) return null;
-  const act = async method => {
-    setBusy(true); setError("");
-    try { setState(await api("/api/demo-pack", method, {})); await onChanged?.(); }
-    catch (e) { setError(e.message); }
-    finally { setBusy(false); }
-  };
-  return <aside className="demo-pack-card" aria-label="示例患者">
-    <b>{state.installed ? `已装载 ${state.count} 位示例患者` : "第一次使用？"}</b>
-    <p>{state.installed
-      ? "示例数据（虚构）已就位：打开患者页即可体验诊前速览、检验趋势与随访提醒。随时一键删除，不影响真实档案。"
-      : "装载 3 位虚构示例患者，不导入任何真实数据就能体验完整工作流：诊前速览、检验趋势、到期随访、今日待办。随时一键删除。"}</p>
-    <div className="demo-pack-actions">
-      {state.installed
-        ? <button type="button" className="secondary" disabled={busy} onClick={() => act("DELETE")}>{busy ? "正在删除…" : "删除示例数据"}</button>
-        : <button type="button" disabled={busy} onClick={() => act("POST")}>{busy ? "正在装载…" : "装载示例患者"}</button>}
-    </div>
-    {error && <p role="alert">{error}</p>}
-  </aside>;
-}
 function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   const [overview, setOverview] = useState(null);
   const [pending, setPending] = useState([]);
   const [busyId, setBusyId] = useState("");
-  const [seedTick, setSeedTick] = useState(0);
   useEffect(() => {
     let alive = true;
     const load = () => Promise.allSettled([
@@ -123,7 +96,7 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
     load();
     const timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
     return () => { alive = false; clearInterval(timer); };
-  }, [reloadKey, seedTick, onData]);
+  }, [reloadKey, onData]);
   const resolvePending = async (action, decision) => {
     setBusyId(action.id);
     try {
@@ -166,8 +139,8 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
         <ul>{pending.map(action => <PendingRow key={action.id} action={action} busy={busyId === action.id}
           onConfirm={() => resolvePending(action, "confirm")} onReject={() => resolvePending(action, "reject")} />)}</ul>
         <p className="muted">AI 只起草，你确认后才生效。</p>
-      </div> : <DemoPackCard onChanged={() => setSeedTick(v => v + 1)} />}
-    </section> : <section className="home-dashboard-empty" aria-label="开始使用"><DemoPackCard onChanged={() => setSeedTick(v => v + 1)} /></section>}
+      </div> : null}
+    </section> : null}
   </>;
 }
 
@@ -628,6 +601,7 @@ export function WorkbenchHome({
       )}
       {isHome ? (
         <>
+      <section className="hub-demo-entry"><div><b>第一次使用？从默认示例开始</b><p>无需上传资料，直接体验患者问答、随访、知识检索和科研工具。</p></div><button type="button" className="primary" disabled={starting || uploading} onClick={() => onView("examples")}>选择示例体验</button></section>
       <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
           <BackupStatus />
           <section className="hub-intro hub-intro-compact">

@@ -215,6 +215,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       <header className="directory-heading">
         <div>
           <h1>资料与工具</h1>
+          {medical && <p>还没有资料？<button className="text-button" onClick={() => onNavigate("examples")}>用默认示例体验这些功能</button></p>}
 
         </div>
       </header>

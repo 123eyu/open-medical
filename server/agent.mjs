@@ -674,7 +674,7 @@ export function createServer(options = {}) {
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
   const backups = new Backups(databasePath);
-  const demoPack = new DemoPack(patients, followups, store);
+  const demoPack = new DemoPack(patients, followups, store, { sessions: sessionBridge, cases, trials: trialScreening, guidelines, schedule, careTasks, care: () => care });
   runtime.registerPlugins([...pendingActionTools(pending, doctor), ...careTools(() => care, pending), ...trialTools(() => trialCandidates, pending), ...scheduleTools(() => schedule), ...labDisplayTools(() => patients), ...extensionTools(() => extensions, pending)]);
   const swapProvider = (next) => {
     provider = next;
@@ -1881,8 +1881,8 @@ export function createServer(options = {}) {
       if (path === "/api/backup/run" && req.method === "POST") return send(res, 201, backups.run());
       // 示例患者包：一键装载/删除，全部虚构、独立标签，永不触碰真实档案。
       if (path === "/api/demo-pack" && req.method === "GET") return send(res, 200, demoPack.status());
-      if (path === "/api/demo-pack" && req.method === "POST") return send(res, 201, demoPack.seed());
-      if (path === "/api/demo-pack" && req.method === "DELETE") return send(res, 200, demoPack.clear());
+      if (path === "/api/demo-pack" && req.method === "POST") return send(res, 201, await demoPack.seed());
+      if (path === "/api/demo-pack" && req.method === "DELETE") return send(res, 200, await demoPack.clear());
       if (path === "/api/patients" && req.method === "GET")
         return send(res, 200, {
           patients: patients.list({

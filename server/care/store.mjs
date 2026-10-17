@@ -95,7 +95,7 @@ export const replyRow = (row) => row && (() => {
 export const alertRow = (row) => row && (() => {
   const data = JSON.parse(row.data);
   return { id: row.id, patientId: row.patient_id, messageId: row.message_id, level: row.level, reason: row.reason, status: row.status,
-    flags: data.flags || [], notified: data.notified || [], escalatedAt: data.escalatedAt || null, note: data.note || "", createdAt: row.created_at, updatedAt: row.updated_at };
+    localOnly: data.localOnly === true, flags: data.flags || [], notified: data.notified || [], escalatedAt: data.escalatedAt || null, note: data.note || "", createdAt: row.created_at, updatedAt: row.updated_at };
 })();
 
 export const campaignRow = (row) => row && (() => {

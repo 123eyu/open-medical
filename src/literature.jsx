@@ -152,6 +152,7 @@ export function LiteratureView({ onOpenTask }) {
             查我领域最新文献：{specialty}
           </button>
         )}
+        <button className="secondary" disabled={busy} onClick={() => setQuery("hypertension home blood pressure monitoring randomized trial")}>填入示例检索词</button>
         <form className="literature-form" onSubmit={runSearch}>
           <input
             className="literature-query"

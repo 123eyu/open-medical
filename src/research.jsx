@@ -59,6 +59,25 @@ export function ResearchView() {
     } catch (err) { setError(err.message); }
     finally { setUploading(false); }
   };
+  const useExample = async () => {
+    if (busy || uploading) return;
+    setUploading(true); setError("");
+    const version = ++selectionGeneration.current;
+    try {
+      const pack = await api("/api/demo-pack", "POST", {});
+      const detail = await api(`/api/sessions/${pack.sessionId}`);
+      if (version !== selectionGeneration.current) return;
+      const datasets = detail.files.filter(f => /\.csv$/i.test(f.name));
+      setSessions(old => [detail, ...old.filter(s => s.id !== detail.id)]);
+      setSessionId(detail.id); setFiles(datasets); setSourceId(datasets.find(f => f.name === "示例研究数据.csv")?.id || "");
+      setProfile(null); setTestResult(null);
+      setTest({ outcome: "sbp", group: "group", method: "auto" });
+      setSize({ design: "means", delta: "8", sd: "12", p1: "", p2: "", alpha: 0.05, power: 0.8 });
+      setDeidColumns("subject");
+      setUploadNotice("已选中 12 行虚构数据。先查看数据概况，再比较 A/B 两组的 sbp；样本量和脱敏字段也已填入示例。可修改后重新计算。");
+    } catch (err) { setError(err.message); }
+    finally { setUploading(false); }
+  };
   const pickSession = async (id) => {
     const version = ++selectionGeneration.current;
     setSessionId(id);
@@ -150,6 +169,7 @@ export function ResearchView() {
           </p>
         )}
         <div className="research-import">
+          <button className="secondary" disabled={busy || uploading} onClick={useExample}>使用示例数据</button>
           <button className="primary" disabled={busy || uploading} onClick={() => uploadRef.current?.click()}><Upload size={16}/>{uploading ? "正在导入…" : "上传 CSV 数据"}</button>
           <input ref={uploadRef} type="file" accept=".csv" hidden onChange={uploadDataset}/>
           <span>也可以选择已有数据。文件保存在本机任务中。</span>

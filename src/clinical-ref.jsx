@@ -70,6 +70,7 @@ function ScalesTab({ initialScale = "" }) {
   return (
     <section className="followups-section">
       <h3>量表与计算器</h3>
+      <button className="secondary" disabled={busy} onClick={() => { setScaleQuery(""); setScaleId("bmi"); setAnswers({ weight: 68, height: 170 }); setResult(null); }}>填入 BMI 示例（68 kg / 170 cm）</button>
       <div className="followup-apply">
         <input
           aria-label="筛选量表"
@@ -178,6 +179,7 @@ function LabsTab() {
   return (
     <section className="followups-section">
       <h3>检验指标速查</h3>
+      <button className="secondary" disabled={busy} onClick={() => { setQuery("血钾"); setEntries(null); }}>填入检验示例</button>
       <form className="literature-form" onSubmit={run}>
         <input
           className="literature-query"
@@ -240,6 +242,7 @@ function CodesTab() {
   return (
     <section className="followups-section">
       <h3>手术操作编码（ICD-9-CM-3 常用速查）</h3>
+      <button className="secondary" disabled={busy} onClick={() => { setQuery("胆囊"); setCodes(null); }}>填入手术示例</button>
       <form className="literature-form" onSubmit={run}>
         <input
           className="literature-query"
@@ -296,6 +299,7 @@ function AdrTab({ onGoScales }) {
       <p className="muted">
         输入当前用药与可疑临床表现，按内置药物不良反应知识表匹配。提示性筛查，不构成因果判定。
       </p>
+      <button className="secondary" disabled={busy} onClick={() => { setMeds("依那普利"); setFindings("干咳"); setResult(null); }}>填入虚构筛查示例</button>
       <div className="drg-form">
         <textarea
           className="case-summary"
