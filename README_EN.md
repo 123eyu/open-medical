@@ -4,9 +4,9 @@
 
 # Open Medical
 
-### Bring patient records, medical knowledge and experience into every visit.
+### Working toward the most doctor-friendly desktop management agent.
 
-An open-source AI desktop workbench for doctors · Patient records · Knowledge · Follow-up
+An open-source desktop management agent · Patients & records · Knowledge & tasks
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-28735b?style=flat-square)](LICENSE)
 [![Desktop](https://img.shields.io/badge/Desktop-macOS%20%7C%20Windows-334155?style=flat-square)](docs/DESKTOP.md)
@@ -20,7 +20,7 @@ An open-source AI desktop workbench for doctors · Patient records · Knowledge 
 
 ---
 
-Open Medical is a macOS / Windows desktop application for doctors. Keep clinical notes, lab results and follow-up records connected to the same patient. Organize guidelines, templates and useful cases in your own knowledge library, then retrieve, prepare and follow up through conversation.
+Open Medical is an open-source desktop management agent for doctors, available on macOS and Windows. Built around everyday clinical work, it helps doctors manage patients, records, knowledge and tasks through natural language, connecting record organization, literature searches, document preparation and ongoing follow-up.
 
 **Keep records locally, connect your preferred model, and review the results.** Use local Ollama / vLLM servers, DeepSeek, OpenAI, Anthropic, OpenRouter or an OpenAI-compatible endpoint.
 
@@ -537,3 +537,7 @@ npm run verify:model    # Live streaming, tool calls and continuation
 ## License
 
 [MIT](LICENSE)
+
+## Community
+
+[LINUX DO](https://linux.do/)

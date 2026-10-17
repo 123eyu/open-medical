@@ -4,9 +4,9 @@
 
 # Open Medical
 
-### 让患者资料、医学知识和你的经验，接上每一次诊疗。
+### 希望做医生最友好的桌面管理 Agent。
 
-开源的医学 AI 桌面工作台 · 患者管理 · 知识积累 · 持续随访
+开源桌面管理 Agent · 患者与资料 · 知识与任务
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-28735b?style=flat-square)](LICENSE)
 [![Desktop](https://img.shields.io/badge/Desktop-macOS%20%7C%20Windows-334155?style=flat-square)](docs/DESKTOP.md)
@@ -20,7 +20,7 @@
 
 ---
 
-Open Medical 是面向医生的 macOS / Windows 桌面应用。把分散的病历、检验、随访记录整理到同一位患者下，把常用指南、模板和案例留在自己的知识库里；需要时，通过对话查找、整理和继续跟进。
+Open Medical 是面向医生的开源桌面管理 Agent，运行于 macOS / Windows。从医生的日常工作出发，通过自然语言管理患者、资料、知识与任务，把病历整理、文献检索、文书准备和持续随访连接起来。
 
 **资料在本机积累，模型按需连接，结果由医生复核。** 支持本地 Ollama / vLLM，以及 DeepSeek、OpenAI、Anthropic、OpenRouter 和 OpenAI 兼容服务。
 
@@ -535,3 +535,7 @@ npm run verify:model    # 真实模型流式输出、工具调用与续轮
 ## 许可证
 
 [MIT](LICENSE)
+
+## 社区
+
+[LINUX DO](https://linux.do/)
