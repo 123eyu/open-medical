@@ -1,0 +1,241 @@
+.patient-dashboard .patient-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
+  gap: 24px 32px;
+  align-items: start;
+}
+.patient-overview-grid .overview-story {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+.patient-dashboard .patient-overview-grid section {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.patient-overview-grid h3 {
+  font-size: 17px;
+  margin: 0 0 14px;
+  color: #50685a;
+  font-weight: 500;
+}
+.patient-overview-grid p {
+  margin: 0 0 10px;
+  line-height: 1.85;
+}
+.patient-overview-grid .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-deep);
+  font-size: 14px;
+  text-align: left;
+  white-space: normal;
+}
+.overview-diagnoses ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.overview-diagnoses li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.overview-diagnoses li span {
+  font-size: var(--reading-size, 18px);
+  font-weight: 600;
+}
+.overview-diagnoses li small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.overview-recent {
+  border-top: 1px solid var(--border);
+  padding-top: 18px !important;
+}
+.overview-recent time {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.overview-attention {
+  min-width: 0;
+  padding: 20px;
+  border-radius: 10px;
+  background: #f0f5eb;
+  border: 1px solid #dce6d5;
+}
+.overview-attention header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.overview-attention h3 {
+  color: #304f3c;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.overview-attention header > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.overview-attention ul {
+  padding: 0;
+  margin: 8px 0 0;
+  list-style: none;
+}
+.overview-attention li + li {
+  border-top: 1px solid #dce6d5;
+}
+.overview-attention li button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 10px 0;
+  font: inherit;
+  text-align: left;
+}
+.overview-attention li button:hover {
+  color: var(--accent-deep);
+}
+.overview-attention li b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.patient-overview-grid .overview-treatment,
+.patient-overview-grid .overview-labs {
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+}
+.overview-plan-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.overview-med-summary {
+  margin: 12px 0;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.overview-labs ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.overview-labs li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+.overview-labs li b {
+  font-weight: 500;
+}
+.overview-labs li small {
+  display: block;
+  color: var(--muted);
+}
+.overview-labs li > span {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.overview-record-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  border-top: 1px solid var(--border);
+  margin-top: 24px;
+  padding-top: 12px;
+}
+.overview-record-links button {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--muted);
+}
+.overview-record-links b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.medical-shell .patient-dashboard .chart-heading {
+  padding-bottom: 16px;
+}
+.medical-shell .patient-dashboard .chart-heading h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.patient-dashboard .chart-heading .eyebrow {
+  display: none;
+}
+.patient-dashboard .chart-heading p {
+  margin-top: 5px;
+}
+.medical-shell .patients-view.has-patient .patients-toolbar {
+  margin-bottom: 10px;
+}
+.medical-shell .has-patient .detail-head {
+  padding: 12px 0 16px;
+  gap: 16px;
+}
+.medical-shell .has-patient .detail-head .patient-line {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.medical-shell .has-patient .detail-head .patient-line > b {
+  font-size: 24px;
+}
+.medical-shell .has-patient .patient-back {
+  min-height: 28px;
+  font-size: 14px;
+  padding: 0;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.medical-shell .has-patient .detail-head .patient-line > small {
+  font-size: 14px;
+}
+.medical-shell .has-patient .patient-area-tabs {
+  margin-top: 0;
+}
+.medical-shell .has-patient .patient-section-tabs {
+  margin: 8px 0 16px;
+}
+@media (max-width: 1000px) {
+  .patient-dashboard .patient-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+  .overview-attention {
+    grid-row: 2;
+  }
+}
+@media (max-width: 600px) {
+  .medical-shell .patient-dashboard {
+    padding: 18px 14px;
+  }
+  .overview-labs li {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}

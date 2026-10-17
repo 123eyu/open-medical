@@ -1,0 +1,436 @@
+.kg-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 8px 0 12px;
+}
+.kg-heading p {
+  margin: 5px 0 0;
+  color: #647168;
+  font-size: 13px;
+}
+.kg-heading .primary {
+  flex-shrink: 0;
+}
+.kg-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid #e3e7df;
+  font-size: 12px;
+  color: #647168;
+}
+.kg-jobs {
+  padding: 12px 0;
+  font-size: 13px;
+}
+.kg-jobs > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  border-bottom: 1px solid #e3e7df;
+}
+.kg-jobs small {
+  display: block;
+  color: #a04b41;
+  margin-top: 6px;
+}
+.kg-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px;
+  font-size: 12px;
+  color: #647168;
+}
+.kg-legend span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.kg-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.knowledge-map .knowledge-map-layout.has-selection {
+  grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr);
+  gap: 16px;
+}
+.kg-canvas-panel {
+  min-width: 0;
+  border: 1px solid #e0e5dc;
+  border-radius: 12px;
+  overflow: hidden;
+  align-self: start;
+  background: #fafcf9;
+}
+.kg-canvas-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e4e9e1;
+  color: #66766c;
+  font-size: 12px;
+}
+.kg-canvas-tools > div {
+  display: flex;
+  gap: 5px;
+}
+.kg-canvas-tools button {
+  border: 1px solid #dde4d9;
+  background: #fff;
+  color: #3b5147;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.knowledge-map .kg-canvas-panel svg {
+  display: block;
+  width: 100%;
+  height: 550px;
+  border-radius: 0;
+  touch-action: none;
+  cursor: grab;
+  background: radial-gradient(#dfe6dc 0.7px, transparent 0.7px);
+  background-size: 20px 20px;
+}
+.knowledge-map .kg-node .node-type {
+  fill: #fff;
+  font-size: 10px;
+  pointer-events: none;
+}
+.knowledge-map .kg-node-label {
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: #fafcf9;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.knowledge-map .kg-edge > path {
+  fill: none;
+  stroke: #a9bcb0;
+  stroke-width: 1.4;
+}
+.knowledge-map .kg-edge .kg-edge-hit {
+  stroke: transparent;
+  stroke-width: 14;
+}
+.knowledge-map .kg-edge.is-caution > path:not(.kg-edge-hit) {
+  stroke: #b67e7a;
+  stroke-dasharray: 5 3;
+}
+.knowledge-map .kg-edge.is-selected > path:not(.kg-edge-hit),
+.knowledge-map .kg-edge:focus > path:not(.kg-edge-hit) {
+  stroke: #335f4e;
+  stroke-width: 3;
+}
+.knowledge-map .kg-edge-label {
+  font-size: 10px;
+  fill: #65766c;
+  paint-order: stroke;
+  stroke: #fafcf9;
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.kg-help {
+  padding: 0 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #6b786e;
+}
+.kg-node-list {
+  padding: 12px 14px;
+  border-top: 1px solid #e3e7df;
+  font-size: 12px;
+  max-height: 240px;
+  overflow: auto;
+}
+.kg-node-list > button {
+  display: block;
+  padding: 7px 0;
+  text-align: left;
+}
+.kg-node-list small {
+  color: #6b786e;
+  margin-left: 6px;
+}
+.knowledge-map .knowledge-map-evidence {
+  max-height: 760px;
+  padding: 4px 0 12px 18px;
+}
+.kg-evidence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #6b786e;
+}
+.knowledge-map-evidence h4 {
+  margin: 22px 0 4px;
+}
+.kg-evidence-tag {
+  color: #397d72;
+  background: #edf3ed;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.kg-evidence-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+@media (max-width: 1000px) {
+  .knowledge-map .knowledge-map-layout.has-selection {
+    grid-template-columns: 1fr;
+  }
+  .knowledge-map .knowledge-map-evidence {
+    border-left: 0;
+    border-top: 1px solid #dfe6dd;
+    max-height: none;
+    padding: 16px 0;
+  }
+  .knowledge-map .kg-canvas-panel svg {
+    height: 440px;
+  }
+}
+@media (max-width: 600px) {
+  .kg-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .knowledge-map-filters select {
+    max-width: 100%;
+    flex: 1;
+  }
+  .kg-heading .primary {
+    width: 100%;
+  }
+  .knowledge-map .kg-canvas-panel svg {
+    height: 370px;
+  }
+}
+.knowledge-map .knowledge-map-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(110px, 150px)) auto;
+  gap: 10px;
+}
+.knowledge-map .knowledge-map-filters :is(input, select) {
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 1100px) {
+  .knowledge-map .knowledge-map-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .knowledge-map .knowledge-map-filters input {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 600px) {
+  .knowledge-map .kg-node-label {
+    font-size: 14px;
+  }
+  .knowledge-map .kg-edge-label {
+    font-size: 12px;
+  }
+}
+
+.kd-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 18px 0 8px;
+}
+.kd-views button[aria-pressed="true"] {
+  background: var(--accent, #216653);
+  color: white;
+  border-color: transparent;
+}
+.kd-recommendation {
+  color: var(--muted, #65716c);
+  font-size: 12px;
+  margin: 0 0 16px;
+}
+.kd-container {
+  min-width: 0;
+}
+.kd-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.kd-picker select {
+  max-width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+.kd-caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.kd-caption h4 {
+  margin: 0 0 6px;
+}
+.kd-caption p {
+  margin: 0;
+  color: var(--muted, #65716c);
+  font-size: 12px;
+}
+.kd-zoom {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.kd-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  border: 1px solid #dce3df;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.kd-scroll {
+  overflow: auto;
+  max-height: 600px;
+  min-height: 340px;
+  background: #f7faf8;
+}
+.knowledge-map .kd-svg {
+  display: block;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.knowledge-map .kd-text {
+  fill: #25473d;
+  text-anchor: middle;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+}
+.kd-node {
+  cursor: pointer;
+}
+.kd-node rect,
+.kd-node polygon {
+  fill: white;
+  stroke: #9cb5ab;
+  stroke-width: 1.5;
+}
+.kd-node.kd-decision polygon {
+  fill: #fff5dc;
+  stroke: #c9a951;
+}
+.kd-node.kd-root rect,
+.kd-node.kd-start rect {
+  fill: #e3f1ea;
+  stroke: #608b79;
+}
+.kd-node.selected rect,
+.kd-node.selected polygon,
+.kd-node:focus rect,
+.kd-node:focus polygon {
+  stroke: #14674d;
+  stroke-width: 3;
+}
+.kd-edge {
+  cursor: pointer;
+}
+.kd-edge-line {
+  fill: none;
+  stroke: #65837b;
+  stroke-width: 2;
+}
+.kd-edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 18;
+}
+.kd-edge rect {
+  fill: #f7faf8;
+  stroke: #d5e2db;
+}
+.kd-edge.selected .kd-edge-line,
+.kd-edge:focus .kd-edge-line {
+  stroke: #17684e;
+  stroke-width: 4;
+}
+.kd-evidence {
+  padding: 18px;
+  border-left: 1px solid #dce3df;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.kd-evidence h4 {
+  margin-top: 0;
+}
+.kd-evidence blockquote {
+  margin: 12px 0;
+  padding-left: 12px;
+  border-left: 3px solid #94b6a5;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.kd-evidence p {
+  line-height: 1.7;
+}
+.kd-note {
+  color: var(--muted, #65716c);
+  border-top: 1px solid #e2e8e4;
+  padding-top: 16px;
+  margin-top: 24px;
+}
+@media (max-width: 900px) {
+  .kd-workspace {
+    grid-template-columns: 1fr;
+  }
+  .kd-evidence {
+    border-left: 0;
+    border-top: 1px solid #dce3df;
+  }
+  .kd-scroll {
+    max-height: 480px;
+  }
+}
+@media (max-width: 600px) {
+  .kd-caption {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.kd-views button,
+.kd-zoom button {
+  appearance: none;
+  border: 1px solid #d5dfd9;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  color: #315147;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.kd-views button:hover,
+.kd-zoom button:hover {
+  border-color: #769d89;
+}
+.kd-views button[aria-pressed="true"] {
+  background: #216653;
+  color: #fff;
+}

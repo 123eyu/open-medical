@@ -1,0 +1,97 @@
+.chat-settings, .chat-followups { text-align:left; min-width:0; }
+.chat-settings { max-width:840px; }
+.chat-settings p, .chat-followups p { line-height:1.7; }
+.chat-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 24px; }
+.chat-tabs button { background:transparent; border:1px solid var(--border); padding:10px 16px; }
+.chat-tabs button[aria-pressed=true] { background:#e6eee3; color:var(--accent-deep); border-color:#9db5a5; }
+/* 渠道分组标题 + 白话说明卡:让"实时/历史导入"的分工一眼可辨 */
+.chat-channel-group { margin-top:26px; }
+.chat-channel-group h3 { margin:0 0 4px; font-size:17px; }
+.chat-channel-group .muted { margin:0; }
+.chat-channel-group+.chat-channel-group { padding-top:6px; }
+.chat-tab-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#2b7059; margin-right:8px; vertical-align:middle; }
+.chat-channel-brief { margin:-8px 0 22px; padding:14px 18px; border:1px solid #cfdccf; border-radius:10px; background:#f4f8f2; }
+.chat-channel-brief p { margin:4px 0; }
+.chat-channel-brief strong { color:var(--accent-deep); }
+/* 高级折叠区里的手填字段:左侧细线标识这是不常动的配置 */
+.chat-advanced-connection { padding-left:14px; border-left:3px solid #dfe8de; }
+.chat-advanced-connection form, .chat-advanced-connection .chat-connection-form { margin-top:8px; }
+.chat-advanced-connection summary { color:var(--muted); }
+.chat-connection-form, .chat-binding-form { display:flex; flex-direction:column; gap:16px; }
+.chat-connection-form>label, .chat-binding-form label:not(.chat-check), .chat-draft>label:not(.chat-check), .chat-region-fields label { display:flex; flex-direction:column; gap:8px; }
+.chat-settings textarea, .chat-settings input:not([type=checkbox]), .chat-followups input:not([type=checkbox]), .chat-followups select, .chat-followups textarea { width:100%; min-width:0; box-sizing:border-box; border:1px solid var(--border); border-radius:7px; padding:10px 12px; color:inherit; background:#fff; font:inherit; }
+.chat-settings .chat-check, .chat-followups .chat-check { display:flex; flex-direction:row; align-items:flex-start; gap:10px; font-weight:400; line-height:1.65; }
+.chat-check input { flex:none; margin-top:6px; }
+.chat-check small { display:block; color:var(--muted); }
+.chat-status { padding:12px 16px; background:#f1f5ef; border-radius:8px; }
+.chat-followups>header, .chat-bindings article, .chat-draft>header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.chat-followups { padding:24px 0; }
+.chat-followups h2 { margin:0; }
+.chat-patient-picker { display:flex; flex-direction:column; gap:8px; max-width:480px; margin:20px 0; }
+.chat-empty { padding:24px 0; color:var(--muted); }
+.chat-binding-form { padding:24px; border:1px solid var(--border); border-radius:10px; margin:20px 0; background:#f8faf6; }
+.chat-name-suggestions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.chat-name-suggestions>span { flex-basis:100%; }
+.chat-name-suggestions button { min-height:34px; padding:4px 14px; border-radius:999px; font-size:14px; }
+.chat-name-suggestions button[aria-pressed=true] { background:#e6eee3; border-color:#9db5a5; color:var(--accent-deep); font-weight:600; }
+.chat-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.chat-bindings article { padding:18px 0; border-bottom:1px solid var(--border); }
+.chat-bindings p { margin:5px 0 0; }
+.chat-draft { padding:24px; margin:20px 0; border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; gap:16px; }
+.chat-draft header span { color:var(--muted); font-size:14px; }
+.chat-draft pre, .chat-note { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; line-height:1.8; max-height:400px; overflow:auto; }
+.chat-draft img { max-width:100%; height:auto; display:block; margin-top:12px; }
+.chat-draft summary, .chat-settings summary, .chat-calibration summary { cursor:pointer; padding:8px 0; }
+.chat-inbox { margin:20px 0; border-left:3px solid #ba963d; padding:8px 20px; }
+.chat-inbox label { padding:12px 0; }
+.chat-preview { position:relative; width:100%; touch-action:none; user-select:none; cursor:crosshair; line-height:0; }
+.chat-preview img { width:100%; height:auto; pointer-events:none; }
+.chat-region { position:absolute; border:2px solid #307450; background:#30745020; pointer-events:none; box-sizing:border-box; }
+.chat-region.messages { border-color:#4268a4; background:#4268a425; }
+.chat-region.selection { border-style:dashed; border-color:#b17c1d; background:#b17c1d20; }
+.chat-region.input-point { width:14px; height:14px; border:2px solid #a4453c; border-radius:50%; background:#a4453c40; transform:translate(-50%,-50%); }
+.chat-reply { margin-top:10px; }
+.chat-reply>summary { cursor:pointer; font-weight:600; }
+.chat-reply[open] { display:flex; flex-direction:column; gap:10px; padding:12px; border-top:1px solid #e3e0da; }
+.chat-region-fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.chat-calibration fieldset { border:1px solid var(--border); margin-top:12px; }
+@media(max-width:700px) { .chat-form-grid { grid-template-columns:1fr; } .chat-region-fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .chat-draft,.chat-binding-form { padding:16px; } }
+.chat-settings button, .chat-followups button { font:inherit; min-height:40px; padding:9px 16px; border:1px solid var(--border); border-radius:7px; background:#fff; color:var(--accent-deep); cursor:pointer; line-height:1.4; }
+.chat-settings button:hover:not(:disabled), .chat-followups button:hover:not(:disabled) { border-color:#8fae9c; background:#eef4ed; }
+.chat-settings button:disabled, .chat-followups button:disabled { cursor:default; opacity:.48; }
+.chat-settings button:focus-visible, .chat-followups button:focus-visible, .chat-settings summary:focus-visible, .chat-followups summary:focus-visible { outline:2px solid #2d7359; outline-offset:3px; }
+.chat-settings button[type=submit], .chat-followups button[type=submit] { background:#2b7059; color:#fff; border-color:#2b7059; }
+.chat-settings button[type=submit]:hover:not(:disabled), .chat-followups button[type=submit]:hover:not(:disabled) { background:#235d49; }
+.chat-settings .toolbar-actions, .chat-followups .toolbar-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+.chat-settings details, .chat-followups details { font-size:14px; }
+.chat-settings details { border-top:1px solid var(--border); padding-top:12px; }
+.chat-settings details>label { display:flex; flex-direction:column; gap:8px; margin:16px 0; }
+.chat-settings details>.chat-check { flex-direction:row; }
+.chat-settings .chat-tabs button[aria-pressed=true] { background:#e6eee3; border-color:#9db5a5; }
+.chat-setup { display:flex; flex-direction:column; gap:24px; }
+.chat-setup-steps { list-style:none; margin:0; padding:0 0 20px; display:flex; flex-wrap:wrap; gap:12px 24px; border-bottom:1px solid var(--border); color:#6b786f; font-size:14px; }
+.chat-setup-steps [aria-current=step] { color:var(--accent-deep); font-weight:600; }
+.chat-setup h3 { margin:0 0 12px; }
+.chat-setup-connected { display:flex; flex-direction:column; gap:12px; }
+.chat-setup-connected>p { margin:0; }
+.chat-setup-next { padding:24px 0; margin-top:12px; border-top:1px solid var(--border); }
+.chat-next-link { display:inline-block; padding:10px 0; color:var(--accent-deep); font-weight:600; text-underline-offset:4px; }
+.chat-help { border-left:3px solid #a69260; padding-left:16px; }
+.chat-setup .chat-connection-form { border-top:1px solid var(--border); padding-top:24px; }
+.chat-import-text { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--bg-secondary, #f4f5f5); border-radius: 8px; }
+.chat-permission-help { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; text-align: left; }
+.chat-permission-help ol { padding-left: 24px; line-height: 1.8; }
+/* 绑定卡工具栏内的「读取前自动定位」勾选:随按钮行内居中,不用表单行的顶部对齐。 */
+.chat-followups .toolbar-actions .chat-check.chat-autoread { align-items:center; font-size:14px; white-space:nowrap; }
+.chat-followups .toolbar-actions .chat-check.chat-autoread input { margin-top:0; }
+/* 连接配置:微信号格式软提示;不拦截提交,只当场纠正「把昵称当微信号」这类常见错误。 */
+.chat-warn { color:#8a5a1e; font-weight:400; line-height:1.6; }
+
+/* 批量导入匹配表 */
+.chat-import-batch { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.chat-import-batch th, .chat-import-batch td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+.chat-import-batch th { background: rgba(127,127,127,.08); }
+.chat-import-batch select { max-width: 220px; }
+
+/* 插件目录卡片:长 URL 等不破坏移动端宽度 */
+.chat-setup .chat-draft p, .chat-setup .chat-draft strong { overflow-wrap: anywhere; }

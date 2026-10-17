@@ -1,0 +1,126 @@
+.task-result {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #30483b;
+}
+.task-result h3 {
+  font-size: 22px;
+  margin: 0 0 16px;
+}
+.task-result h4 {
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+.task-result article {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.task-result p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-result dl {
+  margin: 12px 0;
+}
+.task-result dt {
+  color: #607365;
+  font-size: 14px;
+}
+.task-result dd {
+  margin: 0 0 12px;
+}
+.task-result details {
+  margin: 14px 0;
+  font-size: 15px;
+}
+.task-result summary {
+  cursor: pointer;
+  color: #2e705b;
+  min-height: 36px;
+}
+.task-result a {
+  color: #2e705b;
+}
+.task-result input {
+  font: inherit;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.task-result small {
+  display: block;
+  color: #64786a;
+  font-size: 14px;
+  margin-top: 16px;
+}
+.calculation-value {
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  color: #2e705b;
+}
+.calculation-value span {
+  font-size: 16px;
+  margin-left: 12px;
+}
+.assessment-heading {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+}
+.assessment-heading h3 {
+  margin: 6px 0 12px;
+}
+.assessment-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 20px;
+  container-type: inline-size;
+}
+.assessment-layout.has-evidence {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+}
+.assessment-findings {
+  min-width: 0;
+}
+.assessment-findings article {
+  padding: 18px 14px;
+  border-left: 3px solid transparent;
+}
+.assessment-findings article.is-selected {
+  background: #f0f5ed;
+  border-left-color: #36775b;
+  border-radius: 0 8px 8px 0;
+}
+.assessment-findings h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.assessment-number {
+  font-size: 13px;
+  color: #698274;
+  font-variant-numeric: tabular-nums;
+}
+.assessment-findings button {
+  font: inherit;
+  font-size: 14px;
+  min-height: 42px;
+  white-space: normal;
+}
+.assessment-findings .assessment-source-button {
+  margin-top: 20px;
+}
+.assessment-result .evidence-reader {
+  position: sticky;
+  top: 16px;
+}
+@media (max-width: 1100px) {
+  .assessment-layout.has-evidence {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .assessment-result .evidence-reader {
+    position: static;
+  }
+}

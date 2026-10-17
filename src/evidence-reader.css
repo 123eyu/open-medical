@@ -1,0 +1,106 @@
+.evidence-reader {
+  min-width: 0;
+  align-self: start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f5f8f4;
+  overflow: hidden;
+  color: var(--ink);
+}
+.evidence-reader > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.evidence-reader h4 {
+  margin: 6px 0 0;
+  font-size: 18px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.evidence-reader h4:focus {
+  outline: none;
+}
+.evidence-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #536b5c;
+  font-size: 13px;
+}
+.evidence-scroll {
+  max-height: 65vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px;
+}
+.evidence-document {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.evidence-document:last-child {
+  border-bottom: 0;
+}
+.evidence-document h5 {
+  margin: 8px 0;
+  font-size: 16px;
+}
+.evidence-document blockquote {
+  margin: 12px 0;
+  padding: 0 0 0 14px;
+  border-left: 3px solid #739782;
+  white-space: pre-wrap;
+  line-height: 1.85;
+}
+.task-result .evidence-document blockquote {
+  font-size: var(--body-size, 16px);
+  color: #30483b;
+}
+.evidence-reader .evidence-location,
+.evidence-reader .evidence-scope {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.evidence-reader .evidence-scope {
+  padding: 0 20px;
+}
+.evidence-original summary {
+  cursor: pointer;
+  color: var(--accent-deep);
+  padding: 8px 0;
+  line-height: 1.6;
+}
+.evidence-reader pre {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: #fff;
+  padding: 14px;
+  border-radius: 6px;
+  max-height: 360px;
+  overflow: auto;
+}
+.evidence-reader mark {
+  color: inherit;
+  background: #e5efc9;
+}
+.evidence-empty {
+  line-height: 1.8;
+  padding: 8px 0;
+  color: var(--muted);
+}
+.evidence-reader .ocr-page-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (max-width: 760px) {
+  .evidence-scroll {
+    max-height: 55vh;
+  }
+}

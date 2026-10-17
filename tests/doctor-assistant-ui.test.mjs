@@ -1,0 +1,113 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { chromium } from 'playwright-core';
+import { fixture } from './helpers.mjs';
+const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const out = 'output/playwright/feishu-assistant-20261013';
+
+test('doctor configures reminder channels and approves a Feishu knowledge group through the UI', { skip: !existsSync(chrome), timeout: 60000 }, async t => {
+  mkdirSync(out + '/screenshots', { recursive: true });
+  mkdirSync(out + '/raw', { recursive: true });
+  const sent = [], replies = [], modelInputs = []; let handler;
+  const response = data => ({ ok: true, status: 200, json: async () => data });
+  const now = Date.now();
+  const f = await fixture(t, { followupOptions: { autoStart: false }, doctorNotificationOptions: { autoStart: false,
+    fetchImpl: async (url, init) => {
+      if (url.endsWith('/registration')) return response(new URLSearchParams(init.body).get('action') === 'begin' ? { device_code: 'reminder-code', user_code: 'reminder', interval: 1, expire_in: 600 } : { client_id: 'cli_reminder12345', client_secret: 'test-secret', user_info: { open_id: 'ou_doctor' } });
+      if (url.endsWith('/internal')) return response({ code: 0, tenant_access_token: 'test-access', expire: 7200 });
+      if (url.includes('get_bot_qrcode')) return response({ qrcode: 'test-only', qrcode_img_content: 'https://example.invalid/test-qr' });
+      if (url.includes('get_qrcode_status')) return response({ status: 'confirmed', bot_token: 'test-token', ilink_user_id: 'test-doctor', ilink_bot_id: 'test-bot' });
+      sent.push(JSON.parse(init.body)); return response({ code: 0, ret: 0 });
+    } }, knowledgeBotOptions: {
+    getProvider: () => ({ local: true, provider: '本地演示模型', model: '知识库助手', complete: async messages => { const input = JSON.parse(messages[1].content); modelInputs.push(input); return { message: { content: input.history.length ? '可按两步整理：先核对日期和来源，再列出待补充材料。[1]' : '复诊前需要核对资料日期和来源，并整理反馈与待补充材料。[1]' } }; } }),
+    fetchImpl: async (url, init) => {
+      if (url.endsWith('/registration')) return response(new URLSearchParams(init.body).get('action') === 'begin' ? { device_code: 'knowledge-code', user_code: 'knowledge', interval: 1, expire_in: 600 } : { client_id: 'cli_knowledge1234', client_secret: 'test-secret', user_info: { open_id: 'ou_owner' } });
+      if (url.endsWith('/internal')) return response({ code: 0, tenant_access_token: 'test-access', expire: 7200 });
+      if (url.endsWith('/info')) return response({ code: 0, bot: { open_id: 'ou_bot' } });
+      if (url.includes('/contact/v3/users/')) return response({ code: 0, data: { user: { name: '熊猫' } } });
+      if (url.includes('/chats/')) return response({ code: 0, data: { name: '熊猫学习群' } });
+      replies.push(JSON.parse(init.body)); return response({ code: 0 });
+    }, createSocket: (options, receive) => ({ start: async () => { handler = receive; options.onReady(); }, close() {} }),
+  } });
+  clearInterval(f.server.knowledgeBot.binding.timer);
+  const patient = (await f.json('/api/patients', 'POST', { name: '熊猫' })).data;
+  await f.json(`/api/patients/${patient.id}/care-tasks`, 'POST', { title: '核对复诊材料', kind: 'test', dueAt: new Date(now - 60000).toISOString() });
+  const doc = await f.server.guidelines.addDocument({ title: '复诊资料整理规范', collection: '门诊工作资料', text: '复诊前核对资料日期与来源。整理患者反馈和需要补充的材料。' });
+  f.server.guidelines.updateMetadata(doc.id, { expectedRevision: 0, reviewStatus: 'reviewed', reviewNote: '已核对资料内容', allowExternalUse: true });
+  const browser = await chromium.launch({ executablePath: chrome, headless: true });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, recordVideo: { dir: out + '/raw', size: { width: 1440, height: 1000 } } });
+  const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
+  page.setDefaultTimeout(15000);
+  const video = page.video();
+  t.after(async () => { await context.close(); await video.saveAs(out + '/raw/医生提醒与飞书知识库.webm'); await video.delete(); await browser.close(); });
+  await page.goto(f.origin + '/?view=settings&settingsTab=notifications');
+  const feishu = page.getByRole('region', { name: '飞书医生提醒' });
+  await feishu.getByRole('button', { name: '连接飞书', exact: true }).click();
+  await feishu.getByAltText('飞书绑定二维码').waitFor();
+  await feishu.getByRole('button', { name: '我已确认，检查状态' }).click();
+  await feishu.getByText('已配置连接').waitFor();
+  assert.equal(await page.locator('input[type=password]').count(), 0);
+  await feishu.getByLabel('启用每日随访与待跟进提醒').check();
+  await feishu.getByRole('button', { name: '保存提醒设置' }).click(); await feishu.getByText('提醒设置已保存。').waitFor();
+  await feishu.getByRole('button', { name: '发送今日提醒' }).click(); await feishu.getByText('平台已接受今日提醒', { exact: true }).waitFor();
+  assert.equal(sent.length, 1); assert.match(JSON.parse(sent[0].content).text, /1 位患者/); assert.doesNotMatch(JSON.parse(sent[0].content).text, /熊猫/);
+  await feishu.getByText('查看提醒内容预览').click(); await page.screenshot({ path: out + '/screenshots/01-医生提醒.png', fullPage: true });
+  const wechat = page.getByRole('region', { name: '微信医生提醒' }); await wechat.getByRole('button', { name: '微信扫码连接' }).click();
+  await wechat.getByAltText('微信连接二维码').waitFor(); await page.screenshot({ path: out + '/screenshots/02-微信扫码.png', fullPage: true });
+  await wechat.getByText('微信已扫码连接。可以先发送测试消息，再启用每日提醒。').waitFor();
+  await wechat.getByRole('button', { name: '发送测试提醒' }).click(); await wechat.getByText('平台已接受测试消息，请在微信或飞书中确认收到。').waitFor();
+  assert.equal(sent.at(-1).msg.to_user_id, 'test-doctor');
+  await page.getByRole('button', { name: '飞书知识库机器人', exact: true }).click();
+  await page.getByRole('button', { name: '连接飞书', exact: true }).click();
+  await page.getByAltText('飞书绑定二维码').waitFor();
+  await page.getByRole('button', { name: '我已确认，检查状态' }).click();
+  await page.getByRole('link', { name: '打开知识库机器人 ↗' }).waitFor();
+  assert.equal(await page.locator('input[type=password]').count(), 0);
+  await page.getByLabel(/门诊工作资料 · 1 篇允许对外引用/).check(); await page.getByLabel('启用飞书知识库机器人', { exact: true }).check();
+  await page.getByRole('button', { name: '保存使用范围' }).click(); await page.getByText(/设置已保存，可以打开飞书提问/).waitFor(); await f.server.knowledgeBot.connection;
+  const event = id => ({ sender: { sender_type: 'user', sender_id: { open_id: 'ou_panda' } }, message: { chat_type: 'group', chat_id: 'oc_testgroup', message_id: `om_${id}`, create_time: String(Date.now()), message_type: 'text', mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' } }], content: JSON.stringify({ text: '@_user_1 复诊' }) } });
+  handler(event('discover')); await Promise.all([...f.server.knowledgeBot.jobs]); assert.equal(replies.length, 0);
+  await page.getByRole('button', { name: '刷新群与连接状态' }).click(); await page.getByLabel(/熊猫学习群/).check();
+  await page.getByRole('button', { name: '保存使用范围' }).click(); await page.getByText(/设置已保存，可以打开飞书提问/).waitFor(); await f.server.knowledgeBot.connection;
+  handler(event('answer')); await Promise.all([...f.server.knowledgeBot.jobs]); assert.equal(replies.length, 1); assert.match(JSON.parse(replies[0].content).text, /出处：第/);
+  await page.getByRole('button', { name: '刷新群与连接状态' }).click(); await page.getByText(/最近一次知识库回复已被飞书接受/).waitFor();
+  await page.screenshot({ path: out + '/screenshots/03-飞书知识库机器人.png', fullPage: true });
+  const direct = (id, text) => { const e = event(id); e.message = { ...e.message, chat_type: 'p2p', chat_id: 'oc_private', mentions: [], content: JSON.stringify({ text }) }; return e; };
+  handler(direct('privateDiscover', '复诊')); await Promise.all([...f.server.knowledgeBot.jobs]); assert.equal(replies.length, 1);
+  await page.getByRole('button', { name: '刷新群与连接状态' }).click(); await page.getByLabel(/熊猫 · 单聊/).check();
+  await page.getByLabel('使用当前模型整理回答与连续追问', { exact: true }).check();
+  await page.getByRole('button', { name: '保存使用范围' }).click(); await page.getByText(/设置已保存，可以打开飞书提问/).waitFor(); await f.server.knowledgeBot.connection;
+  handler(direct('privateFirst', '复诊')); await Promise.all([...f.server.knowledgeBot.jobs]);
+  handler(direct('privateFollow', '请列成要点')); await Promise.all([...f.server.knowledgeBot.jobs]);
+  assert.equal(modelInputs.length, 2); assert.equal(modelInputs[1].history.length, 1); assert.match(JSON.parse(replies.at(-1).content).text, /两步整理/);
+  await page.getByRole('heading', { name: '允许使用的单聊', exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: out + '/screenshots/04-单聊与连续追问.png', fullPage: true });
+  await page.getByRole('button', { name: '清空所有对话上下文' }).click(); await page.getByText('对话上下文已清空，飞书中已发送的消息不受影响。').waitFor();
+  assert.equal(f.server.knowledgeBot.contexts.size, 0);
+  await page.reload(); await page.getByRole('button', { name: '飞书知识库机器人', exact: true }).click(); await page.getByLabel(/熊猫学习群/).waitFor(); assert.equal(await page.getByLabel(/熊猫学习群/).isChecked(), true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.locator('.app-settings-content').evaluate(e => e.scrollWidth <= e.clientWidth + 2), true);
+  await page.screenshot({ path: out + '/screenshots/04-窄屏配置.png', fullPage: true });
+  assert.deepEqual(errors, []);
+  writeFileSync(out + '/ui-verification.json', JSON.stringify({ mockExternalTransport: true, syntheticPatients: ['熊猫'], reminder: JSON.parse(sent[0].content).text, knowledgeReply: JSON.parse(replies[0].content).text, privateAnswer: JSON.parse(replies[1].content).text, followupAnswer: JSON.parse(replies[2].content).text, mockModel: true, errors }, null, 2));
+});
+
+test('model picker uses one dialog and switches saved connections only after consent', { skip: !existsSync(chrome), timeout: 30000 }, async t => {
+  const f = await fixture(t, { provider: { local: true, provider: 'local', baseUrl: 'http://127.0.0.1:1/v1', model: 'current-model', complete: async () => ({ message: { content: 'OK' } }) } });
+  const saved = await f.json('/api/model-profiles', 'PUT', { id: 'shared', provider: 'openai-compatible', baseUrl: 'https://synthetic-model.invalid/v1', model: 'second-model', apiKey: 'synthetic-private-key', maxTokens: 8192 });
+  assert.equal(saved.status, 200);
+  const browser = await chromium.launch({ executablePath: chrome, headless: true }); t.after(() => browser.close());
+  const page = await browser.newPage(); page.setDefaultTimeout(10000);
+  await page.goto(f.origin + '/?view=settings'); await page.getByRole('button', { name: '选择模型', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '模型与识别' }); await dialog.getByLabel('任务使用的模型').waitFor();
+  assert.ok(await dialog.locator('.model-settings-body > section').evaluate(e => e.clientWidth > e.closest('dialog').clientWidth * .8));
+  assert.equal(await page.getByRole('dialog').count(), 1); assert.equal(await dialog.locator('input[type=password]').count(), 0);
+  await dialog.getByLabel('任务使用的模型').selectOption({ label: 'second-model · shared' });
+  assert.equal(await dialog.getByRole('button', { name: '使用所选模型' }).isDisabled(), true);
+  assert.ok(await dialog.getByLabel('允许此模型处理我的任务资料').evaluate(e => e.getBoundingClientRect().width < 40));
+  await dialog.getByLabel('允许此模型处理我的任务资料').check();
+  await dialog.getByRole('button', { name: '使用所选模型' }).click(); await dialog.getByText('已启用，下一次任务使用所选模型。').waitFor();
+  assert.equal((await f.json('/api/model-settings')).data.model, 'second-model');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click(); await dialog.waitFor({ state: 'detached' });
+});
