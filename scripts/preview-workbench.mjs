@@ -8,7 +8,7 @@ writeFileSync(
   join(root, "README.md"),
   "# 示例项目\n\n这是用于界面验收的本地资料。\n",
 );
-const server = createWorkspaceServer({
+const server = createWorkspaceServer({ webUi: true,
   database: join(root, "preview.sqlite"),
   provider: {
     name: "offline",

@@ -608,3 +608,12 @@ html.desktop-overlay-titlebar .topbar :is(button, a, input, select, textarea, la
 }
 .settings-login-item { display: flex; align-items: center; gap: 8px; margin: 0; }
 .settings-desktop-note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+
+/* Native preferences also render before any patient/task stylesheet loads. */
+.desktop-preferences .toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.desktop-preferences > details { margin-top: 28px; border-top: 1px solid var(--line, #dfe5de); padding-top: 20px; }
+.desktop-preferences > details > summary { cursor: pointer; font-size: 15px; margin-bottom: 16px; }
+.desktop-preferences button { appearance: none; border: 1px solid var(--line, #dfe5de); border-radius: 8px; padding: 10px 16px; background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; }
+.desktop-preferences button:hover { background: #eef3ec; }
+.desktop-preferences button:focus-visible { outline: 2px solid #28735b; outline-offset: 3px; }
+.desktop-preferences input[type="checkbox"] { accent-color: #28735b; width: 16px; height: 16px; }

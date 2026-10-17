@@ -38,6 +38,8 @@ test("桌面 · 真实模型咨询直接答：默认档位咨询、回答实质�
   // 隔离数据目录内写入模型配置（桌面壳从 userData/model.env 读取）
   mkdirSync(directory, { recursive: true });
   writeFileSync(join(directory, "model.env"), `${MODEL_ENV}\n`, { mode: 0o600 });
+  const desktopEnv = { ...process.env, MEDICAL_DESKTOP_TEST_DIR: directory };
+  delete desktopEnv.ELECTRON_RUN_AS_NODE;
   const app = await _electron.launch({
     executablePath: electronPath,
     args: [MAIN, "--e2e"],
@@ -45,11 +47,7 @@ test("桌面 · 真实模型咨询直接答：默认档位咨询、回答实质�
     timeout: 60000,
     // Windows 下空串仍会被 Electron 视为 run-as-node(曾致进程秒退,
     // 此前因 dist 缺失 skip 未暴露);必须真正删除该变量。
-    env: (() => {
-      const launchEnv = { ...process.env, MEDICAL_DESKTOP_TEST_DIR: directory };
-      delete launchEnv.ELECTRON_RUN_AS_NODE;
-      return launchEnv;
-    })(),
+    env: desktopEnv,
   });
   t.after(async () => {
     try {
@@ -62,7 +60,7 @@ test("桌面 · 真实模型咨询直接答：默认档位咨询、回答实质�
   const page = await app.firstWindow();
   await page.waitForSelector(".app-navigation", { timeout: 30000 });
   const origin = new URL(page.url()).origin;
-  const bootstrap = await (await fetch(`${origin}/api/bootstrap`)).json();
+  const bootstrap = await page.evaluate(() => fetch("/api/bootstrap").then(r => r.json()));
   const token = bootstrap.token;
   const request = (path, method = "GET", data) =>
     fetch(origin + path, {

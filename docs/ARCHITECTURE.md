@@ -13,7 +13,7 @@ flowchart TD
   subgraph 前端
     UI[React 单页工作台<br/>Vite 构建]
   end
-  subgraph 本地进程["本地进程（npm start / 桌面内嵌 / daemon）"]
+  subgraph 本地进程["本地进程（桌面内嵌 / 开发服务 / daemon）"]
     API[HTTP + SSE + WS<br/>localhost 单机监听 + token 鉴权]
     subgraph 内核["通用内核 server/core"]
       WSVC[WorkspaceService<br/>run 生命周期 · 上下文 · 恢复]
@@ -45,10 +45,10 @@ flowchart TD
 
 | 入口 | 命令 | 说明 |
 | --- | --- | --- |
-| 开发服务 | `npm start` → `server/agent.mjs` | 医疗全功能，`127.0.0.1:8787`，数据在 `server/data/medical.sqlite` |
-| 通用平台 | `npm run platform` → `server/platform.mjs` | 同一内核、不加载医疗层/患者表，`8788`，独立数据库 |
-| 桌面端 | `npm run desktop` → `desktop/main.cjs` | Electron 壳内嵌同一 `createServer`（随机端口、独立用户数据目录）；窗口只加载内嵌源，禁代理 |
-| 后台守护 | `npm run daemon` | 应用关闭后计划任务续跑（端口 + 指纹校验接管） |
+| 开发服务 | `npm run dev:server` → `server/agent.mjs --dev-web` | 医疗全功能，`127.0.0.1:8787`，数据在 `server/data/medical.sqlite` |
+| 通用平台 | `npm run platform` → `server/platform.mjs` | 无界面 API，同一内核、不加载医疗层/患者表，`8788`，独立数据库 |
+| 桌面端 | `npm start` / `npm run desktop` → `desktop/main.cjs` | Electron 壳内嵌同一 `createServer`（随机端口、桌面数据目录）；仅原生窗口可取得界面与会话凭据，禁代理 |
+| 后台守护 | `npm run daemon` | 独立通用任务的后台 API（端口 + 指纹校验）；不接管桌面医疗任务 |
 | 独立 CLI | `npm run workspace` | 不依赖医疗服务器的通用工作区命令行 |
 
 HTTP 面统一经 `guard()`：localhost Host 校验 + 同源 + 启动时生成的随机 token（`X-Medical-Token`）。鉴权豁免仅限自带签名/密钥的回调端点（企微回调、ingest）。

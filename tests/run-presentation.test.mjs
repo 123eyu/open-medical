@@ -99,7 +99,7 @@ test(
     const project = join(dir, "project");
     mkdirSync(project, { recursive: true });
     writeFileSync(join(project, "note.txt"), "初始材料");
-    const server = createWorkspaceServer({
+    const server = createWorkspaceServer({ webUi: true,
       database: join(dir, "app.sqlite"),
       provider: {
         apiKey: "synthetic",

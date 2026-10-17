@@ -220,7 +220,7 @@ export function PatientIntakeModal({ onClose, onCreated, onManual, onOpenWorkspa
         <p>上传病历、检查报告或病史描述，自动整理为患者档案。你只需核对结果。</p>
         <p className="muted">支持图片、PDF、Word、Excel、TXT、Markdown、JSON；可一次选择同一患者的多份资料。选择后自动开始解析，相关内容将交由当前配置的模型处理。</p>
       </>}
-      {busy && <><p role="status">可以关闭此窗口，任务会继续处理。资料上传完毕后，刷新页面也不会中断解析。</p><button className="secondary" onClick={closeReview}>后台处理，关闭窗口</button></>}
+      {busy && <><p role="status">可以关闭此窗口，任务会继续处理。资料上传完毕后，重新加载工作台也不会中断解析。</p><button className="secondary" onClick={closeReview}>后台处理，关闭窗口</button></>}
       {!proposal && <>
         <h3>{sessionId.current ? "当前患者的建档任务" : "新患者建档"}</h3>
         <p className="muted">{sessionId.current ? "补充的资料仅加入当前任务。要处理另一位患者，请先新建任务。" : "这里上传的资料会创建独立任务，不会加入之前的患者资料。"}</p>

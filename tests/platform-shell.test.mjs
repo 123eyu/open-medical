@@ -42,6 +42,7 @@ test("独立通用服务 bootstrap 声明通用能力,医疗接口不存在,工�
     rmSync(dir, { recursive: true, force: true });
   });
   const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.equal((await fetch(origin + "/")).status, 403);
   const boot = await (await fetch(origin + "/api/bootstrap")).json();
   assert.equal(boot.engine, "generic-runtime");
   assert.deepEqual(boot.capabilities, {
@@ -70,6 +71,7 @@ test(
     writeFileSync(join(project, "note.txt"), "初始材料");
     let turn = 0;
     const server = createWorkspaceServer({
+      webUi: true,
       database: join(dir, "app.sqlite"),
       provider: {
         apiKey: "synthetic",

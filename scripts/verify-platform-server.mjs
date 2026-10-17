@@ -7,7 +7,7 @@ const directory = resolve(process.env.AGENT_VERIFICATION_DIRECTORY || "output/pl
 const root = join(directory, "project");
 mkdirSync(root, { recursive: true });
 writeFileSync(join(root, "README.md"), "Synthetic browser acceptance fixture. No patient data.\n");
-const server = createWorkspaceServer({ database: join(directory, "fixture.sqlite"),
+const server = createWorkspaceServer({ webUi: true, database: join(directory, "fixture.sqlite"),
   instanceId: "synthetic-ui-fixture",
   provider: { apiKey: "synthetic", model: "UI fixture (not a real model)", provider: "fixture",
     async complete(messages, _tools, { signal }) {

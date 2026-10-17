@@ -33,7 +33,7 @@ function SettingsSubnav({ label, items, section, onSelect }) {
   </nav>;
 }
 
-// Desktop-only preferences are not shown in a browser.
+// Native controls stay unavailable in the developer browser preview.
 function DesktopAppPanel({ desktop }) {
   const [autoLogin, setAutoLogin] = useState(null);
   const [dueNotify, setDueNotify] = useState(() => dueNotifyEnabled());
@@ -58,8 +58,9 @@ function DesktopAppPanel({ desktop }) {
     setDueNotify(on);
     setNote(on ? "已开启到期提醒：随访、复诊、新结果等新待办出现且窗口不在前台时，系统会通知你。" : "已关闭到期提醒，到期的事项仍会列在「今日待办」页里。");
   }
-  return <section aria-label="桌面应用">
+  return <section className="desktop-preferences" aria-label="桌面应用">
     <h2>桌面应用</h2>
+    <p>关闭或隐藏窗口后，后台任务与提醒继续运行；退出应用会停止任务。</p>
 
     {note && <p className="settings-desktop-note" role="status">{note}</p>}
     <div className="toolbar-actions">
@@ -68,8 +69,9 @@ function DesktopAppPanel({ desktop }) {
     </div>
     <details><summary>应用维护</summary>
     <div className="toolbar-actions">
-      {desktop.openDataDirectory && <button onClick={() => desktop.openDataDirectory().catch(() => {})}>打开数据目录</button>}
-      {desktop.relaunchApp && <button onClick={() => desktop.relaunchApp().catch(() => {})}>重启应用</button>}
+      {desktop.openDataDirectory && <button onClick={() => desktop.openDataDirectory().catch(error => setNote(`打开失败：${error.message}`))}>打开数据目录</button>}
+      {desktop.openConfigDirectory && <button onClick={() => desktop.openConfigDirectory().catch(error => setNote(`打开失败：${error.message}`))}>打开配置目录</button>}
+      {desktop.relaunchApp && <button onClick={() => desktop.relaunchApp().catch(error => setNote(`重启失败：${error.message}`))}>重启应用</button>}
     </div>
     </details>
   </section>;

@@ -1,16 +1,16 @@
 {
   "name": "open-medical-agent",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "license": "MIT",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run dev:ui",
     "build": "vite build",
     "test": "node --test --test-force-exit --test-concurrency=2 tests/*.test.mjs",
-    "agent": "node server/agent.mjs",
-    "harness": "node server/agent.mjs",
+    "agent": "node scripts/start-desktop.mjs",
+    "harness": "node scripts/start-desktop.mjs",
     "workspace": "node scripts/workspace-cli.mjs",
-    "start": "node server/agent.mjs",
+    "start": "node scripts/start-desktop.mjs",
     "platform": "node server/platform.mjs",
     "lint": "eslint .",
     "format": "prettier --write src server shared tests scripts *.mjs *.md",
@@ -22,7 +22,7 @@
     "postinstall": "node scripts/prepare-pdf-assets.mjs && node scripts/prepare-pty.mjs",
     "prebuild": "node scripts/prepare-pdf-assets.mjs && node scripts/prepare-pty.mjs",
     "predev": "node scripts/prepare-pdf-assets.mjs",
-    "desktop": "electron desktop/main.cjs",
+    "desktop": "node scripts/start-desktop.mjs",
     "desktop:prune": "node scripts/prune-desktop-backups.mjs",
     "package:mac": "npm run build && node scripts/package-desktop.mjs",
     "package:win": "npm run build && node scripts/package-desktop.mjs --platform=win32 --arch=x64",
@@ -41,7 +41,10 @@
     "remote:coordinator": "node scripts/remote-coordinator.mjs",
     "remote:worker": "node scripts/remote-worker.mjs",
     "desktop:update": "npm run build:native-control && npm run build && node scripts/update-desktop-runtime.mjs",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "dev:ui": "vite",
+    "dev:server": "node server/agent.mjs --dev-web",
+    "dev:platform": "node server/platform.mjs --dev-web"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.79",

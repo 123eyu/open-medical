@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { api } from "./agent-runtime";
 import { Download, FileText, Loader2, Share2, X } from "lucide-react";
-import { SHARE_SECTIONS, FINDING_LABELS, REDACT_MARK, buildShareSections, renderShareHtml } from "../shared/share-report.mjs";
+import { SHARE_SECTIONS, FINDING_LABELS, REDACT_MARK, buildShareSections } from "../shared/share-report.mjs";
 import "./share-wizard.css";
 
 // 脱敏分享向导：选内容 → 看打码预览 → 存 JSON / 导出 PDF。
 // 预览返回的就是最终导出的内容，医生确认过什么就发出去什么；
-// 桌面版走主进程 printToPDF，浏览器回退到系统打印（可另存为 PDF）。
+// 主进程生成 PDF，并用系统保存对话框选择位置。
 export function ShareWizard({ patientId, patientName, onClose, onError }) {
   const [step, setStep] = useState(1);
   const [sections, setSections] = useState(() => new Set(SHARE_SECTIONS.map(([key]) => key)));
@@ -62,13 +62,7 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
         else if (result?.canceled) setNotice("");
         else throw new Error(result?.error || "导出失败");
       } else {
-        const printWindow = window.open("", "_blank", "width=860,height=980");
-        if (!printWindow) throw new Error("浏览器拦截了打印窗口，请允许弹窗后重试。");
-        printWindow.document.write(renderShareHtml(report));
-        printWindow.document.close();
-        printWindow.focus();
-        printWindow.print();
-        setNotice("已打开打印窗口：选择「另存为 PDF」即可保存文件。");
+        throw new Error("PDF 导出需要桌面应用，请在 Open Medical 中打开此病历。");
       }
     } catch (err) {
       onError?.(err.message);
@@ -135,7 +129,7 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
         <button className="secondary" onClick={downloadJson} disabled={busy}><Download size={14} /> 保存 JSON</button>
         <button onClick={exportPdf} disabled={busy}>
           {busy ? <Loader2 className="spin" size={14} /> : <FileText size={14} />}
-          {window.omwDesktop?.shareReport ? " 导出 PDF" : " 打印 / 另存 PDF"}
+           导出 PDF
         </button>
       </div>
     </div>}

@@ -19,7 +19,7 @@ test('advanced project tools execute real browser terminal and MCP without globa
  t.after(async()=>{await writeFile('output/playwright/audit-20260925/tool-entry-runtime-stderr.log',stderr);await app.close();await rm(dir,{recursive:true,force:true});});
  const page=await app.firstWindow();page.setDefaultTimeout(15000);await page.locator('.app-navigation').waitFor();
  const origin=new URL(page.url()).origin;
- const bootstrap=await(await fetch(origin+'/api/bootstrap')).json();
+ const bootstrap=await page.evaluate(() => fetch("/api/bootstrap").then(r => r.json()));
  const api=async(path,method='GET',body)=>{const r=await fetch(origin+path,{method,headers:{'x-medical-token':bootstrap.token,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json()};};
  const w=(await api('/api/workspaces','POST',{root:join(dir,'project'),title:'真实工具闭环',directoryConsent:true})).data;
  const denied=await api(`/api/workspaces/${w.id}/tools`,'POST',{tool:'browser_open',arguments:{url:siteOrigin}});

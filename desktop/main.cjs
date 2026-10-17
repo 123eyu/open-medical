@@ -26,6 +26,8 @@ const {
   unlinkSync,
 } = require("node:fs");
 const { parseEnv } = require("node:util");
+const { randomBytes } = require("node:crypto");
+const desktopAccessToken = randomBytes(32).toString("hex");
 
 const productName = "Open Medical Workbench";
 app.setName(productName);
@@ -148,13 +150,23 @@ function openWindow() {
   window.on("closed", () => {
     window = null;
   });
+  window.on("close", (event) => {
+    if (process.platform !== "darwin" && tray && !quitting) {
+      event.preventDefault();
+      window.hide();
+    }
+  });
   return window.loadURL(origin);
 }
 
 async function verify() {
   const reportPath = join(testDirectory, "desktop-report.json");
   try {
-    const bootstrap = await (await fetch(origin + "/api/bootstrap")).json();
+    const browserDenied = await fetch(origin + "/api/bootstrap");
+    if (browserDenied.status !== 403) throw new Error("Desktop bootstrap accessible outside the app");
+    const bootstrap = await window.webContents.executeJavaScript(
+      'fetch("/api/bootstrap").then(r => r.json())',
+    );
     const request = (url, method, body) =>
       fetch(origin + url, {
         method,
@@ -218,6 +230,7 @@ async function verify() {
       JSON.stringify(
         {
           passed: true,
+          browserAccessBlocked: true,
           app: app.isPackaged,
           platform: process.platform,
           arch: process.arch,
@@ -300,12 +313,13 @@ async function start() {
         browserCandidates.find(existsSync) || "";
   }
   // Boot the medical workbench runtime in-process; the window loads this
-  // local server only, so patient data never leaves the machine.
+  // local server only; external model calls follow the configured permissions.
   {
     const { createServer } = await import(
       pathToFileURL(join(root, "server/agent.mjs"))
     );
     runtime = createServer({
+      desktopAccessToken,
       onNotification: ({ status, kind, title, body }) => {
         if ((!window || !window.isFocused()) && Notification.isSupported())
           new Notification({
@@ -337,6 +351,18 @@ async function start() {
       runtime.listen(0, "127.0.0.1", resolve);
     });
     origin = `http://127.0.0.1:${runtime.address().port}`;
+    // Keep the launch credential in the main process. Never attach it to tool
+    // browser windows, external sites, or a different local service.
+    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+      const headers = { ...details.requestHeaders };
+      for (const key of Object.keys(headers))
+        if (key.toLowerCase() === "x-omw-desktop") delete headers[key];
+      const target = new URL(details.url);
+      if (target.protocol === "ws:") target.protocol = "http:";
+      if (target.origin === origin && details.webContentsId === window?.webContents.id)
+        headers["X-OMW-Desktop"] = desktopAccessToken;
+      callback({ requestHeaders: headers });
+    });
   }
   require('./permission-help.cjs').registerPermissionHelp({ipcMain,shell,app,systemPreferences,getWindow:()=>window,getOrigin:()=>origin});
   const trustedMedia = (wc, permission) => wc === window?.webContents && wc?.getURL().startsWith(origin + "/") && ["media", "display-capture"].includes(permission);
@@ -420,7 +446,8 @@ async function start() {
     }
   });
   // 菜单栏迁入「设置 → 桌面应用」后的窄接口：只暴露固定动作，不传任意路径。
-  ipcMain.handle("omw:open-data-directory", () => shell.openPath(dataDirectory));
+  ipcMain.handle("omw:open-data-directory", () => shell.openPath(dirname(sharedDatabase)));
+  ipcMain.handle("omw:open-config-directory", () => shell.openPath(dataDirectory));
   ipcMain.handle("omw:login-item", () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle("omw:set-login-item", (_event, open) => {
     app.setLoginItemSettings({
@@ -471,8 +498,8 @@ async function start() {
           { type: "separator" },
           { label: "退出并停止后台服务", click: stopDaemonAndQuit },
           {
-            label: "退出窗口（后台任务继续）",
-            click: () => app.quit(),
+            label: "隐藏窗口（后台任务继续）",
+            click: () => window?.hide(),
           },
         ]),
       );
@@ -537,7 +564,8 @@ async function start() {
                       }),
                   },
                 ]),
-            { label: "打开数据目录", click: () => shell.openPath(dataDirectory) },
+            { label: "打开数据目录", click: () => shell.openPath(dirname(sharedDatabase)) },
+            { label: "打开配置目录", click: () => shell.openPath(dataDirectory) },
             {
               label: "重启以应用配置",
               click: () => {
@@ -546,7 +574,7 @@ async function start() {
               },
             },
             { type: "separator" },
-            { role: "reload", label: "刷新页面" },
+            { role: "reload", label: "重新加载工作台" },
             { role: "toggleDevTools", label: "开发者工具" },
           ],
         },
@@ -568,7 +596,7 @@ else {
     if (window) {
       window.show();
       window.focus();
-    }
+    } else if (origin) openWindow();
   });
   app
     .whenReady()
