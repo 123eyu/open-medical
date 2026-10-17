@@ -38,9 +38,7 @@ Open Medical 是面向医生的开源桌面 Agent，运行于 macOS / Windows。
 
 ## 产品演示
 
-<details>
-<summary><strong>观看产品演示 · 79 秒</strong></summary>
-
+**观看产品演示 · 79 秒**
 
 [![Open Medical 产品演示：患者档案、随访与个人知识库](docs/assets/open-medical-preview.gif)](https://github.com/JuneYaooo/open-medical-workbench/blob/main/docs/assets/open-medical-tour.mp4)
 
@@ -49,8 +47,6 @@ Open Medical 是面向医生的开源桌面 Agent，运行于 macOS / Windows。
   <br />
   <sub>点击上方预览打开视频。演示使用示例资料，部分界面随版本迭代有所调整。</sub>
 </p>
-
-</details>
 
 ## 快速开始
 

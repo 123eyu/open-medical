@@ -38,9 +38,7 @@ Open Medical is an open-source desktop agent for doctors, available on macOS and
 
 ## Product tour
 
-<details>
-<summary><strong>Watch the product tour · 79 seconds</strong></summary>
-
+**Watch the product tour · 79 seconds**
 
 [![Open Medical product tour: patient records, follow-up and a personal knowledge library](docs/assets/open-medical-preview.gif)](https://github.com/JuneYaooo/open-medical-workbench/blob/main/docs/assets/open-medical-tour.mp4)
 
@@ -49,8 +47,6 @@ Open Medical is an open-source desktop agent for doctors, available on macOS and
   <br />
   <sub>Click the preview to open the video. The tour uses sample records; some screens have changed in newer versions.</sub>
 </p>
-
-</details>
 
 ## Quick start
 
