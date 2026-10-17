@@ -70,20 +70,9 @@ location / { return 404; }
 | POST `/api/wecom/tasks/:id/refresh` | 查询官方发送结果 |
 | GET/POST `/api/wecom/callback` | 官方 URL 校验/加密客户变更通知 |
 
-## 验证与后续联调
+## 接入限制
 
-本地验证命令：
-
-```sh
-npm run lint
-npm run build
-node --test tests/wecom.test.mjs
-node --test tests/patients.test.mjs tests/patient-privacy.test.mjs tests/wechat-bridge.test.mjs tests/desktop-candidate.test.mjs tests/model-config.test.mjs
-```
-
-覆盖：未配置/未认证、分页同步与失败保留、本人/家属确认、草稿幂等、解除关系后阻止提交、取消外发、单次提交、显式拒绝、网络结果不明禁止重发、签名伪造与企业不匹配、回调去重/大小限制、删除患者级联清理、真实浏览器流程及刷新后读取持久化状态。
-
-待有测试企业后验证：应用权限和可信 IP、测试成员真实客户同步、测试家属绑定、公网回调握手及增删事件、成员端确认发送、官方送达状态、频次限制与凭据轮换。先用测试客户，不直接对正式患者群发。
+实际接入需要企业账号具备相应应用权限、可信 IP 和客户联系授权；公网回调及发送状态依赖企业配置。
 
 范围外：完整会话内容存档、自动接收患者聊天附件建档、微信客服会话、无人值守随访外发、群运营、自动日程触发发送。客户联系 API 本身不授予这些能力。
 

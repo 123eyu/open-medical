@@ -168,24 +168,24 @@ npm run package:win    # Windows：在 Windows 上构建
 
 ### 临床与写作任务模板
 
-从“示例体验 → 任务模板”进入。下图展示各模板带入患者上下文与任务要求的准备状态，**尚未执行生成**；连接模型并核对材料与授权后发送，结果仍需医生复核。
+从“示例体验 → 任务模板”进入。模板会带入患者上下文与任务要求；连接模型并核对材料与授权后发送，结果仍需医生复核。
 
-| 模板 | 用途 | 截图 |
-| :--- | :--- | :--- |
-| **收治病例全流程** | 一次整理时间线、检验摘录、用药与过敏信息。 | [<img src="docs/assets/features/workflow-intake-full.png" width="220" alt="收治病例全流程" />](docs/assets/features/workflow-intake-full.png) |
-| **整理病历** | 把零散记录按就诊时间整理，保留原文出处。 | [<img src="docs/assets/features/workflow-timeline.png" width="220" alt="整理病历" />](docs/assets/features/workflow-timeline.png) |
-| **摘录检验** | 提取项目、数值与单位，供对照原文核查。 | [<img src="docs/assets/features/workflow-observations.png" width="220" alt="摘录检验" />](docs/assets/features/workflow-observations.png) |
-| **核对用药资料** | 整理用药清单和缺失字段。 | [<img src="docs/assets/features/workflow-medication.png" width="220" alt="核对用药资料" />](docs/assets/features/workflow-medication.png) |
-| **生成病历草稿** | 按主诉、病史、查体等结构整理，缺失项待补充。 | [<img src="docs/assets/features/workflow-record-draft.png" width="220" alt="生成病历草稿" />](docs/assets/features/workflow-record-draft.png) |
-| **用药安全核查** | 通过有限的内置规则提示过敏、相互作用和重复用药。 | [<img src="docs/assets/features/workflow-med-safety.png" width="220" alt="用药安全核查" />](docs/assets/features/workflow-med-safety.png) |
-| **患教大白话** | 把已有方案与说明改写为患者易懂的草稿。 | [<img src="docs/assets/features/workflow-patient-edu.png" width="220" alt="患教大白话" />](docs/assets/features/workflow-patient-edu.png) |
-| **检验报告解读** | 依据报告打印的参考范围整理异常项与解读草稿。 | [<img src="docs/assets/features/workflow-lab-read.png" width="220" alt="检验报告解读" />](docs/assets/features/workflow-lab-read.png) |
-| **出院小结草稿** | 整理住院经过、带药与已有随访医嘱。 | [<img src="docs/assets/features/workflow-discharge-summary.png" width="220" alt="出院小结草稿" />](docs/assets/features/workflow-discharge-summary.png) |
-| **值班交班记录** | 整理当前问题、关键事件和待交接事项。 | [<img src="docs/assets/features/workflow-handoff.png" width="220" alt="值班交班记录" />](docs/assets/features/workflow-handoff.png) |
-| **诊疗决策流程图** | 从知识库依据生成 Mermaid 流程图与节点出处。 | [<img src="docs/assets/features/workflow-decision-flow.png" width="220" alt="诊疗决策流程图" />](docs/assets/features/workflow-decision-flow.png) |
-| **不良反应筛查** | 匹配用药与可疑表现，辅助准备 Naranjo 评估。 | [<img src="docs/assets/features/workflow-adr-screen.png" width="220" alt="不良反应筛查" />](docs/assets/features/workflow-adr-screen.png) |
-| **个案报告写作** | 按 CARE 框架组织病例资料与讨论要点。 | [<img src="docs/assets/features/workflow-case-report.png" width="220" alt="个案报告写作" />](docs/assets/features/workflow-case-report.png) |
-| **准备循证检索** | 整理 PICO、检索式与证据核查步骤。 | [<img src="docs/assets/features/workflow-evidence.png" width="220" alt="准备循证检索" />](docs/assets/features/workflow-evidence.png) |
+| 模板 | 用途 |
+| :--- | :--- |
+| **收治病例全流程** | 一次整理时间线、检验摘录、用药与过敏信息。 |
+| **整理病历** | 把零散记录按就诊时间整理，保留原文出处。 |
+| **摘录检验** | 提取项目、数值与单位，供对照原文核查。 |
+| **核对用药资料** | 整理用药清单和缺失字段。 |
+| **生成病历草稿** | 按主诉、病史、查体等结构整理，缺失项待补充。 |
+| **用药安全核查** | 通过有限的内置规则提示过敏、相互作用和重复用药。 |
+| **患教大白话** | 把已有方案与说明改写为患者易懂的草稿。 |
+| **检验报告解读** | 依据报告打印的参考范围整理异常项与解读草稿。 |
+| **出院小结草稿** | 整理住院经过、带药与已有随访医嘱。 |
+| **值班交班记录** | 整理当前问题、关键事件和待交接事项。 |
+| **诊疗决策流程图** | 从知识库依据生成 Mermaid 流程图与节点出处。 |
+| **不良反应筛查** | 匹配用药与可疑表现，辅助准备 Naranjo 评估。 |
+| **个案报告写作** | 按 CARE 框架组织病例资料与讨论要点。 |
+| **准备循证检索** | 整理 PICO、检索式与证据核查步骤。 |
 
 随访计划、问卷与结果登记见下方[待办、随访与消息](#followup)。
 
@@ -248,8 +248,6 @@ npm run package:win    # Windows：在 Windows 上构建
 <summary><strong>私聊助手、知识库机器人与医生提醒</strong></summary>
 
 在设置中分别连接私聊助手、飞书知识库机器人和医生提醒。知识库机器人只引用允许对外使用的资料，提醒可设置发送时间与内容；各渠道需要对应账号和配置。
-
-![私聊助手、知识库机器人与医生提醒](docs/assets/features/settings-channels.png)
 
 ![私聊助手、知识库机器人与医生提醒](docs/assets/features/settings-knowledge-bot.png)
 
@@ -368,8 +366,6 @@ npm run package:win    # Windows：在 Windows 上构建
 
 从患者任务或独立任务开始，选择材料、提出问题，查看成果与执行记录，并继续修改或下载文件。所有任务可在任务记录中检索和再次打开。
 
-![对话、材料与任务记录](docs/assets/features/workspace.png)
-
 ![对话、材料与任务记录](docs/assets/features/tasks.png)
 
 </details>
@@ -381,8 +377,6 @@ npm run package:win    # Windows：在 Windows 上构建
 
 ![项目文件与变更审批](docs/assets/features/projects.png)
 
-![项目文件与变更审批](docs/assets/features/project-review.png)
-
 </details>
 
 <details>
@@ -391,8 +385,6 @@ npm run package:win    # Windows：在 Windows 上构建
 在工作面板管理浏览器访问、媒体任务与工具许可，结合对话完成网页和文件操作。终端与部分办公工具需要相应运行环境，容器化分析需要 Docker。
 
 ![浏览器、媒体与分析工具](docs/assets/features/project-browser.png)
-
-![浏览器、媒体与分析工具](docs/assets/features/project-media.png)
 
 ![浏览器、媒体与分析工具](docs/assets/features/project-extensions.png)
 
@@ -445,10 +437,6 @@ npm run package:win    # Windows：在 Windows 上构建
 
 在“设置 → 模型与运行 → 选择模型”切换可用模型，单独核对材料处理授权。文字识别可配置本机 OCR 与可选视觉模型；图片、扫描件的识别质量取决于原件和所配置服务。
 
-![模型连接与文字识别](docs/assets/features/model-settings.png)
-
-![模型连接与文字识别](docs/assets/features/ocr-settings.png)
-
 </details>
 
 <details>
@@ -464,8 +452,6 @@ npm run package:win    # Windows：在 Windows 上构建
 <summary><strong>桌面应用与后台运行</strong></summary>
 
 在设置中管理登录启动、到期系统提醒与应用维护。可以分别打开患者数据目录和模型配置目录；关闭或隐藏工作窗口后继续执行后台任务，再从 Dock 或托盘返回。PDF 导出通过系统保存对话框选择位置。
-
-![桌面应用设置](docs/assets/features/desktop-settings.png)
 
 </details>
 
@@ -502,7 +488,7 @@ npm run platform       # 本机后台 API，不提供工作台页面
 
 开发调试使用 `npm run dev:server` 启动使用独立数据库的医疗开发服务，再用 `npm run dev:ui` 启动 Vite 界面；通用界面调试使用 `npm run dev:platform`。这些入口仅供开发，桌面应用的内部端口不向外部浏览器提供界面或会话凭据。详细命令见 [开发调试](docs/DESKTOP.md#开发调试)。
 
-Docker 为可选依赖，用于容器化终端与部分办公工具。具体支持范围见 [验证说明](docs/VALIDATION.md) 与 [运行时兼容说明](RUNTIME_COMPATIBILITY.md)。
+Docker 为可选依赖，用于容器化终端与部分办公工具。具体支持范围见 [运行时兼容说明](RUNTIME_COMPATIBILITY.md)。
 
 ## 文档导航
 
@@ -514,18 +500,17 @@ Docker 为可选依赖，用于容器化终端与部分办公工具。具体支�
 | 微信、企业微信与消息归档 | [聊天连接插件](docs/chat-connectors.md) |
 | 患者、消息和随访的数据关系 | [患者管理](docs/PATIENTS.md) |
 | 系统架构与扩展开发 | [架构说明](docs/ARCHITECTURE.md) · [通用内核](docs/GENERIC_RUNTIME.md) · [编排与调度](docs/ORCHESTRATION.md) |
-| 支持范围与验证情况 | [验证说明](docs/VALIDATION.md) · [运行时兼容说明](RUNTIME_COMPATIBILITY.md) |
+| 运行时支持范围 | [运行时兼容说明](RUNTIME_COMPATIBILITY.md) |
 | 私有远程任务队列与 Worker | [远程部署](deploy/remote/README.md) |
 
 ## 参与贡献
 
 欢迎通过 [Issues](https://github.com/JuneYaooo/open-medical-workbench/issues) 反馈问题或提出建议，通过 Pull Request 改进代码和文档。反馈时请附复现步骤、系统与版本信息，并移除患者资料和密钥。
 
-代码修改可在本地运行检查；真实模型验证需要自行配置模型：
+代码修改可在本地运行检查：
 
 ```bash
-npm run check           # lint、测试与生产构建
-npm run verify:model    # 真实模型流式输出、工具调用与续轮
+npm run check           # ESLint 与生产构建
 ```
 
 ## 许可证

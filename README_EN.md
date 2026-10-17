@@ -168,24 +168,24 @@ Ask questions using the current patient chart and selected materials, prepare vi
 
 ### Clinical and writing templates
 
-Open these from Example walkthroughs → Task templates. Each screenshot shows the patient context and prepared task request, **before generation runs**. Connect a model, review materials and permissions, and send the request. Outputs still require clinician review.
+Open these from Example walkthroughs → Task templates. Templates prepare the patient context and task request. Connect a model, review materials and permissions, and send the request. Outputs still require clinician review.
 
-| Template | Purpose | Screenshot |
-| :--- | :--- | :--- |
-| **Complete intake** | Prepare a timeline, lab extracts, medication list and allergy summary. | [<img src="docs/assets/features/workflow-intake-full.png" width="220" alt="Complete intake" />](docs/assets/features/workflow-intake-full.png) |
-| **Clinical timeline** | Order scattered records by visit date with source references. | [<img src="docs/assets/features/workflow-timeline.png" width="220" alt="Clinical timeline" />](docs/assets/features/workflow-timeline.png) |
-| **Lab extraction** | Extract test names, values and units for source checking. | [<img src="docs/assets/features/workflow-observations.png" width="220" alt="Lab extraction" />](docs/assets/features/workflow-observations.png) |
-| **Medication reconciliation** | Organize medication records and identify missing fields. | [<img src="docs/assets/features/workflow-medication.png" width="220" alt="Medication reconciliation" />](docs/assets/features/workflow-medication.png) |
-| **Visit-note draft** | Structure presenting concerns, history and examination, flagging missing information. | [<img src="docs/assets/features/workflow-record-draft.png" width="220" alt="Visit-note draft" />](docs/assets/features/workflow-record-draft.png) |
-| **Medication safety review** | Check allergies, interactions and duplication using the limited built-in rules. | [<img src="docs/assets/features/workflow-med-safety.png" width="220" alt="Medication safety review" />](docs/assets/features/workflow-med-safety.png) |
-| **Patient education** | Rewrite existing plans and explanations in patient-friendly language. | [<img src="docs/assets/features/workflow-patient-edu.png" width="220" alt="Patient education" />](docs/assets/features/workflow-patient-edu.png) |
-| **Lab-report explanation** | Prepare an explanation using the reference ranges printed in the report. | [<img src="docs/assets/features/workflow-lab-read.png" width="220" alt="Lab-report explanation" />](docs/assets/features/workflow-lab-read.png) |
-| **Discharge-summary draft** | Summarize the admission, discharge medication and documented follow-up instructions. | [<img src="docs/assets/features/workflow-discharge-summary.png" width="220" alt="Discharge-summary draft" />](docs/assets/features/workflow-discharge-summary.png) |
-| **Handoff draft** | Summarize current problems, key events and items for handoff. | [<img src="docs/assets/features/workflow-handoff.png" width="220" alt="Handoff draft" />](docs/assets/features/workflow-handoff.png) |
-| **Evidence-linked flowcharts** | Prepare Mermaid flowcharts with source references for each supported step. | [<img src="docs/assets/features/workflow-decision-flow.png" width="220" alt="Evidence-linked flowcharts" />](docs/assets/features/workflow-decision-flow.png) |
-| **Adverse-reaction review** | Match medication and reported findings, and prepare a Naranjo assessment. | [<img src="docs/assets/features/workflow-adr-screen.png" width="220" alt="Adverse-reaction review" />](docs/assets/features/workflow-adr-screen.png) |
-| **Case-report draft** | Organize case information and discussion points around the CARE framework. | [<img src="docs/assets/features/workflow-case-report.png" width="220" alt="Case-report draft" />](docs/assets/features/workflow-case-report.png) |
-| **Evidence-search planning** | Prepare PICO questions, search expressions and evidence-review steps. | [<img src="docs/assets/features/workflow-evidence.png" width="220" alt="Evidence-search planning" />](docs/assets/features/workflow-evidence.png) |
+| Template | Purpose |
+| :--- | :--- |
+| **Complete intake** | Prepare a timeline, lab extracts, medication list and allergy summary. |
+| **Clinical timeline** | Order scattered records by visit date with source references. |
+| **Lab extraction** | Extract test names, values and units for source checking. |
+| **Medication reconciliation** | Organize medication records and identify missing fields. |
+| **Visit-note draft** | Structure presenting concerns, history and examination, flagging missing information. |
+| **Medication safety review** | Check allergies, interactions and duplication using the limited built-in rules. |
+| **Patient education** | Rewrite existing plans and explanations in patient-friendly language. |
+| **Lab-report explanation** | Prepare an explanation using the reference ranges printed in the report. |
+| **Discharge-summary draft** | Summarize the admission, discharge medication and documented follow-up instructions. |
+| **Handoff draft** | Summarize current problems, key events and items for handoff. |
+| **Evidence-linked flowcharts** | Prepare Mermaid flowcharts with source references for each supported step. |
+| **Adverse-reaction review** | Match medication and reported findings, and prepare a Naranjo assessment. |
+| **Case-report draft** | Organize case information and discussion points around the CARE framework. |
+| **Evidence-search planning** | Prepare PICO questions, search expressions and evidence-review steps. |
 
 For follow-up planning, questionnaires and contact records, see [Tasks, follow-up and messaging](#followup).
 
@@ -248,8 +248,6 @@ Use connected WeCom or personal WeChat channels for follow-up. The personal WeCh
 <summary><strong>Private assistants, knowledge bots and reminders</strong></summary>
 
 Configure private assistants, a Feishu knowledge bot and doctor reminders separately. Knowledge replies are limited to sources approved for external use; reminder timing and content are configurable. Each channel requires its own account and setup.
-
-![Private assistants, knowledge bots and reminders](docs/assets/features/settings-channels.png)
 
 ![Private assistants, knowledge bots and reminders](docs/assets/features/settings-knowledge-bot.png)
 
@@ -368,8 +366,6 @@ Run single-case grouping or CSV batch estimates from diagnoses, procedures and c
 
 Start a patient-linked or independent task, select materials, ask questions and inspect outputs and execution history. Continue editing or download files, and reopen tasks from the task directory.
 
-![Conversations, materials and task history](docs/assets/features/workspace.png)
-
 ![Conversations, materials and task history](docs/assets/features/tasks.png)
 
 </details>
@@ -381,8 +377,6 @@ Connect a local folder as a project to read and organize files with project-spec
 
 ![Project files and change review](docs/assets/features/projects.png)
 
-![Project files and change review](docs/assets/features/project-review.png)
-
 </details>
 
 <details>
@@ -391,8 +385,6 @@ Connect a local folder as a project to read and organize files with project-spec
 Manage browser access, media tasks and tool permissions in the work panel, and use conversation to work with pages and files. Terminal and some office tools require their runtimes; containerized analysis requires Docker.
 
 ![Browser, media and analysis tools](docs/assets/features/project-browser.png)
-
-![Browser, media and analysis tools](docs/assets/features/project-media.png)
 
 ![Browser, media and analysis tools](docs/assets/features/project-extensions.png)
 
@@ -445,10 +437,6 @@ Connect a private queue and worker, select files and authorize upload, then chec
 
 Switch available models under Settings → Model & runtime → Select model, and review permission to process task materials. Configure local OCR and an optional vision model separately. Recognition quality depends on the source image and configured services.
 
-![Models and OCR](docs/assets/features/model-settings.png)
-
-![Models and OCR](docs/assets/features/ocr-settings.png)
-
 </details>
 
 <details>
@@ -464,8 +452,6 @@ Prepare three fictional patients with notes, labs, follow-ups, knowledge documen
 <summary><strong>Desktop preferences and background tasks</strong></summary>
 
 Manage login startup, system reminders and app maintenance in Settings. Open the patient data and model configuration folders separately. Close or hide the work window while background tasks continue, then return from the Dock or tray. PDF exports use the system save dialog.
-
-![Desktop app settings](docs/assets/features/desktop-settings.png)
 
 </details>
 
@@ -502,7 +488,7 @@ npm run platform       # Local API without a workbench page
 
 For development, run `npm run dev:server` with its separate development database, then `npm run dev:ui` for Vite. Use `npm run dev:platform` to debug the generic UI. The desktop runtime does not serve its UI or bootstrap credentials to external browsers. See [development setup](docs/DESKTOP.md#开发调试).
 
-Docker is optional and used for containerized terminal and some office tools. See the [capability matrix](docs/VALIDATION.md) and [runtime compatibility](RUNTIME_COMPATIBILITY.md) for supported scope.
+Docker is optional and used for containerized terminal and some office tools. See the [runtime compatibility](RUNTIME_COMPATIBILITY.md) for supported scope.
 
 ## Documentation
 
@@ -516,18 +502,17 @@ Most detailed guides are currently in Chinese.
 | WeChat, WeCom and message archiving | [Chat connectors](docs/chat-connectors.md) |
 | Patient, message and follow-up data | [Patient management](docs/PATIENTS.md) |
 | Architecture and extensions | [Architecture](docs/ARCHITECTURE.md) · [Generic runtime](docs/GENERIC_RUNTIME.md) · [Orchestration](docs/ORCHESTRATION.md) |
-| Supported capabilities and verification | [Validation](docs/VALIDATION.md) · [Runtime compatibility](RUNTIME_COMPATIBILITY.md) |
+| Runtime compatibility | [Runtime compatibility](RUNTIME_COMPATIBILITY.md) |
 | Private task queues and workers | [Remote deployment](deploy/remote/README.md) |
 
 ## Contributing
 
 Report bugs or suggest improvements through [Issues](https://github.com/JuneYaooo/open-medical-workbench/issues), or contribute code and documentation through pull requests. Include reproduction steps, operating system and version information. Remove patient information and credentials before sharing.
 
-Run checks locally for code changes. Live model verification requires your own model configuration:
+Run checks locally for code changes:
 
 ```bash
-npm run check           # Lint, tests and production build
-npm run verify:model    # Live streaming, tool calls and continuation
+npm run check           # Lint and production build
 ```
 
 ## License

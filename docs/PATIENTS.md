@@ -33,7 +33,7 @@
   "messages": [
     {
       "externalId": "wx-msg-001",
-      "patientHint": "13800002222 或 患者姓名",
+      "patientHint": "患者姓名",
       "channel": "ingest",
       "direction": "in",
       "time": "2026-09-07T09:00:00+08:00",

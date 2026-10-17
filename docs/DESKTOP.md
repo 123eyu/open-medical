@@ -18,8 +18,6 @@ macOS 关闭窗口后应用继续运行，可以从 Dock 或「工作台 → 打
 
 PDF 导出使用系统保存对话框；选择工作文件夹也使用原生目录选择器。外部文献和帮助链接由系统浏览器打开，工作台本身在应用内使用。
 
-![桌面应用设置](assets/features/desktop-settings.png)
-
 ## 数据与模型配置
 
 源码启动和安装包使用相同的桌面数据位置：
@@ -54,20 +52,16 @@ npm run backup
 
 备份与原数据库都包含医疗资料，应按同等标准保管。不要删除仍在使用的数据库或将旧 WAL 与恢复后的数据库混用。
 
-## 构建与验证
+## 构建桌面包
 
 ```bash
 npm ci
 npm run package:mac
-npm run verify:desktop
-npm run verify:offline
 ```
 
 Windows 构建使用 `npm run package:win`。`npm run package:desktop` 按当前平台生成包；`TARGET_PLATFORM` / `TARGET_ARCH` 或 `--platform` / `--arch` 可指定目标。跨平台构建需要对应的 Electron runtime 缓存或网络下载；生成目录不等于已在目标系统验证。
 
 输出位于 `release/Open Medical-darwin-arm64/Open Medical.app` 或 `release/Open Medical-win32-x64/`。Intel Mac 需要相应架构的构建与验证。macOS 包尚未做 Apple Developer ID 公证；Windows 包尚未做代码签名。当前为便携包，不包含 MSI 安装器。
-
-`verify:desktop` 启动真实打包二进制，在临时数据目录中检查本地任务、draft 产物、页面加载、渲染进程隔离和外部浏览器访问限制，保存报告与截图到 `output/desktop-build/verification/`。`verify:offline` 检查包内依赖与敏感文件排除，不替代目标系统的断网安装测试。
 
 macOS 构建成功后会整理 `output/` 中符合条件的旧回退包，保留最新一份；正在使用、生成不足一小时或包含本地数据的副本会保留。`npm run desktop:prune` 可预览，`npm run desktop:prune -- --apply` 执行清理。
 

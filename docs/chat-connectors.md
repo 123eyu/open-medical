@@ -101,13 +101,3 @@ createServer({
 - `read(config, cursor, signal)` → `{ messages, nextCursor, hasMore }`
 
 `config` 包含 `accountId`、`endpoint`、解密后的 `token`，读取时还包含 `conversations`。通用消息结构同上，但适配器自身管理游标，`seq` 非必需。必须验证远端账号、仅查询获准会话、尊重 AbortSignal，并返回稳定 ID。注册后设置、关联、定时同步和草稿流程自动使用该适配器。自定义代码与宿主服务同等可信，不通过清单上传执行；新增适配器后重新启动服务。
-
-## 本地验证
-
-```bash
-node --test tests/chat-wx-cli.test.mjs tests/chat-followups.test.mjs
-npm run build
-node --test tests/chat-followups-ui.test.mjs
-```
-
-浏览器测试需要本机 Chrome。测试使用合成账号和消息，不依赖真实微信数据库。

@@ -180,11 +180,7 @@ React 19 单页（无路由库，URL query 状态机 `navigation.js`），Vite �
 
 已知边界（如实声明）：本地审计未实现签名链/防篡改；患者库本身未加密（靠文件权限与整机加密）；微信读取依赖第三方客户端行为；临床有效性未验证。
 
-## 8. 测试与验证
-
-`npm run check` = ESLint + `node --test` 全量（1400+ 用例，覆盖提案协议原子性/回滚、run 状态机、上下文预算、渠道解析拒绝路径、UI 浏览器用例）+ 生产构建。专项：`verify:model`（真实模型流式/工具调用/续轮）、`verify:desktop`、`verify:offline`、`verify:soak`。测试几乎不依赖真实模型——内核确定性设计使错误模式可枚举。
-
-## 9. 模块地图
+## 8. 模块地图
 
 ```
 server/
@@ -199,5 +195,4 @@ desktop/               Electron 壳（主进程、权限辅助、原生桥）
 shared/                前后端共用（policy、SSE、诊断结构、患者问答链、模型预设…）
 src/                   React 前端
 skills/                内置医疗技能（SKILL.md 工作流说明书）
-tests/                 node:test 全量用例
 ```

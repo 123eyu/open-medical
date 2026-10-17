@@ -16,7 +16,7 @@ node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
 
 Worker 环境：`REMOTE_URL=https://你的私有队列域名/`、`REMOTE_WORKER_TOKEN`、`REMOTE_WORK_DIR`（绝对工作目录）。用已有模型环境变量配置 provider，或令 `REMOTE_MODEL_CONFIG` 指向权限为 0600 的 JSON 文件：`{"provider":"openai","baseUrl":"https://api.openai.com/v1","model":"你的模型","apiKey":"你的密钥"}`。运行 `npm run remote:worker`。
 
-仅需文件读写、无需运行终端的 Worker 可明确设置 `REMOTE_TERMINAL=0`；此模式不要求 Docker 镜像，也不会注册可用的终端权限。默认仍启用隔离终端，必须先构建镜像。普通集成测试使用文件模式；设置 `TEST_REMOTE_DOCKER=1` 可验证默认终端模式。
+仅需文件读写、无需运行终端的 Worker 可明确设置 `REMOTE_TERMINAL=0`；此模式不要求 Docker 镜像，也不会注册可用的终端权限。默认仍启用隔离终端，必须先构建镜像。
 
 默认软件源网络较慢时，构建支持 `AGENT_DEBIAN_MIRROR`（仅 HTTPS origin）与 `AGENT_PYPI_INDEX_URL`（无凭据的 HTTPS 索引 URL）。设置后运行 `npm run build:runtime`，未设置时继续使用 Debian 与 PyPI 默认地址。镜像源覆盖不会禁用 TLS 或 apt 签名校验。
 
@@ -31,8 +31,6 @@ Worker 环境：`REMOTE_URL=https://你的私有队列域名/`、`REMOTE_WORKER_
 ## 运维边界
 
 单租户部署；客户端令牌持有者可查看该协调器所有任务，因此不同用户/组织必须使用独立队列数据库与令牌。队列最多 1000 项，文件快照最多 500 文件/10MB，结果最多 12MB；Worker 项目保留七天。需要磁盘监控及备份。SQLite 数据库只允许一个协调器进程持有，可部署多个 Worker。
-
-HTTP 协议测试与本机 Worker 闭环在 `tests/remaining-platform.test.mjs` 中，使用测试模型响应；不代表真实云部署或模型验收已通过。
 
 ## systemd 示例
 
