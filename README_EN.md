@@ -24,7 +24,23 @@ Open Medical is a local patient-management assistant for doctors. Keep clinical 
 
 **Keep records locally, connect your preferred model, and review the results.** Use local Ollama / vLLM servers, DeepSeek, OpenAI, Anthropic, OpenRouter or an OpenAI-compatible endpoint.
 
+![Patient pre-visit overview](docs/assets/features/patient-overview.png)
+
+## Start here
+
+| What you want to do | Where to start |
+| :--- | :--- |
+| Install and run | [Quick start](#quick-start) |
+| Create records, read reports and prepare documents | [Patients and records](#patients) · [Task templates](#clinical-templates) |
+| Handle daily tasks, follow-up and messages | [Tasks and messaging](#followup) |
+| Organize knowledge, search literature and do research | [Knowledge and research](#knowledge) |
+| Use file tools, models and automation | [Workspaces and customization](#workspace) |
+
 ## Product tour
+
+<details>
+<summary><strong>Watch the product tour · 79 seconds</strong></summary>
+
 
 [![Open Medical product tour: patient records, follow-up and a personal knowledge library](docs/assets/open-medical-preview.gif)](https://github.com/JuneYaooo/open-medical-workbench/blob/main/docs/assets/open-medical-tour.mp4)
 
@@ -34,25 +50,7 @@ Open Medical is a local patient-management assistant for doctors. Keep clinical 
   <sub>Click the preview to open the video. The tour uses sample records; some screens have changed in newer versions.</sub>
 </p>
 
-## A workbench for everyday care
-
-| | What you can do |
-| :--- | :--- |
-| **Patient records** | Create patients or import a roster. Review diagnoses, medications, allergies and lab trends before a visit. |
-| **Conversational preparation** | Add notes and reports, organize timelines, extract facts and prepare documents. Check sources before accepting proposed record changes. |
-| **Follow-up and tracking** | Work through due follow-ups, tests and referrals. Record actual contact outcomes and schedule the next step. |
-| **Personal knowledge** | Organize guidelines, templates and notes by purpose. Retrieve source passages and explore relationships in the knowledge graph. |
-| **Cases and memory** | Save useful cases, find similar ones and reuse confirmed working preferences in later tasks. |
-| **Messages and reminders** | Archive patient messages, connect doctor reminders through WeChat or Feishu, and authorize a Feishu bot to search shareable collections. |
-
-### From a document to the next follow-up
-
-1. **Bring in the material** — Select a patient and add a clinical note, report or existing document.
-2. **Organize and review** — Extract facts, consult knowledge and check sources alongside proposed record changes.
-3. **Save and follow up** — Save records, arrange follow-ups or test/referral tracking, and work through today's tasks.
-4. **Build reusable context** — Bring useful sources, cases and confirmed preferences into future tasks.
-
-Knowledge and preferences are reused through retrieval and context; they do not automatically train the model. See the [doctor workflow guide](docs/DOCTOR_WORKBENCH_GUIDE.md).
+</details>
 
 ## Quick start
 
@@ -68,7 +66,7 @@ npm start
 
 Open [http://127.0.0.1:8787](http://127.0.0.1:8787). One local process serves the UI and API, binding only to the loopback interface by default.
 
-**First steps:** Create a patient → add material → connect a model in Settings → start an organization task. Patient records, clinical entries and follow-up records can be managed without a model.
+**First steps:** Open Example walkthroughs → Prepare all examples to explore ready-made records, or create a patient → add material → select a model → start a task. Patient records, clinical entries and follow-up records can be managed without a model.
 
 ### Desktop app
 
@@ -83,7 +81,7 @@ Packages are written to `release/`. Open the `.app` on macOS or run `Open Medica
 
 ### Connect a model
 
-Use **Settings → Model connections**, or copy `.env.example` to `.env`, configure `AI_PROVIDER` and the provider credentials, then restart.
+Use **Settings → Model & runtime → Select model** to choose an available connection. Manage provider endpoints and credentials in connection configuration, or copy `.env.example` to `.env`, configure `AI_PROVIDER` and the provider credentials, then restart.
 
 | Connection | Use case |
 | :--- | :--- |
@@ -92,6 +90,377 @@ Use **Settings → Model connections**, or copy `.env.example` to `.env`, config
 | OpenAI-compatible endpoint | Configure a self-hosted or third-party endpoint and model ID. |
 
 Context and output limits can be adjusted in model settings. External models receive authorized source material and relevant context; local storage does not make cloud inference local.
+
+## Feature guide
+
+These screens use fictional example records. Expand a feature to read its description and view its screenshots; click an image for the full-size view.
+
+<a id="patients"></a>
+
+### Patients and clinical records
+
+<details>
+<summary><strong>Patient management and intake</strong></summary>
+
+Find patients by name, identifier, group or tag, and manage active and archived records. Create records manually, preview roster imports, or upload clinical documents and review the resulting intake draft. Roster imports do not overwrite existing charts.
+
+![Patient management and intake](docs/assets/features/patients.png)
+
+![Patient management and intake](docs/assets/features/patient-import.png)
+
+</details>
+
+<details>
+<summary><strong>Pre-visit overview</strong></summary>
+
+Review diagnoses, medications, allergies, recent results and outstanding tasks in one place. Open the underlying records to check details and sources before a visit.
+
+![Pre-visit overview](docs/assets/features/patient-overview.png)
+
+</details>
+
+<details>
+<summary><strong>Diagnoses, history and visits</strong></summary>
+
+Maintain the clinical summary, diagnoses and visit history with dates and sources. Review and edit missing details while keeping visits and source documents associated with the same patient.
+
+![Diagnoses, history and visits](docs/assets/features/patient-clinical.png)
+
+![Diagnoses, history and visits](docs/assets/features/patient-visits.png)
+
+</details>
+
+<details>
+<summary><strong>Medications, allergies and treatment plans</strong></summary>
+
+Distinguish active, stopped and unverified medication records, and retain doses, frequencies and allergies. Record treatment goals, interventions, review dates and assessments. Safety prompts cover only the built-in rules.
+
+![Medications, allergies and treatment plans](docs/assets/features/patient-medications.png)
+
+</details>
+
+<details>
+<summary><strong>Lab imports and trends</strong></summary>
+
+Import or enter lab results with dates, values, units and sources, then compare them over time. Conflicting same-day results remain available for review; measurements with different units are not merged into one trend.
+
+![Lab imports and trends](docs/assets/features/patient-labs.png)
+
+</details>
+
+<details>
+<summary><strong>Patient material library</strong></summary>
+
+Keep notes, reports and medication lists under the patient record. Read originals, find files and start follow-up tasks from the material library, retaining documents and outputs for later use.
+
+![Patient material library](docs/assets/features/patient-library.png)
+
+</details>
+
+<details>
+<summary><strong>Visit preparation and assistance</strong></summary>
+
+Ask questions using the current patient chart and selected materials, prepare visit notes or documents, and compare similar cases. Proposed chart changes require review before being written.
+
+![Visit preparation and assistance](docs/assets/features/patient-assistance.png)
+
+</details>
+
+<a id="clinical-templates"></a>
+
+### Clinical and writing templates
+
+Open these from Example walkthroughs → Task templates. Each screenshot shows the patient context and prepared task request, **before generation runs**. Connect a model, review materials and permissions, and send the request. Outputs still require clinician review.
+
+| Template | Purpose | Screenshot |
+| :--- | :--- | :--- |
+| **Complete intake** | Prepare a timeline, lab extracts, medication list and allergy summary. | [<img src="docs/assets/features/workflow-intake-full.png" width="220" alt="Complete intake" />](docs/assets/features/workflow-intake-full.png) |
+| **Clinical timeline** | Order scattered records by visit date with source references. | [<img src="docs/assets/features/workflow-timeline.png" width="220" alt="Clinical timeline" />](docs/assets/features/workflow-timeline.png) |
+| **Lab extraction** | Extract test names, values and units for source checking. | [<img src="docs/assets/features/workflow-observations.png" width="220" alt="Lab extraction" />](docs/assets/features/workflow-observations.png) |
+| **Medication reconciliation** | Organize medication records and identify missing fields. | [<img src="docs/assets/features/workflow-medication.png" width="220" alt="Medication reconciliation" />](docs/assets/features/workflow-medication.png) |
+| **Visit-note draft** | Structure presenting concerns, history and examination, flagging missing information. | [<img src="docs/assets/features/workflow-record-draft.png" width="220" alt="Visit-note draft" />](docs/assets/features/workflow-record-draft.png) |
+| **Medication safety review** | Check allergies, interactions and duplication using the limited built-in rules. | [<img src="docs/assets/features/workflow-med-safety.png" width="220" alt="Medication safety review" />](docs/assets/features/workflow-med-safety.png) |
+| **Patient education** | Rewrite existing plans and explanations in patient-friendly language. | [<img src="docs/assets/features/workflow-patient-edu.png" width="220" alt="Patient education" />](docs/assets/features/workflow-patient-edu.png) |
+| **Lab-report explanation** | Prepare an explanation using the reference ranges printed in the report. | [<img src="docs/assets/features/workflow-lab-read.png" width="220" alt="Lab-report explanation" />](docs/assets/features/workflow-lab-read.png) |
+| **Discharge-summary draft** | Summarize the admission, discharge medication and documented follow-up instructions. | [<img src="docs/assets/features/workflow-discharge-summary.png" width="220" alt="Discharge-summary draft" />](docs/assets/features/workflow-discharge-summary.png) |
+| **Handoff draft** | Summarize current problems, key events and items for handoff. | [<img src="docs/assets/features/workflow-handoff.png" width="220" alt="Handoff draft" />](docs/assets/features/workflow-handoff.png) |
+| **Evidence-linked flowcharts** | Prepare Mermaid flowcharts with source references for each supported step. | [<img src="docs/assets/features/workflow-decision-flow.png" width="220" alt="Evidence-linked flowcharts" />](docs/assets/features/workflow-decision-flow.png) |
+| **Adverse-reaction review** | Match medication and reported findings, and prepare a Naranjo assessment. | [<img src="docs/assets/features/workflow-adr-screen.png" width="220" alt="Adverse-reaction review" />](docs/assets/features/workflow-adr-screen.png) |
+| **Case-report draft** | Organize case information and discussion points around the CARE framework. | [<img src="docs/assets/features/workflow-case-report.png" width="220" alt="Case-report draft" />](docs/assets/features/workflow-case-report.png) |
+| **Evidence-search planning** | Prepare PICO questions, search expressions and evidence-review steps. | [<img src="docs/assets/features/workflow-evidence.png" width="220" alt="Evidence-search planning" />](docs/assets/features/workflow-evidence.png) |
+
+For follow-up planning, questionnaires and contact records, see [Tasks, follow-up and messaging](#followup).
+
+<a id="followup"></a>
+
+### Tasks, follow-up and messaging
+
+<details>
+<summary><strong>Daily agenda and appointments</strong></summary>
+
+Review due follow-ups, appointments, tests, referrals and patient alerts, then open the relevant patient from each item. Appointment records retain the date, reason and status.
+
+![Daily agenda and appointments](docs/assets/features/agenda.png)
+
+![Daily agenda and appointments](docs/assets/features/patient-appointments.png)
+
+</details>
+
+<details>
+<summary><strong>Follow-up plans, questionnaires and contact records</strong></summary>
+
+Use templates or custom steps to schedule follow-up and prepare questionnaires and checklists. Record the actual contact outcome, time, notes and next action. A generated reminder does not mean the patient has been contacted.
+
+![Follow-up plans, questionnaires and contact records](docs/assets/features/followup-plans.png)
+
+![Follow-up plans, questionnaires and contact records](docs/assets/features/patient-followups.png)
+
+</details>
+
+<details>
+<summary><strong>Test and referral tracking</strong></summary>
+
+Track each item from waiting for results through clinician review, notification and closure. Retain sources, review notes and notification records, with rescheduling, cancellation and reopening. This is local tracking without hospital-system integration.
+
+![Test and referral tracking](docs/assets/features/patient-tracking.png)
+
+</details>
+
+<details>
+<summary><strong>Patient inbox and reply review</strong></summary>
+
+Review patient messages, alerts and reply drafts together, with access to linked conversations and charts. Edit or discard drafts; live messaging requires a configured channel and authorization.
+
+![Patient inbox and reply review](docs/assets/features/messages.png)
+
+</details>
+
+<details>
+<summary><strong>Automated outreach and chat follow-up</strong></summary>
+
+Use connected WeCom or personal WeChat channels for follow-up. The personal WeChat flow supports AI drafts, clinician-confirmed sending, structured reply review and confirmed archiving. Chat follow-up turns existing conversations into follow-up records.
+
+![Automated outreach and chat follow-up](docs/assets/features/followup-auto.png)
+
+![Automated outreach and chat follow-up](docs/assets/features/followup-chat.png)
+
+</details>
+
+<details>
+<summary><strong>Private assistants, knowledge bots and reminders</strong></summary>
+
+Configure private assistants, a Feishu knowledge bot and doctor reminders separately. Knowledge replies are limited to sources approved for external use; reminder timing and content are configurable. Each channel requires its own account and setup.
+
+![Private assistants, knowledge bots and reminders](docs/assets/features/settings-channels.png)
+
+![Private assistants, knowledge bots and reminders](docs/assets/features/settings-knowledge-bot.png)
+
+![Private assistants, knowledge bots and reminders](docs/assets/features/settings-notifications.png)
+
+</details>
+
+<a id="knowledge"></a>
+
+### Knowledge, cases and research
+
+<details>
+<summary><strong>Knowledge libraries and document management</strong></summary>
+
+Create collections for guidelines, manuals, templates and patient-education materials. Read documents and manage imports and background processing from the library. Patient materials and shared knowledge are managed separately.
+
+![Knowledge libraries and document management](docs/assets/features/knowledge.png)
+
+![Knowledge libraries and document management](docs/assets/features/knowledge-documents.png)
+
+</details>
+
+<details>
+<summary><strong>Search and source verification</strong></summary>
+
+Search by question, keyword, document type and source status. Inspect cited lines before continuing into a question-answering task. Keyword retrieval remains available when the embedding service is unavailable, with an explicit notice in the UI.
+
+![Search and source verification](docs/assets/features/knowledge-reader.png)
+
+</details>
+
+<details>
+<summary><strong>Sources, versions and sharing permissions</strong></summary>
+
+Maintain author or institution, publication year, source URL and edition. Retire outdated sources while retaining historical references. External citation permission is separate and must be renewed after source changes.
+
+![Sources, versions and sharing permissions](docs/assets/features/knowledge-source.png)
+
+</details>
+
+<details>
+<summary><strong>Knowledge graphs and document diagrams</strong></summary>
+
+Generate entity relationships, mind maps or process diagrams from documents and return to the supporting text from nodes. The screenshot shows the generation entry point. A processing model is required; unsupported relationships are not filled in automatically.
+
+![Knowledge graphs and document diagrams](docs/assets/features/knowledge-map.png)
+
+</details>
+
+<details>
+<summary><strong>Case library and similar-case retrieval</strong></summary>
+
+Save case summaries, key results, treatment histories, outcomes and lessons. Search, bookmark and edit cases, or compare them with the current patient while distinguishing matches, differences and unknowns.
+
+![Case library and similar-case retrieval](docs/assets/features/cases.png)
+
+</details>
+
+<details>
+<summary><strong>Literature search</strong></summary>
+
+Search PubMed or Europe PMC, review abstracts and citations, and bring literature into a task. Use the evidence-planning template to prepare PICO questions and search expressions first. Live searches require internet access.
+
+![Literature search](docs/assets/features/literature.png)
+
+</details>
+
+<details>
+<summary><strong>Clinical-trial prescreening</strong></summary>
+
+Save protocols and eligibility criteria, run rule-based prescreening against patient charts, and review each criterion as met, unmet or unknown. AI assessments and clinician review remain separate, with enrollment tracking. Prescreening is not a final eligibility decision.
+
+![Clinical-trial prescreening](docs/assets/features/trial-screening.png)
+
+</details>
+
+<details>
+<summary><strong>Research statistics and de-identified exports</strong></summary>
+
+Upload a CSV or select an existing dataset for descriptive statistics, group comparisons, two-group sample-size estimates and field-based de-identification. Built-in fictional data lets you try the local calculations without a model.
+
+![Research statistics and de-identified exports](docs/assets/features/statistics.png)
+
+</details>
+
+<details>
+<summary><strong>Clinical reference tools</strong></summary>
+
+Use local scale calculators, lab reference entries, common ICD-9-CM-3 procedure codes and adverse-reaction matching. Follow the lab report and institutional code set where applicable; adverse-reaction matches do not establish causality.
+
+![Clinical reference tools](docs/assets/features/reference-scales.png)
+
+![Clinical reference tools](docs/assets/features/reference-labs.png)
+
+![Clinical reference tools](docs/assets/features/reference-codes.png)
+
+![Clinical reference tools](docs/assets/features/reference-adr.png)
+
+</details>
+
+<details>
+<summary><strong>Single-case and batch DRG examples</strong></summary>
+
+Run single-case grouping or CSV batch estimates from diagnoses, procedures and costs, with configurable rates and imported weights. This uses simplified demonstration rules and cannot be used for reimbursement. Importing weights does not supply a full grouper.
+
+![Single-case and batch DRG examples](docs/assets/features/drg.png)
+
+</details>
+
+<a id="workspace"></a>
+
+### Workspaces and customization
+
+<details>
+<summary><strong>Conversations, materials and task history</strong></summary>
+
+Start a patient-linked or independent task, select materials, ask questions and inspect outputs and execution history. Continue editing or download files, and reopen tasks from the task directory.
+
+![Conversations, materials and task history](docs/assets/features/workspace.png)
+
+![Conversations, materials and task history](docs/assets/features/tasks.png)
+
+</details>
+
+<details>
+<summary><strong>Project files and change review</strong></summary>
+
+Connect a local folder as a project to read and organize files with project-specific permissions. Review proposed edits and diffs before applying changes under the selected approval mode. Projects and patient charts are managed separately.
+
+![Project files and change review](docs/assets/features/projects.png)
+
+![Project files and change review](docs/assets/features/project-review.png)
+
+</details>
+
+<details>
+<summary><strong>Browser, media and analysis tools</strong></summary>
+
+Manage browser access, media tasks and tool permissions in the work panel, and use conversation to work with pages and files. Terminal and some office tools require their runtimes; containerized analysis requires Docker.
+
+![Browser, media and analysis tools](docs/assets/features/project-browser.png)
+
+![Browser, media and analysis tools](docs/assets/features/project-media.png)
+
+![Browser, media and analysis tools](docs/assets/features/project-extensions.png)
+
+</details>
+
+<details>
+<summary><strong>Skills, connected tools and automation rules</strong></summary>
+
+Use built-in medical Skills, manage personal skills and automation rules, and connect MCP or plugin services with project-specific scopes. Request custom behavior through conversation and review proposals before applying them.
+
+![Skills, connected tools and automation rules](docs/assets/features/settings-skills.png)
+
+![Skills, connected tools and automation rules](docs/assets/features/settings-connections.png)
+
+![Skills, connected tools and automation rules](docs/assets/features/settings-workbench.png)
+
+</details>
+
+<details>
+<summary><strong>Doctor preferences and reusable memory</strong></summary>
+
+Save confirmed working preferences, writing habits and lessons. Review, edit, disable or delete memories and manage learning permissions. Knowledge and preferences are reused through retrieval and context; they do not automatically train the model.
+
+![Doctor preferences and reusable memory](docs/assets/features/doctor-memory.png)
+
+![Doctor preferences and reusable memory](docs/assets/features/settings-learning.png)
+
+</details>
+
+<details>
+<summary><strong>Scheduled tasks</strong></summary>
+
+Schedule one-time, recurring-interval or timezone-aware Cron tasks with explicit model and execution authorization. The service must remain running; schedules do not automatically approve file changes.
+
+![Scheduled tasks](docs/assets/features/scheduled-tasks.png)
+
+</details>
+
+<details>
+<summary><strong>Remote jobs and workers</strong></summary>
+
+Connect a private queue and worker, select files and authorize upload, then check status and import results locally. Remote edits become reviewable proposals with conflict checks. A separately configured remote service is required.
+
+![Remote jobs and workers](docs/assets/features/remote-jobs.png)
+
+</details>
+
+<details>
+<summary><strong>Models and OCR</strong></summary>
+
+Switch available models under Settings → Model & runtime → Select model, and review permission to process task materials. Configure local OCR and an optional vision model separately. Recognition quality depends on the source image and configured services.
+
+![Models and OCR](docs/assets/features/model-settings.png)
+
+![Models and OCR](docs/assets/features/ocr-settings.png)
+
+</details>
+
+<details>
+<summary><strong>Built-in example walkthroughs</strong></summary>
+
+Prepare three fictional patients with notes, labs, follow-ups, knowledge documents, cases, a study protocol and research CSV data. Open guided scenarios without uploading your own records. The example pack can be removed separately.
+
+![Built-in example walkthroughs](docs/assets/features/examples.png)
+
+</details>
 
 ## Data and scope
 
