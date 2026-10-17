@@ -842,7 +842,6 @@ export function PatientsView({
                 </button>
               </div>
               {/* 四个子页合并为单页滚动，减少一层嵌套；企微自动随访折叠到底部。 */}
-              <h3 className="followup-merged-title">随访待办与记录</h3>
               <div>
               <FollowupRecords
                 key={detail.id}

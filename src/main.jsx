@@ -806,7 +806,7 @@ function App() {
   useLayoutEffect(() => {
     const pane = endRef.current?.parentElement;
     if (pane && followOutput.current) {
-      pane.scrollTop = pane.scrollHeight;
+      pane.scrollTop = !session?.messages.length && !activeRun?.busy ? 0 : pane.scrollHeight;
       lastScrollTop.current = pane.scrollTop;
     }
   }, [activeId, session?.messages.length, activeRun?.partial, activeRun?.busy]);
@@ -1928,6 +1928,7 @@ function App() {
                 )}
                 {!acceptArtifact && (
                 <div className="composer-wrap">
+                  {notice && <div className="composer-notice" role="status"><span>{notice}</span><IconButton title="关闭提示" onClick={() => setNotice("")}><X size={14}/></IconButton></div>}
                   {mention && (
                     <div className="mention-menu" role="listbox" aria-label="提及">
                       {patientMentions.length > 0 && (
@@ -2191,7 +2192,7 @@ function App() {
                           </select>
                         </label>
                       )}
-                      <span className="composer-spacer" />
+                      <div className="composer-submit">
                       {accessMode === "each" && config?.modelConfigured && !busy && (
                         <label className="tb-check">
                           <input
@@ -2228,6 +2229,7 @@ function App() {
                           <ArrowUp size={19} />
                         </button>
                       )}
+                      </div>
                     </div>
                   </form>
                   <div className="composer-note">
@@ -2674,7 +2676,7 @@ function App() {
         </div>
         <KnowledgeSourcePanel contextKey={`${view}:${activeId}`} />
       </div>
-      {notice && (
+      {notice && view !== "workbench" && (
         <div className="notice" role="status">
           {notice}
           <IconButton title="关闭提示" onClick={() => setNotice("")}>

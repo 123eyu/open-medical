@@ -7,16 +7,16 @@
   font-synthesis: none;
   /* 设计令牌唯一出处；v6-shell 及一切组件继承于此。 */
   --accent: #28654c;
-  --accent-strong: var(--accent-strong);
-  --accent-deep: var(--accent-deep);
+  --accent-strong: #245b45;
+  --accent-deep: #204c3b;
   --accent-soft: #edf3eb;
   --accent-line: #c8d8ce;
   --ink: #263831;
   /* 弱化文字：在 #f7f8f5 与浅色底上 ≥4.5:1（无障碍底线）。 */
-  --muted: var(--muted);
-  --border: var(--border);
-  --line: var(--line);
-  --soft: var(--soft);
+  --muted: #64766c;
+  --border: #dfe6df;
+  --line: #e8ede6;
+  --soft: #f1f5f0;
   --surface: #f5f7f5;
   --warning: #92632a;
   --amber: #92632a;
@@ -673,6 +673,7 @@ small {
 }
 .composer-bottom {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
@@ -3217,8 +3218,11 @@ blockquote p {
   }
 }
 .task-preparation {
-  padding-top: 48px;
+  padding-top: 0;
+  margin: 8px auto 16px;
 }
+.task-preparation .welcome-symbol { display: none; }
+.task-preparation > p:not(.eyebrow) { margin-bottom: 14px; }
 .task-preparation h2 {
   font-size: 24px;
   letter-spacing: -0.7px;
@@ -5036,3 +5040,19 @@ nav.toolbox .session b{font-weight:500;}
 .demo-pack-actions button { border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 8px; padding: 8px 16px; min-height: 36px; }
 .demo-pack-actions .secondary { border-color: var(--border); background: transparent; color: var(--ink); }
 .home-dashboard-empty { margin-bottom: 22px; max-width: 640px; }
+
+/* Task notices stay in the conversation flow so controls remain reachable. */
+.composer-notice { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--accent-line); border-radius: 8px; background: var(--accent-soft); color: var(--accent-deep); font-size: 13px; line-height: 1.6; }
+.composer-notice > span { flex: 1; min-width: 0; }
+.composer-notice > button { flex-shrink: 0; }
+.drg-view .module-head { flex-wrap: wrap; align-items: flex-start; }
+.drg-view .module-head > div:first-child { flex: 1 1 440px; min-width: 0; }
+.drg-view .drg-settings { flex-wrap: wrap; justify-content: flex-start; }
+.drg-view .drg-settings :is(button, label) { white-space: nowrap; flex-shrink: 0; }
+
+.composer-submit { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
+.research-table th:nth-child(-n + 3),
+.research-table td:nth-child(2),
+.research-table td:nth-child(3) { white-space: nowrap; }
+.research-table td:first-child,
+.research-table td:nth-child(4) { overflow-wrap: anywhere; }
