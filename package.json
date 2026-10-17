@@ -23,6 +23,7 @@
     "prebuild": "node scripts/prepare-pdf-assets.mjs && node scripts/prepare-pty.mjs",
     "predev": "node scripts/prepare-pdf-assets.mjs",
     "desktop": "electron desktop/main.cjs",
+    "desktop:prune": "node scripts/prune-desktop-backups.mjs",
     "package:mac": "npm run build && node scripts/package-desktop.mjs",
     "package:win": "npm run build && node scripts/package-desktop.mjs --platform=win32 --arch=x64",
     "package:desktop": "npm run build && node scripts/package-desktop.mjs",

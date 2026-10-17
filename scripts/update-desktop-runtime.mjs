@@ -21,6 +21,7 @@ import {
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve, dirname } from "node:path";
+import { pruneAfterDesktopBuild } from "./prune-desktop-backups.mjs";
 
 const signing =
   process.platform === "darwin"
@@ -113,3 +114,4 @@ try {
     await rm(staging, { recursive: true, force: true });
   else console.error("更新未提交，原安装包保留于：" + previous);
 }
+await pruneAfterDesktopBuild(root);
