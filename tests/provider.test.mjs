@@ -1,0 +1,851 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import { DeepSeekProvider } from "../server/provider.mjs";
+import { fixture } from "./helpers.mjs";
+const frame = (delta, finish = null) =>
+  "data: " +
+  JSON.stringify({ choices: [{ delta, finish_reason: finish }] }) +
+  "\r\n\r\n";
+async function mockProvider(t, handler) {
+  const server = http.createServer(async (req, res) => {
+    let raw = "";
+    for await (const part of req) raw += part;
+    await handler(JSON.parse(raw), res);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    server.closeAllConnections();
+    server.close();
+  });
+  return new DeepSeekProvider({
+    apiKey: "test-only",
+    baseUrl: `http://127.0.0.1:${server.address().port}/v1`,
+    timeoutMs: 1500,
+  });
+}
+
+test("DeepSeek byte-fragmented UTF8, CRLF and keepalives produce proper text", async (t) => {
+  const provider = await mockProvider(t, (_, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    const bytes = Buffer.from(
+      ": keepalive\r\n\r\n" +
+        frame({ content: "你好医学" }, "stop") +
+        "data: [DONE]\r\n\r\n",
+    );
+    for (const byte of bytes) res.write(Buffer.from([byte]));
+    res.end();
+  });
+  let delta = "";
+  const result = await provider.complete(
+    [{ role: "user", content: "hi" }],
+    [],
+    { onDelta: (t) => (delta += t) },
+  );
+  assert.equal(delta, "你好医学");
+  assert.equal(result.message.content, delta);
+});
+test("incomplete and malformed streams are failures, never successful empty replies", async (t) => {
+  for (const [name, response] of [
+    ["truncated", frame({ content: "partial" })],
+    ["malformed", "data: broken\n\n"],
+  ]) {
+    await t.test(name, async (t) => {
+      const p = await mockProvider(t, (_, res) => {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.end(response);
+      });
+      await assert.rejects(() => p.complete([], []));
+    });
+  }
+});
+test("reasoning and fragmented tool calls survive tool rounds and later conversation turns", async (t) => {
+  const received = [];
+  let counter = 0;
+  const provider = await mockProvider(t, (body, res) => {
+    received.push(body);
+    counter++;
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    if (counter === 1)
+      res.end(
+        frame({
+          reasoning_content: "provider private context",
+          tool_calls: [
+            {
+              index: 0,
+              id: "tool-1",
+              function: {
+                name: "build_workflow",
+                arguments: '{"title":"流程",',
+              },
+            },
+          ],
+        }) +
+          frame(
+            {
+              tool_calls: [
+                { index: 0, function: { arguments: '"steps":["核对原文"]}' } },
+              ],
+            },
+            "tool_calls",
+          ) +
+          "data: [DONE]\n\n",
+      );
+    else res.end(frame({ content: "处理完成" }, "stop") + "data: [DONE]\n\n");
+  });
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  const first = await f.chat(s.id, "请整理工作流程", {
+    mode: "model",
+    externalConsent: true,
+  });
+  assert.equal(first.events.at(-1).type, "message.complete");
+  assert.equal(
+    received[1].messages.at(-2).reasoning_content,
+    "provider private context",
+  );
+  assert.equal(received[1].messages.at(-1).role, "tool");
+  await f.chat(s.id, "继续整理", { mode: "model", externalConsent: true });
+  assert.ok(
+    received[2].messages.some(
+      (m) => m.reasoning_content === "provider private context",
+    ),
+  );
+  const ui = await f.json(`/api/sessions/${s.id}`);
+  assert.ok(!JSON.stringify(ui.data).includes("provider private context"));
+});
+test("model consent is enforced before any request and consented requests send original text", async (t) => {
+  let bodySeen;
+  const provider = await mockProvider(t, (body, res) => {
+    bodySeen = body;
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(frame({ content: "已整理" }, "stop") + "data: [DONE]\n\n");
+  });
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  assert.equal((await f.chat(s.id, "hi", { mode: "model" })).status, 412);
+  assert.equal(bodySeen, undefined);
+  const file = (
+    await f.json(`/api/sessions/${s.id}/files`, "POST", {
+      name: "r.txt",
+      text: "姓名：测试甲\n联系电话 13812345678",
+    })
+  ).data;
+  assert.equal(file.text, "姓名：测试甲\n联系电话 13812345678");
+  await f.chat(s.id, "手机号 13912345678", {
+    mode: "model",
+    externalConsent: true,
+    fileIds: [file.id],
+  });
+  const body = JSON.stringify(bodySeen);
+  assert.ok(body.includes("13812345678"));
+  assert.ok(body.includes("13912345678"));
+  assert.ok(body.includes("测试甲"));
+});
+test("cancellation saves partial content, blocks duplicate runs and releases lock", async (t) => {
+  let begin;
+  const started = new Promise((resolve) => (begin = resolve));
+  const provider = {
+    apiKey: "x",
+    model: "mock",
+    complete: async (messages, tools, { signal, onDelta }) => {
+      onDelta("已处理部分");
+      begin();
+      await new Promise((resolve, reject) =>
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        }),
+      );
+    },
+  };
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  const run = f.chat(s.id, "test", { mode: "model", externalConsent: true });
+  await started;
+  assert.equal((await f.chat(s.id, "test 2")).status, 409);
+  assert.equal((await f.json(`/api/sessions/${s.id}`, "DELETE")).status, 409);
+  await f.json(`/api/chat/${s.id}/cancel`, "POST", {});
+  const result = await run;
+  assert.equal(result.events.at(-1).type, "run.cancelled");
+  assert.ok(!result.events.some((e) => e.type === "message.complete"));
+  const stored = (await f.json(`/api/sessions/${s.id}`)).data;
+  assert.equal(stored.runs[0].status, "cancelled");
+  assert.equal(stored.runs[0].partial, "已处理部分");
+  assert.equal(f.server.runtime.active.size, 0);
+});
+
+test("model deltas stream to client events exactly as provided", async (t) => {
+  const provider = {
+    apiKey: "x",
+    model: "mock",
+    complete: async (messages, tools, { onDelta }) => {
+      onDelta("电话 13812");
+      onDelta("345678。");
+      return { message: { role: "assistant", content: "电话 13812345678。" } };
+    },
+  };
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  const result = await f.chat(s.id, "整理测试文本", {
+    mode: "model",
+    externalConsent: true,
+  });
+  assert.ok(result.text.includes("13812345678。"));
+});
+test("finite tool budgets stop repeated calls without fake completion and preserve failure", async (t) => {
+  let round = 0;
+  const provider = {
+    apiKey: "x",
+    model: "mock",
+    complete: async () => ({
+      message: {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "c" + ++round,
+            function: {
+              name: "build_workflow",
+              arguments: JSON.stringify({ title: "流程", steps: ["核对"] }),
+            },
+          },
+        ],
+      },
+    }),
+  };
+  const f = await fixture(t, { provider, runtimeOptions: { maxRounds: 2 } });
+  const s = await f.session();
+  const result = await f.chat(s.id, "整理工作流程", {
+    mode: "model",
+    externalConsent: true,
+  });
+  assert.equal(round, 2);
+  assert.equal(result.events.at(-1).type, "error");
+  assert.equal(result.events.at(-1).payload.code, "TOOL_BUDGET");
+  assert.equal(f.server.runtime.active.size, 0);
+});
+test("context budget does not silently truncate patient history", async (t) => {
+  let called = false;
+  const provider = {
+    apiKey: "x",
+    model: "mock",
+    complete: async () => {
+      called = true;
+    },
+  };
+  const f = await fixture(t, {
+    provider,
+    runtimeOptions: { maxContextChars: 100 },
+  });
+  const s = await f.session();
+  const result = await f.chat(s.id, "整理病历", {
+    mode: "model",
+    externalConsent: true,
+  });
+  assert.equal(called, false);
+  assert.equal(result.events.at(-1).payload.code, "CONTEXT_LIMIT");
+});
+
+test("transient rate limits retry before streaming, with bounded attempts and usage", async (t) => {
+  let attempts = 0;
+  const p = await mockProvider(t, (body, res) => {
+    assert.equal(body.thinking.type, "disabled");
+    if (++attempts < 3) {
+      res.writeHead(429, { "retry-after": "0" });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(
+      frame({ content: "成功。" }, "stop") +
+        "data: " +
+        JSON.stringify({
+          choices: [],
+          usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 },
+        }) +
+        "\n\ndata: [DONE]\n\n",
+    );
+  });
+  const statuses = [];
+  const result = await p.complete([], [], {
+    onStatus: (s) => statuses.push(s),
+  });
+  assert.equal(attempts, 3);
+  assert.equal(statuses.length, 2);
+  assert.equal(result.usage.total_tokens, 13);
+});
+test("provider timeout aborts hanging response; invalid tool completion is rejected", async (t) => {
+  const p = await mockProvider(t, (_, res) =>
+    res.writeHead(200, { "content-type": "text/event-stream" }),
+  );
+  p.timeoutMs = 60;
+  await assert.rejects(
+    () => p.complete([], []),
+    (e) => e.name === "TimeoutError",
+  );
+  const invalid = await mockProvider(t, (_, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(
+      frame(
+        {
+          tool_calls: [
+            {
+              index: 0,
+              id: "a",
+              function: { name: "build_workflow", arguments: "{}" },
+            },
+          ],
+        },
+        "stop",
+      ) + "data: [DONE]\n\n",
+    );
+  });
+  await assert.rejects(() => invalid.complete([], []), /结束状态/);
+});
+test("browser disconnect aborts provider work and durable run is cancelled", async (t) => {
+  let began, finished;
+  const started = new Promise((r) => (began = r)),
+    stopped = new Promise((r) => (finished = r));
+  const provider = {
+    apiKey: "mock",
+    model: "mock",
+    complete: async (_m, _t, { signal, onDelta }) => {
+      onDelta("可追溯的部分结果。");
+      began();
+      await new Promise((_, reject) =>
+        signal.addEventListener(
+          "abort",
+          () => {
+            finished();
+            reject(signal.reason);
+          },
+          { once: true },
+        ),
+      );
+    },
+  };
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  const abort = new AbortController();
+  const responsePromise = fetch(f.origin + `/api/chat/${s.id}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-medical-token": f.server.token,
+    },
+    body: JSON.stringify({
+      message: "合成资料整理",
+      mode: "model",
+      externalConsent: true,
+    }),
+    signal: abort.signal,
+  });
+  await started;
+  const response = await responsePromise;
+  const reader = response.body.getReader();
+  await reader.read();
+  abort.abort();
+  await stopped;
+  for (let i = 0; i < 50 && f.server.runtime.active.size; i++)
+    await new Promise((r) => setTimeout(r, 5));
+  const state = (await f.json(`/api/sessions/${s.id}`)).data;
+  assert.equal(state.runs[0].status, "cancelled");
+  assert.equal(state.messages.filter((m) => m.role === "assistant").length, 0);
+  assert.match(state.runs[0].partial, /部分结果/);
+});
+test("usage accumulates across tool rounds and unselected sources stay outside provider request", async (t) => {
+  const seen = [];
+  let n = 0;
+  const provider = {
+    apiKey: "mock",
+    model: "mock",
+    complete: async (messages, _tools, { onDelta }) => {
+      seen.push(JSON.stringify(messages));
+      n++;
+      if (n === 1)
+        return {
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: "c",
+                function: {
+                  name: "extract_clinical_timeline",
+                  arguments: "{}",
+                },
+              },
+            ],
+          },
+          usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+        };
+      onDelta("已整理。");
+      return {
+        message: { role: "assistant", content: "已整理。" },
+        usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 },
+      };
+    },
+  };
+  const f = await fixture(t, { provider });
+  const s = await f.session();
+  const selected = (
+    await f.json(`/api/sessions/${s.id}/files`, "POST", {
+      name: "selected.txt",
+      text: "2026-01-01 选中资料",
+    })
+  ).data;
+  await f.json(`/api/sessions/${s.id}/files`, "POST", {
+    name: "excluded.txt",
+    text: "不得发送的独立标记 EXCLUDED-CASE-B",
+  });
+  const result = await f.chat(s.id, "整理时间线", {
+    mode: "model",
+    externalConsent: true,
+    fileIds: [selected.id],
+  });
+  assert.equal(result.events.at(-1).payload.usage.total_tokens, 35);
+  assert.equal(result.events.at(-1).payload.usage.rounds, 2);
+  assert.ok(seen.every((s) => !s.includes("EXCLUDED-CASE-B")));
+});
+
+test("OpenAI-compatible factory omits DeepSeek-only thinking fields and preserves tools", async (t) => {
+  const { createProvider } = await import("../server/provider.mjs");
+  let body;
+  const provider = await mockProvider(t, (payload, res) => {
+    body = payload;
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(frame({ content: "OpenAI。" }, "stop") + "data: [DONE]\n\n");
+  });
+  const open = createProvider({
+    provider: "openai",
+    apiKey: "x",
+    baseUrl: provider.baseUrl,
+    model: "gpt-test",
+    fetchImpl: provider.fetch,
+  });
+  await open.complete(
+    [{ role: "user", content: "hi" }],
+    [
+      {
+        type: "function",
+        function: {
+          name: "x",
+          description: "x",
+          parameters: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+      },
+    ],
+  );
+  assert.equal(body.model, "gpt-test");
+  assert.equal(body.thinking, undefined);
+  assert.equal(body.reasoning_effort, undefined);
+  assert.ok(body.tools.length);
+});
+test("Anthropic native Messages SSE supports text and fragmented tool_use", async (t) => {
+  let round = 0;
+  const server = await new Promise((resolve) => {
+    const s = http.createServer((req, res) => {
+      round++;
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      if (round === 1)
+        res.end(
+          "event: message_start\ndata: " +
+            JSON.stringify({
+              type: "message_start",
+              message: { usage: { input_tokens: 4 } },
+            }) +
+            "\n\n" +
+            "event: content_block_start\ndata: " +
+            JSON.stringify({
+              type: "content_block_start",
+              index: 0,
+              content_block: {
+                type: "tool_use",
+                id: "u1",
+                name: "build_workflow",
+              },
+            }) +
+            "\n\n" +
+            "event: content_block_delta\ndata: " +
+            JSON.stringify({
+              type: "content_block_delta",
+              index: 0,
+              delta: {
+                type: "input_json_delta",
+                partial_json: '{"title":"流程",',
+              },
+            }) +
+            "\n\n" +
+            "event: content_block_delta\ndata: " +
+            JSON.stringify({
+              type: "content_block_delta",
+              index: 0,
+              delta: {
+                type: "input_json_delta",
+                partial_json: '"steps":["核对"]}',
+              },
+            }) +
+            "\n\n" +
+            "event: message_delta\ndata: " +
+            JSON.stringify({
+              type: "message_delta",
+              delta: { stop_reason: "tool_use" },
+              usage: { output_tokens: 3 },
+            }) +
+            "\n\n" +
+            "event: message_stop\ndata: " +
+            JSON.stringify({ type: "message_stop" }) +
+            "\n\n",
+        );
+      else
+        res.end(
+          "event: message_start\ndata: " +
+            JSON.stringify({
+              type: "message_start",
+              message: { usage: { input_tokens: 8 } },
+            }) +
+            "\n\n" +
+            "event: content_block_start\ndata: " +
+            JSON.stringify({
+              type: "content_block_start",
+              index: 0,
+              content_block: { type: "text", text: "" },
+            }) +
+            "\n\n" +
+            "event: content_block_delta\ndata: " +
+            JSON.stringify({
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "完成。" },
+            }) +
+            "\n\n" +
+            "event: message_delta\ndata: " +
+            JSON.stringify({
+              type: "message_delta",
+              delta: { stop_reason: "end_turn" },
+              usage: { output_tokens: 2 },
+            }) +
+            "\n\n" +
+            "event: message_stop\ndata: " +
+            JSON.stringify({ type: "message_stop" }) +
+            "\n\n",
+        );
+    });
+    s.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  t.after(() => server.close());
+  const { AnthropicProvider } = await import("../server/provider.mjs");
+  const p = new AnthropicProvider({
+    apiKey: "x",
+    baseUrl: `http://127.0.0.1:${server.address().port}`,
+    model: "claude-test",
+  });
+  const first = await p.complete(
+    [
+      { role: "system", content: "rules" },
+      { role: "user", content: "hi" },
+    ],
+    [
+      {
+        type: "function",
+        function: {
+          name: "build_workflow",
+          description: "",
+          parameters: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+      },
+    ],
+  );
+  assert.equal(first.message.tool_calls[0].function.name, "build_workflow");
+  assert.equal(first.usage.output_tokens, 3);
+  const second = await p.complete(
+    [
+      { role: "user", content: "hi" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: first.message.tool_calls[0]
+          ? [first.message.tool_calls[0]]
+          : [],
+      },
+      { role: "tool", tool_call_id: "u1", content: "ok" },
+    ],
+    [],
+  );
+  assert.equal(second.message.content, "完成。");
+  assert.equal(round, 2);
+});
+
+test("output-length truncation delivers partial content with stopReason instead of failing", async (t) => {
+  const p = await mockProvider(t, (_, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(
+      frame({ content: "已生成的报告前半部分" }, "length") + "data: [DONE]\n\n",
+    );
+  });
+  const result = await p.complete([{ role: "user", content: "hi" }], []);
+  assert.equal(result.message.content, "已生成的报告前半部分");
+  assert.equal(result.stopReason, "max_tokens");
+  assert.equal(result.message.tool_calls, undefined);
+});
+
+test("truncated tool calls with unparseable arguments are dropped, complete ones kept", async (t) => {
+  const p = await mockProvider(t, (_, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(
+      frame({ content: "部分说明" }) +
+        frame(
+          {
+            tool_calls: [
+              {
+                index: 0,
+                id: "ok-1",
+                function: { name: "t1", arguments: '{"a":1}' },
+              },
+              {
+                index: 1,
+                id: "cut-1",
+                function: { name: "t2", arguments: '{"b":"半截' },
+              },
+            ],
+          },
+          "length",
+        ) +
+        "data: [DONE]\n\n",
+    );
+  });
+  const result = await p.complete([{ role: "user", content: "hi" }], []);
+  assert.equal(result.stopReason, "max_tokens");
+  assert.deepEqual(
+    result.message.tool_calls.map((c) => c.id),
+    ["ok-1"],
+  );
+});
+
+test("anthropic max_tokens truncation delivers partial content instead of failing", async (t) => {
+  const server = await new Promise((resolve) => {
+    const s = http.createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.end(
+        "event: message_start\ndata: " +
+          JSON.stringify({
+            type: "message_start",
+            message: { usage: { input_tokens: 4 } },
+          }) +
+          "\n\n" +
+          "event: content_block_delta\ndata: " +
+          JSON.stringify({
+            type: "content_block_delta",
+            index: 0,
+            delta: { type: "text_delta", text: "报告已写一半" },
+          }) +
+          "\n\n" +
+          "event: message_delta\ndata: " +
+          JSON.stringify({
+            type: "message_delta",
+            delta: { stop_reason: "max_tokens" },
+            usage: { output_tokens: 9 },
+          }) +
+          "\n\n" +
+          "event: message_stop\ndata: " +
+          JSON.stringify({ type: "message_stop" }) +
+          "\n\n",
+      );
+    });
+    s.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  t.after(() => server.close());
+  const { AnthropicProvider } = await import("../server/provider.mjs");
+  const p = new AnthropicProvider({
+    apiKey: "x",
+    baseUrl: `http://127.0.0.1:${server.address().port}`,
+    model: "claude-test",
+  });
+  const result = await p.complete([{ role: "user", content: "hi" }], []);
+  assert.equal(result.message.content, "报告已写一半");
+  assert.equal(result.stopReason, "max_tokens");
+});
+
+test('anthropic continues after malformed JSON tool arguments instead of crashing while serializing history', async () => {
+  const { AnthropicProvider } = await import('../server/provider.mjs');
+  let request;
+  const provider = new AnthropicProvider({ apiKey: 'synthetic', baseUrl: 'https://model.example', model: 'synthetic', fetchImpl: async (_url, options) => {
+    request = JSON.parse(options.body);
+    const frames = [
+      { type: 'message_start', message: { usage: { input_tokens: 1 } } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '请修正 JSON' } },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } },
+      { type: 'message_stop' },
+    ];
+    return new Response(frames.map((frame) => `event: ${frame.type}\ndata: ${JSON.stringify(frame)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  const malformed = '{"note":"原文"未转义""}';
+  const result = await provider.complete([
+    { role: 'user', content: '整理合成患者' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'invalid', type: 'function', function: { name: 'patient_create_propose', arguments: malformed } }] },
+    { role: 'tool', tool_call_id: 'invalid', content: '{"error":"invalid JSON","code":"INVALID_TOOL_ARGS"}' },
+  ], []);
+  assert.equal(result.message.content, '请修正 JSON');
+  assert.equal(request.messages[1].content[0].input.invalid_json_arguments, malformed);
+  assert.equal(request.messages[2].content[0].tool_use_id, 'invalid');
+});
+
+test('Anthropic explicitly disables server-default thinking for a bounded JSON task', async () => {
+  const { AnthropicProvider } = await import('../server/provider.mjs');
+  const requests = [];
+  const provider = new AnthropicProvider({ apiKey: 'synthetic', baseUrl: 'https://model.example', model: 'synthetic', fetchImpl: async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    const frames = [
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '{"pattern":"brief"}' } },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 5 } },
+      { type: 'message_stop' },
+    ];
+    return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } });
+  } });
+  const messages = [{ role: 'user', content: 'Return the style label as JSON.' }];
+  await provider.complete(messages, [], { maxTokens: 300, thinking: 'disabled' });
+  assert.deepEqual(requests[0].thinking, { type: 'disabled' });
+  assert.equal(requests[0].max_tokens, 300);
+  await provider.complete(messages, [], { maxTokens: 300, thinking: 'enabled' });
+  assert.deepEqual(requests[1].thinking, { type: 'enabled', budget_tokens: 4096 });
+  assert.equal(requests[1].max_tokens, 4396);
+});
+
+test('local Ollama compatibility maps thinking controls without DeepSeek-specific fields', async t => {
+  const { createProvider } = await import('../server/provider.mjs');
+  const requests = [];
+  const endpoint = await mockProvider(t, (payload, res) => {
+    requests.push(payload);
+    res.writeHead(200, { 'content-type': 'text/event-stream' });
+    res.end(frame({ content: '合成结果' }, 'stop') + 'data: [DONE]\n\n');
+  });
+  const local = createProvider({ provider: 'local', baseUrl: endpoint.baseUrl, model: 'synthetic-local' });
+  await local.complete([{ role: 'user', content: 'test' }], []);
+  await local.complete([{ role: 'user', content: 'test' }], [], { thinking: 'enabled' });
+  assert.equal(requests[0].reasoning_effort, 'none');
+  assert.equal(requests[1].reasoning_effort, 'high');
+  assert.equal(requests[0].thinking, undefined);
+  assert.equal(requests[1].thinking, undefined);
+});
+
+test("provider timeout bounds silence between stream chunks, not total stream length", async (t) => {
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  let stall = false;
+  const endpoint = await mockProvider(t, async (_, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    for (let i = 0; i < 6; i++) {
+      res.write(frame({ content: `片段${i}` }));
+      await pause(stall && i === 1 ? 1000 : 80);
+      if (res.destroyed) return;
+    }
+    res.end(frame({}, "stop") + "data: [DONE]\n\n");
+  });
+  const p = new DeepSeekProvider({ apiKey: "test-only", baseUrl: endpoint.baseUrl, timeoutMs: 250 });
+  const steady = await p.complete([{ role: "user", content: "hi" }], []);
+  assert.equal(steady.message.content, "片段0片段1片段2片段3片段4片段5");
+  stall = true;
+  await assert.rejects(
+    p.complete([{ role: "user", content: "hi" }], []),
+    (error) => error.name === "TimeoutError",
+  );
+});
+
+const anthropicStream = (frames) =>
+  new Response(frames.map((f) => `event: ${f.type}\ndata: ${JSON.stringify(f)}\n\n`).join(""), {
+    headers: { "content-type": "text/event-stream" },
+  });
+
+test("Anthropic replays signed thinking blocks with tool use and caches tools and system", async () => {
+  const { AnthropicProvider } = await import("../server/provider.mjs");
+  const requests = [];
+  const provider = new AnthropicProvider({ apiKey: "synthetic", baseUrl: "https://model.example", model: "synthetic", thinking: "enabled",
+    fetchImpl: async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return anthropicStream(requests.length === 1 ? [
+        { type: "message_start", message: { usage: { input_tokens: 5 } } },
+        { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "", signature: "" } },
+        { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "先读文件" } },
+        { type: "content_block_delta", index: 0, delta: { type: "signature_delta", signature: "sig-1" } },
+        { type: "content_block_start", index: 1, content_block: { type: "tool_use", id: "u1", name: "read_file" } },
+        { type: "content_block_delta", index: 1, delta: { type: "input_json_delta", partial_json: '{"path":"a.txt"}' } },
+        { type: "message_delta", delta: { stop_reason: "tool_use" }, usage: { output_tokens: 9 } },
+        { type: "message_stop" },
+      ] : [
+        { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "完成" } },
+        { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 1 } },
+        { type: "message_stop" },
+      ]);
+    } });
+  const tools = [
+    { type: "function", function: { name: "read_file", description: "read", parameters: { type: "object" } } },
+    { type: "function", function: { name: "list_directory", description: "list", parameters: { type: "object" } } },
+  ];
+  const history = [{ role: "system", content: "规则" }, { role: "user", content: "读 a.txt" }];
+  const first = await provider.complete(history, tools);
+  assert.deepEqual(first.message.thinkingBlocks, [{ type: "thinking", thinking: "先读文件", signature: "sig-1" }]);
+  assert.deepEqual(requests[0].system, [{ type: "text", text: "规则", cache_control: { type: "ephemeral" } }]);
+  assert.equal(requests[0].tools[0].cache_control, undefined);
+  assert.deepEqual(requests[0].tools[1].cache_control, { type: "ephemeral" });
+  await provider.complete([...history, first.message, { role: "tool", tool_call_id: "u1", content: "内容" }], tools);
+  assert.deepEqual(requests[1].messages[1].content.map((b) => b.type), ["thinking", "tool_use"]);
+  assert.equal(requests[1].messages[1].content[0].signature, "sig-1");
+  await provider.complete([...history, first.message, { role: "tool", tool_call_id: "u1", content: "内容" }], tools, { thinking: "disabled" });
+  assert.deepEqual(requests[2].messages[1].content.map((b) => b.type), ["tool_use"]);
+});
+
+test("Anthropic prompt caching can be turned off for gateways that reject cache_control", async () => {
+  const { createProvider } = await import("../server/provider.mjs");
+  let request;
+  const provider = createProvider({ provider: "anthropic", apiKey: "synthetic", baseUrl: "https://model.example", promptCache: false,
+    fetchImpl: async (_url, options) => {
+      request = JSON.parse(options.body);
+      return anthropicStream([
+        { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "ok" } },
+        { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 1 } },
+        { type: "message_stop" },
+      ]);
+    } });
+  await provider.complete([{ role: "system", content: "规则" }, { role: "user", content: "hi" }], []);
+  assert.deepEqual(request.system, [{ type: "text", text: "规则" }]);
+});
+
+// 与真实 Responses 流一致：每个输出项都有 added/done 事件，被截断的项只有 added。
+const responsesEvents = (output, terminal, cut = new Set()) => {
+  const events = [{ type: "response.created", response: { id: "resp_1", created_at: 1, model: "synthetic" } }];
+  output.forEach((item, index) => {
+    events.push({ type: "response.output_item.added", output_index: index, item: item.type === "message" ? { ...item, content: [] } : item.type === "function_call" ? { ...item, arguments: "" } : item });
+    if (item.type === "message")
+      for (const part of item.content) events.push({ type: "response.output_text.delta", item_id: item.id, output_index: index, content_index: 0, delta: part.text });
+    if (item.type === "function_call") events.push({ type: "response.function_call_arguments.delta", item_id: item.id, output_index: index, delta: item.arguments });
+    if (!cut.has(item.id)) events.push({ type: "response.output_item.done", output_index: index, item });
+  });
+  events.push({ type: terminal.status === "completed" ? "response.completed" : "response.incomplete", response: { id: "resp_1", created_at: 1, model: "synthetic", output, usage: { input_tokens: 7, output_tokens: 3 }, ...terminal } });
+  return new Response(events.map((e, i) => `data: ${JSON.stringify({ sequence_number: i, ...e })}\n\n`).join(""), { headers: { "content-type": "text/event-stream" } });
+};
+
+test("Responses max_output_tokens incomplete soft-lands with complete tool calls only", async () => {
+  const { ResponsesProvider } = await import("../server/core/providers.mjs");
+  const output = [
+    { type: "message", id: "m1", role: "assistant", status: "completed", content: [{ type: "output_text", text: "报告前半", annotations: [] }] },
+    { type: "function_call", id: "f1", call_id: "c1", name: "read_file", arguments: '{"path":"a"}', status: "completed" },
+    { type: "function_call", id: "f2", call_id: "c2", name: "read_file", arguments: '{"path":"b', status: "incomplete" },
+  ];
+  const provider = new ResponsesProvider({ apiKey: "synthetic", baseUrl: "https://model.example/v1", model: "synthetic",
+    fetchImpl: async () => responsesEvents(output, { status: "incomplete", incomplete_details: { reason: "max_output_tokens" } }, new Set(["f2"])) });
+  const result = await provider.complete([{ role: "user", content: "写报告" }], []);
+  assert.equal(result.stopReason, "max_tokens");
+  assert.equal(result.message.content, "报告前半");
+  assert.deepEqual(result.message.tool_calls.map((c) => c.id), ["c1"]);
+  assert.equal(result.message.responseItems, undefined);
+  const filtered = new ResponsesProvider({ apiKey: "synthetic", baseUrl: "https://model.example/v1", model: "synthetic",
+    fetchImpl: async () => responsesEvents(output, { status: "incomplete", incomplete_details: { reason: "content_filter" } }, new Set(["f2"])) });
+  await assert.rejects(filtered.complete([{ role: "user", content: "写报告" }], []), (e) => e.code === "PROVIDER_INCOMPLETE");
+});

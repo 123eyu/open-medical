@@ -1,0 +1,610 @@
+/* V6: stable medical/general navigation, real task and project surfaces. */
+.v6-shell {
+  --body-size: 16px;
+  --meta-size: 14px;
+  --reading-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.v6-shell.large-text {
+  --body-size: 20px;
+  --meta-size: 18px;
+  --reading-size: 22px;
+}
+.v6-shell .topbar {
+  height: 68px;
+  flex-shrink: 0;
+  gap: 16px;
+}
+.v6-shell .app-navigation {
+  padding: 24px 18px 16px;
+  overflow-y: auto;
+  background: #f2f5ef;
+}
+.v6-shell .app-navigation > .new-session {
+  font-size: 15px;
+  min-height: 44px;
+  margin: 0 0 10px;
+  flex-shrink: 0;
+}
+.v6-shell .business-nav-label {
+  margin: 20px 12px 9px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: #67766d;
+}
+.v6-shell .business-nav {
+  gap: 3px;
+}
+.v6-shell .business-nav button {
+  width: 100%;
+  min-height: 45px;
+  font-size: 16px;
+  padding: 10px 12px;
+  gap: 12px;
+}
+.v6-shell .business-nav button.active {
+  background:var(--accent-soft);
+  color: var(--accent-deep);
+}
+.v6-shell .advanced-nav {
+  flex: none;
+  overflow: visible;
+  margin-top: 22px;
+  border-top: 1px solid #dfe6dc;
+}
+.v6-shell .advanced-nav > summary {
+  display: list-item !important;
+  font-size: 12px;
+  padding: 14px 5px;
+}
+.v6-shell .advanced-nav .sessions {
+  flex: none;
+  max-height: 230px;
+}
+.v6-shell .pinned-projects {
+  margin-top: 20px;
+  border-top: 1px solid #dfe6dc;
+}
+.v6-shell .pinned-projects button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+}
+.v6-shell .pinned-projects span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.v6-shell .business-preferences button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.display-modes {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.display-modes button,
+.text-size-control {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  min-height: 36px;
+  border-radius: 5px;
+}
+.display-modes button[aria-pressed="true"] {
+  background: #edf3e8;
+  color: #24543a;
+  font-weight: 600;
+}
+.display-modes button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.text-size-control {
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.v6-shell .top-meters {
+  display: none;
+}
+.v6-shell .top-actions {
+  gap: 10px;
+}
+.v6-shell .brand-caption {
+  font-size: 12px;
+}
+.v6-shell .workbench-hub {
+  padding-top: 30px;
+}
+.v6-shell .hub-intro h1 {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.v6-shell .hub-intro p {
+  font-size: var(--body-size);
+}
+.v6-shell .hub-composer textarea {
+  font-size: var(--reading-size);
+  line-height: 1.8;
+}
+.v6-shell .hub-scene-btn {
+  font-size: var(--body-size);
+}
+.v6-shell .hub-start-nav button {
+  font-size: 14px;
+  min-height: 40px;
+}
+.v6-shell .product-content > .shell {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+.v6-shell.mode-split .product-content > .shell {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+}
+.v6-shell.mode-chat .product-content > .shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+.v6-shell.mode-chat .product-content > .shell > .inspector {
+  display: none;
+}
+.v6-shell .message-content {
+  font-size: var(--body-size);
+  line-height: 1.85;
+}
+.v6-shell .composer textarea {
+  font-size: var(--body-size);
+  line-height: 1.8;
+}
+.v6-shell .conversation-head h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.v6-shell .panel-tabs button {
+  font-size: 13px;
+}
+.v6-shell.mode-chat .conversation > .message-list,
+.v6-shell.mode-chat .composer-wrap {
+  width: 100%;
+  max-width: 1000px;
+  margin-inline: auto;
+}
+.work-directory {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 38px 42px;
+  width: 100%;
+  max-width: 1380px;
+  margin-inline: auto;
+}
+.directory-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.directory-heading h1 {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0 0 10px;
+}
+.directory-heading p,
+.directory-note {
+  font-size: var(--body-size);
+  line-height: 1.8;
+  color: var(--muted);
+}
+.directory-heading > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  min-height: 44px;
+}
+.directory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.directory-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.directory-filters button {
+  font-size: 14px;
+  padding: 9px 13px;
+  min-height: 40px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.directory-filters button[aria-pressed="true"] {
+  background: #edf3e8;
+  color: #24543a;
+  border-color: #dce6d7;
+}
+.directory-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 12px;
+  color: var(--muted);
+}
+.directory-search input {
+  min-height: 42px;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  max-width: 230px;
+}
+.directory-rows {
+  border-top: 1px solid var(--border);
+}
+.project-directory-row,
+.task-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.directory-open,
+.task-directory-row > span {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.directory-open {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.work-directory strong {
+  font-size: var(--body-size);
+  font-weight: 600;
+  line-height: 1.6;
+  display: block;
+}
+.work-directory small {
+  display: block;
+  font-size: var(--meta-size);
+  line-height: 1.8;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.project-directory-row > button:not(.directory-open) {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  min-width: 40px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+}
+.project-directory-row > button[aria-pressed="true"] {
+  color: var(--accent);
+  background: #edf3e8;
+}
+.directory-status,
+.task-directory-row em {
+  font-size: var(--meta-size);
+  color: var(--muted);
+  font-style: normal;
+}
+.directory-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 36px;
+}
+.directory-tools article {
+  display: flex;
+}
+.directory-tools .tool-card-link {
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 6px;
+  padding: 26px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.directory-tools .tool-card-link:hover { background: var(--surface); }
+.directory-tools .tool-card-link[aria-disabled="true"] { cursor: not-allowed; opacity: .7; }
+.directory-tools h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 18px 0 8px;
+}
+.directory-tools p {
+  font-size: var(--body-size);
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 0 22px;
+}
+.directory-tools footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  width: 100%;
+}
+.directory-tools .tool-card-action {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 9px 12px;
+  min-height: 42px;
+  font-size: 14px;
+}
+.directory-empty {
+  padding: 70px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+.directory-empty h2 {
+  font-size: 22px;
+  color: var(--ink);
+}
+.directory-empty p {
+  font-size: var(--body-size);
+  line-height: 1.8;
+}
+.v6-shell :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #4f9679;
+  outline-offset: 3px;
+}
+/* The composer is one input surface; keep its focus ring outside the
+   caption/editor/toolbar instead of outlining the nested textarea. */
+.v6-shell .hub-composer:has(textarea:focus-visible) {
+  border-color: #4f9679;
+  outline: 2px solid #4f9679;
+  outline-offset: 0;
+}
+.v6-shell .hub-composer textarea {
+  display: block;
+  margin: 6px 0 10px;
+  border-radius: 0;
+}
+.v6-shell .hub-composer textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.v6-shell .hub-composer-caption {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.v6-shell button {
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+@media (min-width: 1181px) {
+  .v6-shell .product-content > .shell > .inspector {
+    position: relative;
+    inset: auto;
+    width: auto;
+    display: flex;
+    min-height: 0;
+    box-shadow: none;
+  }
+}
+@media (max-width: 1180px) {
+  .v6-shell .product-content > .shell,
+  .v6-shell.mode-split .product-content > .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .v6-shell .top-actions .model-chip,
+  .v6-shell .brand-caption,
+  .v6-shell .brand-divider {
+    display: none;
+  }
+  .work-directory {
+    padding: 28px;
+  }
+  .directory-status {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .v6-shell .topbar {
+    height: 62px;
+    padding: 0 12px;
+  }
+  .v6-shell .top-brand > b,
+  .v6-shell .brand-mark {
+    display: none;
+  }
+  .v6-shell .top-actions {
+    gap: 3px;
+  }
+  .v6-shell .top-actions > .patient-pill,
+  .v6-shell .top-actions > .workspace-location {
+    display: none;
+  }
+  .display-modes button {
+    font-size: 12px;
+    padding: 7px;
+  }
+  .text-size-control {
+    padding: 7px;
+  }
+  .text-size-control span {
+    display: none;
+  }
+  .v6-shell .app-navigation {
+    width: 238px;
+  }
+  .v6-shell .business-nav button {
+    font-size: 16px;
+  }
+  .work-directory {
+    padding: 25px 18px;
+  }
+  .directory-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .directory-heading h1 {
+    font-size: 28px;
+  }
+  .directory-tools {
+    grid-template-columns: 1fr;
+  }
+  .directory-search {
+    width: 100%;
+  }
+  .directory-search input {
+    max-width: none;
+    width: 100%;
+  }
+  .project-directory-row,
+  .task-directory-row {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .directory-open {
+    flex-basis: 65%;
+  }
+  .task-directory-row em {
+    margin-left: 33px;
+  }
+  .v6-shell .workbench-hub {
+    padding-inline: 18px;
+  }
+  .v6-shell .hub-intro h1 {
+    font-size: 26px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v6-shell button {
+    transition: none;
+  }
+}
+@media (max-width: 700px) {
+  .v6-shell .topbar {
+    height: 108px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 8px;
+  }
+  .v6-shell .top-brand {
+    width: 100%;
+    height: 28px;
+  }
+  .v6-shell .top-brand > b {
+    display: block;
+  }
+  .v6-shell .top-actions {
+    width: 100%;
+    height: 44px;
+    gap: 5px;
+  }
+  .v6-shell .top-actions .model-badge,
+  .v6-shell .top-actions > .icon-button:last-child {
+    display: none;
+  }
+  .v6-shell .top-actions .pt-switcher {
+    min-width: 55px;
+  }
+  .v6-shell .app-navigation.open,
+  .v6-shell .inspector.open {
+    top: 108px;
+  }
+  .v6-shell .nav-scrim {
+    inset: 108px 0 0;
+  }
+}
+@media(max-width:520px){.v6-shell .topbar{height:144px}.v6-shell .top-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;height:auto;gap:5px}.v6-shell .display-modes{grid-column:1/3}.v6-shell .text-size-control{grid-column:3}.v6-shell .top-actions .pt-switcher{grid-column:1/3}.v6-shell .top-actions>.icon-button{grid-column:3}.v6-shell .app-navigation.open,.v6-shell .inspector.open{top:144px}.v6-shell .nav-scrim{inset:144px 0 0}}
+
+/* Reference materials are opened deliberately; closed panels reserve no space. */
+.v6-shell .product-content > .shell:not(.with-inspector) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.v6-shell .product-content > .shell > .inspector:not(.open) { display: none; }
+.v6-shell .inspector-head .icon-button { display: flex; }
+.v6-shell .inspector-head b { font-size: 16px; }
+.v6-shell .inspector-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.inspector-more { padding: 14px 18px; border-top: 1px solid var(--border); font-size: 14px; }
+.inspector-more summary { cursor: pointer; color: #637563; }
+.inspector-more button { display: block; padding: 10px 0; }
+@media (max-width: 1180px) {
+  .v6-shell .inspector.open { width: min(400px, 100vw); }
+}
+
+/* Project tools need a usable work surface, while the conversation stays mounted. */
+.v6-shell .product-content > .workspace-shell.tool-focused {
+  grid-template-columns: minmax(0, 1fr);
+}
+.v6-shell .workspace-shell.tool-focused > .conversation { display: none; }
+.v6-shell .workspace-shell.tool-focused > .inspector {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  display: flex;
+  box-shadow: none;
+}
+.workspace-shell .panel-tabs { flex-wrap: wrap; }
+.workspace-shell .panel-tabs > button { white-space: nowrap; flex: 0 0 auto; }
+.app-settings-page { box-sizing: border-box; width: 100%; padding: 32px; max-width: 1280px; margin: 0; text-align: left; }
+/* 设置页是 .product-content 的直接子元素且无自带滚动容器:内容高于窗口时被裁掉且
+   文档不可滚动(随访连接分区加入引导内容后触发)。让它自己成为滚动容器。 */
+.product-content > .app-settings-page { flex: 1; min-height: 0; overflow-y: auto; }
+.app-settings-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 32px; }
+.app-settings-layout > nav { display: flex; flex-direction: column; gap: 6px; align-self: start; }
+.app-settings-layout > nav button { text-align: left; padding: 12px 16px; border: 0; background: transparent; }
+.app-settings-layout > nav button[aria-pressed="true"] { background: #e6eee3; color: var(--accent-deep, #28674f); }
+.app-settings-content { min-width: 0; }
+.app-settings-content h2 { margin: 0 0 16px; font-size: 22px; }
+.app-settings-content p { line-height: 1.7; }
+.settings-project-picker { display: flex; flex-direction: column; gap: 8px; margin: 24px 0; max-width: 480px; }
+.settings-project-picker select { width: 100%; }
+@media (max-width: 700px) {
+  .app-settings-page { padding: 24px 18px; }
+  .app-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .app-settings-layout > nav { flex-direction: row; }
+}
+/* 桌面壳(Electron/Windows)隐藏原生标题栏后,顶栏兼任窗口拖拽区,右上角为
+   系统最小化/最大化/关闭按钮预留宽度;仅window-controls-overlay显示模式下
+   生效,浏览器与macOS(保留系统标题栏)不受影响,env回退值即无变化。 */
+/* 生效条件由 main.jsx 依据 navigator.windowControlsOverlay.visible 加/去 desktop-overlay-titlebar 类 */
+html.desktop-overlay-titlebar .topbar { -webkit-app-region: drag; padding-right: calc(100vw - env(titlebar-area-width, 100vw) + 22px); }
+html.desktop-overlay-titlebar .topbar :is(button, a, input, select, textarea, label, [role="status"]) { -webkit-app-region: no-drag; }
+/* 保留媒体查询等价形态,双保险 */
+@media (display-mode: window-controls-overlay) {
+  .topbar { -webkit-app-region: drag; padding-right: calc(100vw - env(titlebar-area-width, 100vw) + 22px); }
+  .topbar :is(button, a, input, select, textarea, label, [role="status"]) { -webkit-app-region: no-drag; }
+}
+.settings-login-item { display: flex; align-items: center; gap: 8px; margin: 0; }
+.settings-desktop-note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }

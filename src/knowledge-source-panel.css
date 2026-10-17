@@ -1,0 +1,118 @@
+.kw-source-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 clamp(420px, 40vw, 640px);
+  width: clamp(420px, 40vw, 640px);
+  min-width: 0;
+  min-height: 0;
+  background: #fff;
+  border-left: 1px solid #dce5df;
+  box-shadow: -8px 0 24px #213b2d08;
+  z-index: 25;
+}
+.kw-source-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+.kw-source-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+.kw-source-heading small {
+  color: #627368;
+  font-size: 13px;
+}
+.kw-source-heading h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.kw-source-heading button {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+}
+.kw-source-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 0 20px 12px;
+  border-bottom: 1px solid #dce5df;
+  font-size: 13px;
+  color: #607367;
+}
+.kw-source-context strong {
+  color: #99501d;
+}
+.kw-source-context button {
+  min-height: 36px;
+}
+.kw-source-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.kw-source-feedback {
+  padding: 20px;
+}
+.medical-shell .kw-source-panel .module-view.kw-reader {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: visible;
+}
+.medical-shell .kw-source-panel .kw-reader > .module-card {
+  width: 100%;
+  max-width: none;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+.kw-source-panel .guidelines-reader-head {
+  display: none;
+}
+.kw-source-panel .guidelines-text {
+  overflow: visible;
+  max-height: none;
+}
+.kw-source-panel .guideline-line {
+  scroll-margin: 16px;
+}
+.kw-source-panel .knowledge-source-card {
+  margin-top: 0;
+}
+.v6-shell:has(.kw-source-panel) .product-content > .shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+.v6-shell:has(.kw-source-panel) .product-content > .shell > .inspector {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .kw-source-panel {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    z-index: 180;
+    border: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .kw-source-heading {
+    padding: 14px 16px 10px;
+  }
+  .kw-source-context {
+    padding: 0 16px 10px;
+  }
+  .medical-shell .kw-source-panel .kw-reader > .module-card {
+    padding: 14px 16px;
+  }
+}

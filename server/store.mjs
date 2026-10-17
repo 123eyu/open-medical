@@ -1,0 +1,353 @@
+import { initializeLearning } from "./medical/learning-schema.mjs";
+import { sqliteTransaction } from "./sqlite-transaction.mjs";
+import { DatabaseSync } from "node:sqlite";
+import {
+  mkdirSync,
+  chmodSync,
+  openSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+} from "node:fs";
+import { dirname } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import { AppError, check, identifier } from "./errors.mjs";
+
+// Single local user; parameterized queries + SQLite transactions prevent lost updates.
+export class Store {
+  constructor(filename) {
+    if (filename !== ":memory:")
+      mkdirSync(dirname(filename), { recursive: true, mode: 0o700 });
+    if (filename !== ":memory:") {
+      this.lockPath = filename + ".lock";
+      this.lockId = randomUUID();
+      // 句柄持有到进程退出、由 OS 释放：硬杀（任务管理器/打包脚本 taskkill）
+      // 后锁自动消失，不留靠 pid 校验的残锁——Windows 的 pid 会被回收复用，
+      // 只查 pid 存活会把残锁当活进程（实测：旧进程早已被杀，重启仍报
+      // 「该数据库已有运行时使用」）。EEXIST 分支只为兼容旧版本留下的
+      // 残锁文件（旧实现写完即关句柄）：pid 已死则接管，存活才是真冲突。
+      const acquire = () => {
+        this.lockFd = openSync(this.lockPath, "wx", 0o600);
+        writeFileSync(
+          this.lockFd,
+          JSON.stringify({ pid: process.pid, id: this.lockId }),
+        );
+      };
+      try {
+        acquire();
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        let owner;
+        try {
+          owner = JSON.parse(readFileSync(this.lockPath, "utf8"));
+        } catch {
+          throw new AppError(
+            "DATABASE_LOCK",
+            "数据库锁状态不明，请删除锁文件后重试",
+            503,
+          );
+        }
+        if (
+          !Number.isInteger(owner.pid) ||
+          owner.pid <= 0 ||
+          typeof owner.id !== "string"
+        )
+          throw new AppError(
+            "DATABASE_LOCK",
+            "数据库锁记录无效，请删除锁文件后重试",
+            503,
+          );
+        let alive = true;
+        try {
+          process.kill(owner.pid, 0);
+        } catch (e) {
+          if (e.code === "ESRCH") alive = false;
+        }
+        if (alive)
+          throw new AppError(
+            "DATABASE_LOCK",
+            "该数据库已有运行时使用，请关闭旧进程",
+            503,
+          );
+        unlinkSync(this.lockPath);
+        acquire();
+      }
+    }
+    try {
+      this.db = new DatabaseSync(filename);
+      if (filename !== ":memory:") chmodSync(filename, 0o600);
+      this.db
+        .exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+      CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, action TEXT NOT NULL, time TEXT NOT NULL, detail TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS event_log (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, run_id TEXT NOT NULL, seq INTEGER NOT NULL, type TEXT NOT NULL, time TEXT NOT NULL, payload TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS event_log_session ON event_log(session_id,id);
+      CREATE TABLE IF NOT EXISTS patients (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS patient_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT, channel TEXT NOT NULL, direction TEXT NOT NULL, time TEXT NOT NULL, external_id TEXT UNIQUE, processed INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS patient_messages_patient ON patient_messages(patient_id,id);
+      CREATE TABLE IF NOT EXISTS follow_ups (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, status TEXT NOT NULL, next_due INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS follow_ups_due ON follow_ups(status,next_due);
+      CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, kind TEXT NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS reminders_due ON reminders(status,due_at);
+      CREATE TABLE IF NOT EXISTS care_tasks (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, status TEXT NOT NULL, due_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS care_tasks_patient ON care_tasks(patient_id,status,due_at);
+      CREATE TABLE IF NOT EXISTS doctor_profile (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS doctor_memories (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, status TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0, count INTEGER NOT NULL DEFAULT 1, topic TEXT NOT NULL DEFAULT '', content TEXT NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS doctor_memories_kind ON doctor_memories(kind,status);
+      CREATE TABLE IF NOT EXISTS literature_cache (key TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS guideline_docs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS guideline_chunks (id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id TEXT NOT NULL, ord INTEGER NOT NULL, start_line INTEGER NOT NULL, end_line INTEGER NOT NULL, text TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS guideline_chunk_vectors (doc_id TEXT NOT NULL, ord INTEGER NOT NULL, model TEXT NOT NULL DEFAULT '', dim INTEGER NOT NULL, vector TEXT NOT NULL, PRIMARY KEY(doc_id, ord, model));
+      CREATE INDEX IF NOT EXISTS guideline_chunks_doc ON guideline_chunks(doc_id,ord);
+      CREATE TABLE IF NOT EXISTS followup_plans (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS risk_alerts (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, rule_key TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS risk_alerts_key ON risk_alerts(patient_id,rule_key);
+      CREATE TABLE IF NOT EXISTS case_library (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS context_archives (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, run_id TEXT, hash TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS context_archives_session ON context_archives(session_id);
+      CREATE TABLE IF NOT EXISTS pending_actions (id TEXT PRIMARY KEY, type TEXT NOT NULL, patient_id TEXT, status TEXT NOT NULL, payload TEXT NOT NULL, summary TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS pending_actions_patient ON pending_actions(patient_id,status);
+      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+      initializeLearning(this.db);
+      // Existing proposals have no trustworthy base version. Keep NULL rather
+      // than backfilling today's revision: confirmation must fail closed.
+      const pendingColumns = this.db.prepare("PRAGMA table_info(pending_actions)").all();
+      if (!pendingColumns.some((column) => column.name === "base_revision"))
+        this.db.exec("ALTER TABLE pending_actions ADD COLUMN base_revision INTEGER");
+      // Vectors carry their embedding model; pre-model tables are derived
+      // data and are simply rebuilt by reindex.
+      const vectorCols = this.db.prepare("PRAGMA table_info(guideline_chunk_vectors)").all();
+      if (vectorCols.length && !vectorCols.some((c) => c.name === "model")) {
+        this.db.exec("DROP TABLE guideline_chunk_vectors");
+        this.db.exec(
+          "CREATE TABLE guideline_chunk_vectors (doc_id TEXT NOT NULL, ord INTEGER NOT NULL, model TEXT NOT NULL DEFAULT '', dim INTEGER NOT NULL, vector TEXT NOT NULL, PRIMARY KEY(doc_id, ord, model))",
+        );
+      }
+      // schema 2 → 3 adds patient-domain tables; 3 → 4 adds the doctor
+      // profile/memory tables; later versions add knowledge-domain tables.
+      // All migrations are additive; session rows are unchanged.
+      const SCHEMA_VERSION = "8";
+      const schemaRow = this.db
+        .prepare("SELECT value FROM meta WHERE key=?")
+        .get("schema_version");
+      const setSchema = (value) =>
+        this.db
+          .prepare("UPDATE meta SET value=? WHERE key=?")
+          .run(value, "schema_version");
+      if (!schemaRow)
+        this.db
+          .prepare("INSERT INTO meta VALUES (?,?)")
+          .run("schema_version", SCHEMA_VERSION);
+      else if (Number(schemaRow.value) < Number(SCHEMA_VERSION))
+        setSchema(SCHEMA_VERSION);
+      else if (schemaRow.value !== SCHEMA_VERSION)
+        throw new AppError(
+          "DATABASE_SCHEMA",
+          "数据库版本不兼容；未修改既有会话，请使用匹配的运行时",
+          503,
+        );
+      // Interrupted turns remain visible after restart, never falsely complete.
+      for (const session of this.list()) {
+        if (session.runs.some((r) => r.status === "running"))
+          this.mutate(session.id, (s) => {
+            for (const r of s.runs.filter((r) => r.status === "running")) {
+              r.status = "interrupted";
+              r.error = "服务重新启动，执行已中断。";
+              r.endedAt = new Date().toISOString();
+              for (const child of r.children || []) {
+                if (["running", "queued"].includes(child.status)) {
+                  child.status = "interrupted";
+                  child.error = "服务重启，子代理执行已中断";
+                  child.endedAt = r.endedAt;
+                }
+              }
+            }
+          });
+      }
+    } catch (error) {
+      try {
+        this.db?.close();
+      } finally {
+        this.releaseLock();
+      }
+      throw error;
+    }
+  }
+  releaseLock() {
+    if (this.lockPath) {
+      try {
+        if (JSON.parse(readFileSync(this.lockPath, "utf8")).id === this.lockId)
+          unlinkSync(this.lockPath);
+      } catch {}
+    }
+  }
+  close() {
+    try {
+      this.db.close();
+    } finally {
+      this.releaseLock();
+    }
+  }
+  list() {
+    return this.db
+      .prepare("SELECT data FROM sessions")
+      .all()
+      .map((row) => JSON.parse(row.data))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+  get(id) {
+    const row = this.db.prepare("SELECT data FROM sessions WHERE id=?").get(id);
+    if (!row) throw new AppError("NOT_FOUND", "会话不存在", 404);
+    return JSON.parse(row.data);
+  }
+  create({
+    id = randomUUID(),
+    title = "新的医疗工作",
+    files = [],
+    copiedFrom,
+    patientId = null,
+  } = {}) {
+    const session = {
+      id,
+      title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      revision: 0,
+      messages: [],
+      files,
+      ...(copiedFrom ? { copiedFrom } : {}),
+      ...(patientId ? { patientId } : {}),
+      artifacts: [],
+      runs: [],
+    };
+    try {
+      this.db
+        .prepare("INSERT INTO sessions VALUES (?,?)")
+        .run(id, JSON.stringify(session));
+    } catch (e) {
+      if (this.db.prepare("SELECT id FROM sessions WHERE id=?").get(id))
+        throw new AppError("CONFLICT", "会话已存在", 409);
+      throw e;
+    }
+    this.audit(id, "session.created");
+    return session;
+  }
+  mutate(id, update) {
+    return sqliteTransaction(this.db, () => {
+      const data = this.get(id);
+      update(data);
+      data.revision++;
+      data.updatedAt = Date.now();
+      this.db
+        .prepare("UPDATE sessions SET data=? WHERE id=?")
+        .run(JSON.stringify(data), id);
+      return data;
+    });
+  }
+  delete(id) {
+    this.get(id);
+    this.db.prepare("DELETE FROM sessions WHERE id=?").run(id);
+    this.db.prepare("DELETE FROM audit WHERE session_id=?").run(id);
+    this.db.prepare("DELETE FROM event_log WHERE session_id=?").run(id);
+    this.db.prepare("DELETE FROM context_archives WHERE session_id=?").run(id);
+    if (
+      this.db
+        .prepare("SELECT name FROM sqlite_master WHERE name='scheduled_jobs'")
+        .get()
+    )
+      this.db.prepare("DELETE FROM scheduled_jobs WHERE session_id=?").run(id);
+  }
+  // Compressed-out conversation history and oversized tool results are
+  // archived verbatim so the model can page them back through
+  // read_context_archive; archives die with their session.
+  archive(sessionId, runId, data) {
+    const serialized = JSON.stringify(data);
+    const archiveId = randomUUID();
+    const hash = createHash("sha256").update(serialized).digest("hex");
+    this.db
+      .prepare(
+        "INSERT INTO context_archives(id,session_id,run_id,hash,created_at,data) VALUES (?,?,?,?,?,?)",
+      )
+      .run(archiveId, sessionId, runId, hash, new Date().toISOString(), serialized);
+    return { id: archiveId, hash, chars: serialized.length };
+  }
+  readArchive(sessionId, archiveId, offset = 0, limit = 8000) {
+    identifier(archiveId);
+    check(
+      Number.isSafeInteger(offset) &&
+        offset >= 0 &&
+        Number.isInteger(limit) &&
+        limit > 0 &&
+        limit <= 16000,
+      "INVALID_INPUT",
+      "归档读取范围无效",
+    );
+    const row = this.db
+      .prepare(
+        "SELECT data FROM context_archives WHERE id=? AND session_id=?",
+      )
+      .get(archiveId, sessionId);
+    check(row, "NOT_FOUND", "归档不存在或不属于当前会话", 404);
+    const chunk = row.data.slice(offset, offset + limit);
+    return {
+      archiveId,
+      total: row.data.length,
+      offset,
+      hasMore: offset + limit < row.data.length,
+      chunk,
+    };
+  }
+  audit(sessionId, action, detail = {}) {
+    this.db
+      .prepare(
+        "INSERT INTO audit(session_id,action,time,detail) VALUES (?,?,?,?)",
+      )
+      .run(sessionId, action, new Date().toISOString(), JSON.stringify(detail));
+  }
+  appendEvent(event) {
+    this.db
+      .prepare(
+        "INSERT INTO event_log(session_id,run_id,seq,type,time,payload) VALUES (?,?,?,?,?,?)",
+      )
+      .run(
+        event.session_id,
+        event.run_id,
+        event.seq,
+        event.type,
+        event.time,
+        JSON.stringify(event.payload || {}),
+      );
+  }
+  eventLog(id, { after = 0, limit = 1000 } = {}) {
+    check(
+      Number.isInteger(after) &&
+        after >= 0 &&
+        Number.isInteger(limit) &&
+        limit > 0 &&
+        limit <= 5000,
+      "INVALID_INPUT",
+      "事件分页参数无效",
+    );
+    return this.db
+      .prepare(
+        "SELECT id,run_id,seq,type,time,payload FROM event_log WHERE session_id=? AND id>? ORDER BY id ASC LIMIT ?",
+      )
+      .all(id, after, limit)
+      .map((row) => ({
+        id: row.id,
+        run_id: row.run_id,
+        seq: row.seq,
+        type: row.type,
+        time: row.time,
+        payload: JSON.parse(row.payload),
+      }));
+  }
+  auditLog(id) {
+    return this.db
+      .prepare(
+        "SELECT id,action,time,detail FROM audit WHERE session_id=? ORDER BY id DESC LIMIT 200",
+      )
+      .all(id)
+      .map((row) => ({ ...row, detail: JSON.parse(row.detail) }));
+  }
+}

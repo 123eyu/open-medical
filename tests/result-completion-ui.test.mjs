@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { chromium } from 'playwright-core';
+import { fixture } from './helpers.mjs';
+const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+test('completed results stay readable without an approval form or generic agenda item', {skip:!existsSync(chrome)}, async t=>{
+  const f=await fixture(t);
+  const session=await f.session('合成结果');
+  await f.json(`/api/sessions/${session.id}/files`,'POST',{name:'报告.txt',text:'2026-09-19 化验\n血糖: 8.9 mmol/L\n血红蛋白: 105 g/L'});
+  const current=(await f.json(`/api/sessions/${session.id}`)).data;
+  const run=await f.chat(session.id,'整理检验数值',{mode:'local',sessionRevision:current.revision,fileIds:current.files.map(f=>f.id),requestId:'completion-check'});
+  assert.equal(run.status,200);
+  const saved=(await f.json(`/api/sessions/${session.id}`)).data;
+  assert.ok(saved.artifacts.length);
+  assert.ok(saved.artifacts.every(a=>!a.review), 'delivery must not fabricate user review records');
+  const summary=(await f.json('/api/sessions')).data.sessions.find(s=>s.id===session.id);
+  assert.equal(summary.reviewCount,0);
+  assert.equal(summary.resultCount,saved.artifacts.length);
+  assert.ok((await f.json('/api/doctor/overview')).data.work.items.every(i=>!i.id.startsWith('review:')));
+  const browser=await chromium.launch({executablePath:chrome,headless:true});t.after(()=>browser.close());
+  const page=await browser.newPage({viewport:{width:1440,height:1000}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(`${f.origin}/?view=workbench&session=${session.id}&tab=results`);
+  await page.locator('.artifact-detail').waitFor();
+  assert.equal(await page.getByRole('button',{name:'人工复核',exact:true}).count(),0);
+  await page.getByRole('button',{name:'查看结果',exact:true}).first().click();
+  const result=page.getByRole('dialog',{name:'查看结果',exact:true});await result.waitFor();
+  assert.equal(await result.getByRole('button',{name:'确认通过',exact:true}).count(),0);
+  await result.getByRole('button',{name:'出处对照',exact:true}).click();
+  assert.match(await result.innerText(),/报告.txt/);
+  await page.goto(f.origin+'/?view=review');
+  await page.getByRole('main',{name:'任务记录'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'待复核',exact:true}).count(),0);
+  assert.match(await page.locator('.task-directory-row').first().innerText(),/合成结果/);
+  assert.deepEqual(errors,[]);
+});
