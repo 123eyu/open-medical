@@ -53,7 +53,13 @@ test('new-patient proposal retains labs, visits and selected source files after 
   const chart = (await f.json(`/api/sessions/${confirmed.data.applied.sessionId}`)).data;
   assert.ok(chart.files.some((item) => item.text === file.text));
   assert.ok(chart.files.some((item) => item.name === "建档时的对话输入.txt"));
-  assert.equal((await f.json(`/api/pending-actions/${proposal.id}/confirm`, 'POST', {})).status, 409);
+  const replay = await f.json(`/api/pending-actions/${proposal.id}/confirm`, 'POST', {});
+  assert.equal(replay.status, 200);
+  assert.equal(replay.data.replayed, true);
+  assert.deepEqual(replay.data.applied, confirmed.data.applied);
+  assert.equal((await f.json('/api/patients')).data.patients.length, 1);
+  assert.deepEqual((await f.json(`/api/sessions/${confirmed.data.applied.sessionId}`)).data.files, chart.files);
+  assert.equal(f.server.store.db.prepare('SELECT COUNT(*) n FROM review_sessions WHERE action_id=?').get(proposal.id).n, 1);
 });
 
 test('scanned PDF is stored with all page artifacts, duplicates do not accumulate images', async (t) => {

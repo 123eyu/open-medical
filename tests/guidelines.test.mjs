@@ -130,31 +130,68 @@ test("guideline agent tools: search/list/read execute and skip validation upfron
 
 test("guideline API: import via REST, search endpoint, delete, bootstrap count", async (t) => {
   const { fixture } = await import("./helpers.mjs");
-  const f = await fixture(t);
-  const created = await f.json("/api/knowledge", "POST", {
-    title: "中国高血压防治指南 2024",
-    org: "中华医学会",
-    year: 2024,
-    text: SAMPLE,
+  const { EmbeddingService } = await import("../server/medical/embeddings.mjs");
+  for (const semantic of [false, true]) await t.test(semantic ? "deterministic semantic retrieval" : "keyword-only retrieval", async (t) => {
+    const embeddedInputs = [];
+    const embedder = new EmbeddingService({
+      apiKey: "", provider: "ollama", url: "http://127.0.0.1:1", model: "bge-m3",
+      // Equal vectors deliberately include every source chunk; exact lexical
+      // evidence must still rank first, regardless of local model availability.
+      embedFn: async inputs => {
+        assert.equal(semantic, true, "keyword-only mode must not embed");
+        embeddedInputs.push(...inputs);
+        return inputs.map(() => [1, 0, 0]);
+      },
+    });
+    if (!semantic) embedder.available = () => false;
+    const f = await fixture(t, { embedder });
+    const created = await f.json("/api/knowledge", "POST", {
+      title: "中国高血压防治指南 2024",
+      org: "中华医学会",
+      year: 2024,
+      text: SAMPLE,
+    });
+    assert.equal(created.status, 201);
+    const doc = created.data;
+    assert.equal(doc.chunkCount, 3);
+    assert.equal(doc.indexing.status, semantic ? "ready" : "keyword_only");
+    assert.equal(doc.indexing.embedded, semantic ? 3 : 0);
+
+    const search = await f.json(`/api/guidelines/search?q=${encodeURIComponent("降压 药物")}`);
+    assert.equal(search.status, 200);
+    assert.equal(search.data.count, semantic ? 3 : 1);
+    const hits = search.data.hits;
+    assert.equal(hits.length, search.data.count);
+    assert.deepEqual(hits.map(hit => [hit.startLine, hit.endLine]), semantic ? [[3, 7], [1, 2], [8, 10]] : [[3, 7]]);
+    assert.equal(new Set(hits.map(hit => `${hit.docId}:${hit.startLine}:${hit.endLine}`)).size, hits.length);
+    assert.equal(hits[0].lexicalMatchType, "exact");
+    assert.ok(hits[0].matches.some(line => line.text.includes("降压药物")));
+    assert.deepEqual(hits.map(hit => hit.matchedVia), semantic ? ["hybrid", "vector", "vector"] : ["text"]);
+    const sourceLines = SAMPLE.split("\n");
+    for (const hit of hits) {
+      assert.equal(hit.docId, doc.id);
+      assert.equal(hit.docTitle, doc.title);
+      assert.equal(hit.sha256, doc.sha256);
+      assert.equal(hit.vectorScore, semantic ? 1 : null);
+      assert.equal(hit.snippet, sourceLines.slice(hit.startLine - 1, hit.endLine).slice(0, 4).join("\n").slice(0, 500));
+      for (const line of hit.matches) assert.equal(line.text, sourceLines[line.lineNo - 1].slice(0, 300));
+    }
+    assert.equal(embeddedInputs.includes("降压 药物"), semantic);
+
+    const boot = (await f.json("/api/bootstrap")).data;
+    assert.equal(boot.knowledge.count, 1);
+    assert.ok(boot.tools.includes("knowledge_search"));
+    assert.ok(boot.tools.includes("knowledge_ingest"));
+
+    const full = await f.json(`/api/knowledge/${doc.id}`);
+    assert.equal(full.status, 200);
+    assert.equal(full.data.lineCount, sourceLines.length);
+    assert.equal(full.data.text, SAMPLE);
+    assert.equal((await f.json(`/api/knowledge/${doc.id}`, "DELETE")).data.ok, true);
+    assert.equal((await f.json("/api/knowledge")).data.documents.length, 0);
+    assert.equal((await f.json("/api/bootstrap")).data.knowledge.count, 0);
+    assert.equal((await f.json(`/api/guidelines/search?q=${encodeURIComponent("降压 药物")}`)).data.count, 0);
   });
-  assert.equal(created.status, 201);
-  const doc = created.data;
-  assert.ok(doc.chunkCount >= 1);
-
-  const search = await f.json(`/api/guidelines/search?q=${encodeURIComponent("降压 药物")}`);
-  assert.equal(search.status, 200);
-  assert.equal(search.data.count, 1);
-  assert.ok(search.data.hits[0].docTitle.includes("高血压"));
-
-  const boot = (await f.json("/api/bootstrap")).data;
-  assert.equal(boot.knowledge.count, 1);
-  assert.ok(boot.tools.includes("knowledge_search"));
-  assert.ok(boot.tools.includes("knowledge_ingest"));
-
-  const full = await f.json(`/api/knowledge/${doc.id}`);
-  assert.ok(full.data.lineCount >= 10);
-  assert.equal((await f.json(`/api/knowledge/${doc.id}`, "DELETE")).data.ok, true);
-  assert.equal((await f.json("/api/knowledge")).data.documents.length, 0);
 });
 
 test('documents with an implicit default collection remain countable and selectable without rewriting stored sources',async t=>{

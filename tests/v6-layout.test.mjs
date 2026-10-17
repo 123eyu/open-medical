@@ -31,6 +31,7 @@ test('V6 uses real navigation, project identity, task history and display modes 
  await modes.click();assert.equal(await modes.innerText(),'显示：工作区');await page.locator('.inspector').waitFor();assert.equal(await page.locator('.inspector').isVisible(),true);
  assert.equal(await page.locator('.composer textarea').inputValue(),'保留在项目乙的输入草稿');
  await page.screenshot({path:'output/playwright/v6-project.png'});
+ await page.locator('.composer textarea').fill('');
  await page.getByRole('navigation',{name:'资料与工具',exact:true}).getByRole('button').click();await page.getByRole('main',{name:'工具目录'}).waitFor();
  await page.getByRole('button',{name:'医疗工具',exact:true}).click();await page.getByRole('heading',{name:'临床速查',exact:true}).waitFor();
  await page.screenshot({path:'output/playwright/v6-tools.png'});
@@ -57,6 +58,7 @@ test('V6 uses real navigation, project identity, task history and display modes 
   await modes.waitFor();await page.locator('.composer textarea').fill('切换显示保持项目草稿');
   for(let i=0;i<3;i++)await modes.click();
   assert.equal(await page.locator('.composer textarea').inputValue(),'切换显示保持项目草稿');
+  await page.locator('.composer textarea').fill('');
   await page.reload();await modes.waitFor();await page.getByRole('button',{name:'浏览工作区文件',exact:true}).click();await page.getByText('note.md',{exact:true}).first().waitFor();
  }
  await page.getByRole('button',{name:'Aa · 切换字号（标准/大/特大）',exact:true}).click();

@@ -1,6 +1,33 @@
 import { comparisonSchema, verifyComparison, comparisonIssues, groundedCaseFindings, quoteInEvidence, evidenceText } from './case-comparison.mjs';
 import {randomUUID} from 'node:crypto';
 import {check} from '../errors.mjs';
+import {CASE_DIMENSIONS} from '../../shared/case-comparison.mjs';
+
+function searchOverview(items, {localResult, localSearched, receipts, localOnly}) {
+  const local = items.filter(item => item.evidence.type === 'local-record').length;
+  const abstracts = items.filter(item => item.evidence.type === 'abstract').length;
+  const metadata = items.filter(item => item.evidence.type === 'metadata').length;
+  const failed = receipts.filter(receipt => receipt.status === 'failed').length;
+  const summary = items.length
+    ? `本次展示 ${items.length} 条候选：${local} 条本地记录、${abstracts} 条已取得摘要、${metadata} 条仅题录。相同点、差异与待核对项见各候选的原文对照。`
+    : '本次未展示候选；这不代表不存在相似病例。';
+  const limitations = [
+    !localSearched ? '本次未检索本地病例。' : localResult?.failed
+      ? '本地检索失败，不能据此判断是否存在相似病例。'
+      : `本地检索返回 ${localResult?.count ?? localResult?.matches?.length ?? 0} 条候选，范围限于当前可检索的本机记录。`,
+    localOnly ? '本轮限定本机检索，未进行网上检索。'
+      : `网上来源请求 ${receipts.length} 次，其中 ${failed} 次失败；检索范围不代表覆盖全部文献。`,
+  ];
+  if (failed) limitations.push('失败来源尚未取得可核对结果；请求失败不等于没有相关病例。');
+  if (metadata) limitations.push(`${metadata} 条候选仅取得题录，尚无摘要可用于核对临床细节。`);
+  if (abstracts) limitations.push(`${abstracts} 条候选的证据范围为已取得的摘要，尚未核对全文。`);
+  items.forEach((item, index) => {
+    const incomplete = item.comparison.filter(row => row.relation === 'unknown' || !row.currentQuote || !row.candidateQuote);
+    if (incomplete.length) limitations.push(`候选 ${index + 1} 的${incomplete.map(row => CASE_DIMENSIONS.find(d => d.key === row.dimension).label).join('、')}尚未完成双方证据对照；这不等于原始档案未记录这些信息。`);
+  });
+  limitations.push('候选和逐项关系仍需医生结合来源核对，不能直接据此确定诊疗方案。');
+  return {summary, limitations};
+}
 
 export const similarCaseQuestion = text => /(?:相似|类似|相近).{0,8}(?:病例|患者|案例)|(?:病例|案例).{0,8}(?:相似|类似)/.test(text);
 export function similarCaseSearchScope(text) {
@@ -87,7 +114,10 @@ export function configureSimilarCaseTools(registry, workspace, run) {
         const comparison=verifyComparison(item.comparison,currentEvidence.join('\n'),candidateEvidence).map(row=>({...row,reason:row.uncertainty?row.reason:row.currentQuote&&row.candidateQuote?`当前患者：${row.current}；候选病例：${row.candidate}。`:'缺少双方原文，暂不参与相似度计算。'}));
         return {...item,...groundedCaseFindings(comparison),...(issues.length?{comparisonWarnings:issues}:{}),...(candidate.local&&candidate.starred?{starred:true,lessons:candidate.lessons||''}:{}),outcome:item.outcome?.quote && quoteInEvidence(item.outcome.quote,candidateEvidence)?item.outcome:undefined,comparison,sourceKind:candidate.local?'local':'online',evidence:{type:candidate.local?'local-record':article?.abstract?'abstract':'metadata',text:candidate.local?JSON.stringify(candidate):(article?.abstract || ''),retrievedAt:new Date().toISOString()},title:candidate.title || candidate.name || candidate.diagnosis || '本地病例',scope:candidate.local?'本地记录':article?.abstract?'已取得摘要，临床相似性待核对':'仅题录，未核实病例细节',url:candidate.local?undefined:`https://pubmed.ncbi.nlm.nih.gov/${item.reference}/`};
       });
-      delivered = {id:randomUUID(),type:'similar_cases',title:'相似病例检索结果（待复核）',status:'draft',version:1,createdAt:new Date().toISOString(),summary:args.summary,cases:items,limitations:args.limitations,searches:receipts,localCount:localResult?.count,localFailed:localResult?.failed===true,localSearched:Boolean(counts.similar_case_search),matches:items.map(item=>({sourceId:item.reference,sourceName:item.title,quote:item.quote||'',url:item.url,evidence:item.evidence,scope:item.scope})),evidenceSummary:{candidates:items.length,abstracts:items.filter(i=>i.evidence.type==='abstract').length,metadataOnly:items.filter(i=>i.evidence.type==='metadata').length,failedSources:receipts.filter(s=>s.status==='failed').length},provenance:'model_draft'};
+      // Model prose is not a second source of clinical facts or missing-data
+      // claims. The overview uses only recorded retrieval and comparison state.
+      const overview = searchOverview(items, {localResult, localSearched:Boolean(counts.similar_case_search), receipts, localOnly:run.policy?.searchScope==='local'});
+      delivered = {id:randomUUID(),type:'similar_cases',title:'相似病例检索结果（待复核）',status:'draft',version:1,createdAt:new Date().toISOString(),...overview,cases:items,searches:receipts,localCount:localResult?.count,localFailed:localResult?.failed===true,localSearched:Boolean(counts.similar_case_search),matches:items.map(item=>({sourceId:item.reference,sourceName:item.title,quote:item.quote||'',url:item.url,evidence:item.evidence,scope:item.scope})),evidenceSummary:{candidates:items.length,abstracts:items.filter(i=>i.evidence.type==='abstract').length,metadataOnly:items.filter(i=>i.evidence.type==='metadata').length,failedSources:receipts.filter(s=>s.status==='failed').length},provenance:'model_draft'};
       return delivered;
     },
   });

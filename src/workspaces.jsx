@@ -1,4 +1,5 @@
 import { readLocation, writeLocation } from "./navigation";
+import { getWorkspaceDraft, setWorkspaceDraft } from "./workspace-drafts";
 import { useEffect, useRef, useState } from "react";
 import {
   FolderOpen,
@@ -76,16 +77,22 @@ export function WorkspacesView({
   const [showCreate, setShowCreate] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const [attachments, setAttachments] = useState([]),
+  const selectedId = useRef(null),
+    composerDraft = useRef({ prompt: "", attachments: [] });
+  const [attachments, updateAttachments] = useState([]),
     [attachmentError, setAttachmentError] = useState("");
+  function setAttachments(next) {
+    const value = typeof next === "function" ? next(composerDraft.current.attachments) : next;
+    composerDraft.current = { ...composerDraft.current, attachments: value };
+    setWorkspaceDraft(selectedId.current, composerDraft.current);
+    updateAttachments(value);
+  }
   useEffect(() => {
     if (initialCreate) setShowCreate(true);
     else if (initialWorkspaceId) select(initialWorkspaceId);
     if (initialPrompt) setPrompt(initialPrompt);
   }, []);
-  const selectedId = useRef(null),
-    drafts = useRef(new Map()),
-    messagesEnd = useRef(null),
+  const messagesEnd = useRef(null),
     followOutput = useRef(true),
     // 首次预填的提示词：select() 会重置输入框，用它穿透第一次选中
     pendingPrompt = useRef(initialPrompt);
@@ -305,9 +312,15 @@ export function WorkspacesView({
       alive = false;
     };
   }, [previewKind, file?.path, current?.id]);
-  const [prompt, setPrompt] = useState(""),
+  const [prompt, updatePrompt] = useState(""),
     [partial, setPartial] = useState(""),
     [events, setEvents] = useState([]);
+  function setPrompt(next) {
+    const value = typeof next === "function" ? next(composerDraft.current.prompt) : next;
+    composerDraft.current = { ...composerDraft.current, prompt: value };
+    setWorkspaceDraft(selectedId.current, composerDraft.current);
+    updatePrompt(value);
+  }
   // 首页带来的首个任务：工作区就绪后自动运行一次，避免用户落地后还要再点
   // 一次发送。只在首个稳定状态触发；条件不满足（忙碌/运行中/无模型）时保
   // 留预填，交回手动发送。
@@ -531,15 +544,13 @@ export function WorkspacesView({
     }
   }
   async function select(id) {
-    if (selectedId.current)
-      drafts.current.set(selectedId.current, { prompt, attachments });
     selectedId.current = id;
     try {
       localStorage.setItem("workbench.selectedTask", id);
     } catch {}
     followOutput.current = true;
     setCurrent(null);
-    const draft = drafts.current.get(id);
+    const draft = getWorkspaceDraft(id);
     setPrompt(pendingPrompt.current || draft?.prompt || "");
     pendingPrompt.current = "";
     setAttachments(draft?.attachments || []);
@@ -575,6 +586,17 @@ export function WorkspacesView({
     }
   }
   async function run() {
+    const submittedId = selectedId.current, submittedDraft = composerDraft.current;
+    const clearSubmittedDraft = () => {
+      // A response for another project or an older input cannot clear what the
+      // doctor has started writing while the request was in flight.
+      if (getWorkspaceDraft(submittedId) !== submittedDraft) return;
+      setWorkspaceDraft(submittedId, { prompt: "", attachments: [] });
+      if (selectedId.current === submittedId) {
+        setPrompt("");
+        setAttachments([]);
+      }
+    };
     const taskText =
       prompt +
       attachments
@@ -614,8 +636,7 @@ export function WorkspacesView({
           externalConsent: true,
           requestId: crypto.randomUUID(),
         });
-        setPrompt("");
-        setAttachments([]);
+        clearSubmittedDraft();
         await refresh();
       } catch (e) {
         setError(e.message);
@@ -650,8 +671,7 @@ export function WorkspacesView({
           resumeOnRestart,
           ...(resumeRunId ? { resumeRunId } : {}),
         });
-        setPrompt("");
-        setAttachments([]);
+        clearSubmittedDraft();
         setResumeRunId("");
         if (ticket === generation.current) await refresh(id);
         return;
@@ -670,8 +690,7 @@ export function WorkspacesView({
           ...(resumeRunId ? { resumeRunId } : {}),
         }),
       });
-      setPrompt("");
-      setAttachments([]);
+      clearSubmittedDraft();
       let terminal = false;
       for await (const frame of sseFrames(response.body)) {
         if (ticket !== generation.current) break;

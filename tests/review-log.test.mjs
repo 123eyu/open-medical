@@ -63,14 +63,13 @@ test("review autosave, revision conflict, atomic confirm and deidentified audit"
   assert.equal(diffs.length, 2);
   assert.doesNotMatch(JSON.stringify(sessions), /私密测试甲/);
   assert.equal(diffs.find((d) => d.field === "status").learnable, 0);
-  assert.equal(
-    (
-      await f.json(`/api/pending-actions/${p.id}/confirm`, "POST", {
-        payload: final,
-      })
-    ).status,
-    409,
-  );
+  const replay = await f.json(`/api/pending-actions/${p.id}/confirm`, "POST", { payload: final });
+  assert.equal(replay.status, 200);
+  assert.equal(replay.data.replayed, true);
+  assert.deepEqual(replay.data.applied, result.data.applied);
+  assert.equal(f.server.patients.all().length, 1);
+  assert.deepEqual(f.server.store.db.prepare("SELECT * FROM review_sessions").all(), sessions);
+  assert.deepEqual(f.server.store.db.prepare("SELECT * FROM review_diffs").all(), diffs);
 });
 test("zero edits backwards compatible; invalid payload rolls back; other action cannot smuggle payload", async (t) => {
   const f = await fixture(t),
