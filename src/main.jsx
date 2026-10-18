@@ -297,7 +297,7 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           {/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/.test(match.url || "") ?
             <a className="source-link" href={match.url} target="_blank" rel="noreferrer">{match.sourceName} · PubMed</a> :
             artifact.type === "similar_cases" ? <span>{match.sourceName} · 本地记录</span> :
-            <button className="source-link" onClick={() => onSource(match)}>{match.sourceName}{match.line ? ` · L${match.line}` : ""}</button>}
+            <button className="source-link" onClick={() => onSource({...match, snapshot: artifact.evidenceSources?.find(source => source.id === match.sourceId)})}>{match.sourceName}{match.line ? ` · L${match.line}` : ""}</button>}
           {match.scope && <small>{match.scope}</small>}
           {match.evidence?.text && <details><summary>查看检索时保存的{match.evidence.type === "abstract" ? "摘要" : "记录"}</summary><p>{match.evidence.text}</p></details>}
 
@@ -1353,7 +1353,7 @@ function App() {
   const recentConversations = sessions.filter(item => item.userMessageCount > 0).slice(0, 15);
   const effectiveConsentRequired = modelEnabled && accessMode === "each";
   const fileContent = citation
-    ? session?.files.find((f) => f.id === citation.sourceId)?.text ||
+    ? citation.snapshot?.text || session?.files.find((f) => f.id === citation.sourceId)?.text ||
       session?.messages.find((m) => m.id === citation.sourceId)?.content
     : null;
   return (
@@ -2340,6 +2340,7 @@ function App() {
                             {citation.page ? ` · P${citation.page}` : ""} · L
                             {citation.line}
                           </h3>
+                          {citation.snapshot?.sourceType === "patient-chart-snapshot" && <p className="muted">本次评估的医生登记档案快照 · 修订 {citation.snapshot.patientRevision}；不是上传原件或指南。</p>}
                           <pre>
                             {(fileContent || citation.quote || "")
                               .split("\n")

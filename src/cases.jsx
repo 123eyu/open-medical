@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./agent-runtime";
+import { useClinicalDraft } from "./clinical-drafts";
+import { mutateCase } from "./case-mutation";
+import { CuratedCaseSources } from "./curated-case-sources";
 import { Loader2, Plus, Search, Star, Trash2, UserPlus, X } from "lucide-react";
 
 // Case library view: browse/search local cases, run similar-case search,
@@ -10,7 +13,9 @@ export function CasesView() {
   const [patients, setPatients] = useState([]);
   const [query, setQuery] = useState("");
   const [starredOnly, setStarredOnly] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useClinicalDraft("case-library", "editing", null);
+  const [actionConflict, setActionConflict] = useState(null);
+  const mutationLock = useRef(false);
   const [similarText, setSimilarText] = useState("");
   const [similarDiagnosis, setSimilarDiagnosis] = useState("");
   const [similarMatches, setSimilarMatches] = useState(null);
@@ -25,7 +30,7 @@ export function CasesView() {
     lessons: "",
     tags: "",
   });
-  const [expanded, setExpanded] = useState({});
+  const [expanded, setExpanded] = useState(() => editing ? { [editing.id]: true } : {});
 
   const refresh = async () => {
     const [list, people] = await Promise.all([
@@ -98,20 +103,28 @@ export function CasesView() {
     }
   };
   const toggleStar = async (item) => {
-    setError("");
-    try {
-      await api(`/api/cases/${item.id}`, "PATCH", { starred: !item.starred });
-      await refresh();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-  const saveCuration = async () => {
-    if (!editing) return;
+    if (mutationLock.current) return;
+    mutationLock.current = true;
     setBusy(true);
     setError("");
     try {
-      await api(`/api/cases/${editing.id}`, "PATCH", {
+      await mutateCase(item, "PATCH", { starred: !item.starred });
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+      if (err.code === "REVISION_CONFLICT") setActionConflict(item);
+    } finally {
+      mutationLock.current = false;
+      setBusy(false);
+    }
+  };
+  const saveCuration = async () => {
+    if (!editing || editing.conflict || mutationLock.current) return;
+    mutationLock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await mutateCase(editing, "PATCH", {
         lessons: editing.lessons,
         tags: editing.tags.split(/[,，、\s]+/).filter(Boolean),
       });
@@ -119,17 +132,32 @@ export function CasesView() {
       await refresh();
     } catch (err) {
       setError(err.message);
+      if (err.code === "REVISION_CONFLICT") {
+        try {
+          const current = await api(`/api/cases/${editing.id}`);
+          setEditing({ ...editing, conflict: current });
+        } catch (readError) { setError(readError.message); }
+      }
     } finally {
+      mutationLock.current = false;
       setBusy(false);
     }
   };
-  const removeCase = async (id) => {
+  const removeCase = async (item) => {
+    if (mutationLock.current) return;
+    mutationLock.current = true;
+    setBusy(true);
     setError("");
     try {
-      await api(`/api/cases/${id}`, "DELETE");
+      await mutateCase(item, "DELETE");
+      if (editing?.id === item.id) setEditing(null);
       await refresh();
     } catch (err) {
       setError(err.message);
+      if (err.code === "REVISION_CONFLICT") setActionConflict(item);
+    } finally {
+      mutationLock.current = false;
+      setBusy(false);
     }
   };
 
@@ -146,6 +174,10 @@ export function CasesView() {
             {adding ? "取消" : "收入病例"}
           </button>
         </div>
+        {actionConflict && <div role="alert">
+          <p>案例已变化，精选或删除未执行。请查看最新内容后重新决定。</p>
+          <button className="secondary" onClick={async () => { try { await refresh(); setActionConflict(null); setError(""); } catch (e) { setError(e.message); } }}>查看最新案例</button>
+        </div>}
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -256,6 +288,7 @@ export function CasesView() {
                       .join(" · ")}
                   </p>
                   {match.summary && <p className="literature-authors">{match.summary}</p>}
+                  <CuratedCaseSources sources={match.curatedSources} />
                   <div className="literature-hints">
                     {match.reasons.map((reason) => (
                       <span className="hint-tag" key={reason}>
@@ -344,9 +377,16 @@ export function CasesView() {
                   )}
                   {editing?.id === item.id ? (
                     <div>
+                      {editing.conflict && <div role="alert">
+                        <p>案例已被其他操作修改。请对照最新经验与标签，合并后明确核对再保存。</p>
+                        <textarea aria-label="服务器最新经验" readOnly value={editing.conflict.lessons || ""} />
+                        <p>最新标签：{(editing.conflict.tags || []).join("、") || "无"}；精选：{editing.conflict.starred ? "是" : "否"}</p>
+                        <button className="secondary" onClick={() => { setEditing({ ...editing, revision: editing.conflict.revision || 0, conflict: null }); setError(""); }}>已核对最新版本，保留输入继续保存</button>
+                      </div>}
                       <textarea
                         rows={2}
                         aria-label="经验教训"
+                        disabled={busy}
                         placeholder="这次最有价值的点、下次遇到类似患者怎么用"
                         value={editing.lessons}
                         onChange={(e) =>
@@ -355,6 +395,7 @@ export function CasesView() {
                       />
                       <input
                         aria-label="标签"
+                        disabled={busy}
                         placeholder="标签，逗号分隔"
                         value={editing.tags}
                         onChange={(e) =>
@@ -362,10 +403,10 @@ export function CasesView() {
                         }
                       />
                       <div className="guideline-import-actions">
-                        <button onClick={saveCuration} disabled={busy}>
+                        <button onClick={saveCuration} disabled={busy || Boolean(editing.conflict)}>
                           保存
                         </button>
-                        <button className="secondary" onClick={() => setEditing(null)}>
+                        <button className="secondary" disabled={busy} onClick={() => setEditing(null)}>
                           取消
                         </button>
                       </div>
@@ -373,9 +414,11 @@ export function CasesView() {
                   ) : (
                     <button
                       className="text-button"
+                      disabled={busy || Boolean(editing)}
                       onClick={() =>
                         setEditing({
                           id: item.id,
+                          revision: item.revision || 0,
                           lessons: item.lessons || "",
                           tags: (item.tags || []).join("、"),
                         })
@@ -391,11 +434,12 @@ export function CasesView() {
                   className="icon-button"
                   title={item.starred ? "取消精选" : "标记为精选案例"}
                   aria-pressed={item.starred}
+                  disabled={busy || Boolean(actionConflict)}
                   onClick={() => toggleStar(item)}
                 >
                   <Star size={13} fill={item.starred ? "currentColor" : "none"} />
                 </button>
-                <button className="icon-button danger" title="删除病例" onClick={() => removeCase(item.id)}>
+                <button className="icon-button danger" title="删除病例" disabled={busy || Boolean(actionConflict)} onClick={() => removeCase(item)}>
                   <Trash2 size={13} />
                 </button>
               </div>

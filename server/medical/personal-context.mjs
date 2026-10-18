@@ -1,4 +1,4 @@
-import { TERM_GROUPS, diffSummary } from "../../shared/review-diff.mjs";
+import { TERM_GROUPS, diffSummary, normalizeReviewText } from "../../shared/review-diff.mjs";
 import { check } from "../errors.mjs";
 import { deidentifyExample } from "./deidentify-example.mjs";
 // P1/P2 remain opt-in until the release model matrix clears its acceptance gates.
@@ -73,6 +73,24 @@ export function localModel(provider) {
     return false;
   }
 }
+// Check a declared structured transformation against the resulting fields.
+// A matching value is a consistency check, not proof that the model used a
+// habit; never infer an undeclared habit just because its target text appears.
+function supportsHabitAttribution(payload, rule) {
+  if (!rule || !["term_replace", "unit_normalize", "format_rule", "term_style"].includes(rule.type))
+    return true;
+  const rows = Array.isArray(payload[rule.section]) ? payload[rule.section] : [];
+  return rows.some((item) => {
+    if (!item || (rule.scope?.status && item.status !== rule.scope.status)) return false;
+    if (rule.item && normalizeReviewText(item.item) !== normalizeReviewText(rule.item)) return false;
+    if (rule.type === "term_style")
+      return TERM_GROUPS.some((group) => item.name === group[rule.direction === "full" ? 1 : 0]);
+    const value = item[rule.field];
+    return rule.pattern === "iso-date"
+      ? typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      : value === rule.to;
+  });
+}
 export class PersonalContext {
   constructor({ store, doctor, cases, guidelines, extensions, provider }) {
     Object.assign(this, {
@@ -91,6 +109,7 @@ export class PersonalContext {
     const context = {
       text: "",
       habits: [],
+      habitRules: {},
       examples: [],
       knowledge: [],
       skills: [],
@@ -121,6 +140,7 @@ export class PersonalContext {
       const line = `H${m.id} ${m.content}\n`;
       if (habitChars + line.length > 1450) continue;
       context.habits.push({ id: m.id, content: m.content });
+      if (m.rule) context.habitRules[m.id] = structuredClone(m.rule);
       blocks.push(line);
       habitChars += line.length;
     }
@@ -307,6 +327,15 @@ export class PersonalContext {
             ]),
           ])
         : { payload: before, changes: [] };
+    const mismatched = personalization.habits.filter((habit) =>
+      !result.changes.some((change) => change.habitId === habit.id) &&
+      !supportsHabitAttribution(result.payload, context.habitRules?.[habit.id]),
+    );
+    check(
+      !mismatched.length,
+      "PERSONALIZATION_MISMATCH",
+      `习惯归因与草稿字段不一致：${mismatched.map((h) => `H${h.id}（${h.content}）`).join("、")}。尚未创建提案或记录采用反馈。请核对实际采用的习惯，修正 personalization.habitIds 或移除未采用条目；不要为匹配习惯而改变原文临床事实。`,
+    );
     for (const c of result.changes)
       if (!personalization.habits.some((h) => h.id === c.habitId))
         personalization.habits.push({ id: c.habitId, content: c.content });

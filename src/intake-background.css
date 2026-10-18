@@ -1,0 +1,27 @@
+/* Reserve layout space instead of covering consent, send or patient controls. */
+.intake-background-status {
+  order: 1;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border, #ddd);
+  background: var(--bg-panel, white);
+}
+.intake-background-status p {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+}
+.intake-background-status button {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+@media (max-width: 520px) {
+  .intake-background-status { padding: 6px 12px; gap: 6px; }
+}

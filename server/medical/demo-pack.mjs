@@ -1,4 +1,5 @@
 import { check } from "../errors.mjs";
+import { randomUUID } from "node:crypto";
 import { DEMO_CSV, DEMO_KNOWLEDGE } from "../../shared/demo-experience.mjs";
 
 // 示例患者包：让新医生不导入任何真实数据就能体验完整工作流
@@ -177,7 +178,7 @@ export class DemoPack {
     for (const r of resources.filter(r => r.kind !== "patient" && r.kind !== "collection")) {
       if (this.exists(r.kind, r.id)) {
         if (r.kind === "knowledge") await this.guidelines.removeDocument(r.id, { expectedRevision: this.guidelines.docRow(r.id).revision || 0 });
-        else if (r.kind === "case") this.cases.removeCase(r.id);
+        else if (r.kind === "case") this.cases.removeCase(r.id, { expectedRevision: this.cases.get(r.id).revision || 0, requestId: randomUUID() });
         else if (r.kind === "session") this.sessions.removeSession(r.id);
         else if (r.kind === "trial") {
           for (const table of ["trial_screenings", "trial_enrollments", "trial_batches"]) this.store.db.prepare(`DELETE FROM ${table} WHERE trial_id=?`).run(r.id);

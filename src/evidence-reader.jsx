@@ -43,7 +43,8 @@ export function EvidenceReader({
           sources.map((entry, i) => {
             const source =
               typeof entry === "string" ? { sourceName: entry } : entry;
-            const file = sourceFile(source.sourceName, files);
+            const snapshot = source.snapshot?.sourceType === "patient-chart-snapshot" ? source.snapshot : null;
+            const file = snapshot || sourceFile(source.sourceName, files);
             const match = exactQuote(file?.text, source.quote);
             return (
               <section
@@ -54,6 +55,7 @@ export function EvidenceReader({
                   {source.kind || "患者资料"}
                 </span>
                 <h5>{source.sourceName || "资料出处未记录"}</h5>
+                {snapshot && <p className="evidence-location">本次评估读取的医生登记档案快照 · 修订 {snapshot.patientRevision}。不是上传原件或指南；后续档案变更不会改写此处保存的依据。</p>}
                 {(source.page || source.line) && (
                   <p className="evidence-location">
                     引用时位置 ·{" "}

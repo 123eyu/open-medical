@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "./agent-runtime";
 import { useHabitMutation } from "./habit-mutation";
 import { useHabitDraft } from "./habit-drafts";
+import { CuratedCaseSources } from "./curated-case-sources";
 import "./learning-loop.css";
 const sectionNames = {
   diagnoses: "诊断",
@@ -1144,7 +1145,7 @@ export function SimilarCaseCard({ patientId }) {
             .trim();
           const long = text.length > 120;
           return (
-            <p key={m.caseId}>
+            <div key={m.caseId}>
               {long ? (
                 <details>
                   <summary>
@@ -1155,7 +1156,8 @@ export function SimilarCaseCard({ patientId }) {
               ) : (
                 text || m.diagnosis
               )}
-              {m.lessons ? ` · 你的案例笔记：${m.lessons}` : ""}{" "}
+              {m.clinicalSource?.type === "case-snapshot" && <small> · 历史案例快照</small>}
+              {m.curatedSources?.length ? <CuratedCaseSources sources={m.curatedSources}/> : m.lessons ? ` · 你的案例笔记：${m.lessons}` : ""}{" "}
               <a
                 href={
                   m.caseId.startsWith("patient:")
@@ -1166,7 +1168,7 @@ export function SimilarCaseCard({ patientId }) {
               >
                 打开
               </a>
-            </p>
+            </div>
           );
         })}
       {error && <p role="alert">{error}</p>}

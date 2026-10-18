@@ -161,6 +161,7 @@ function AssessmentResult({ diagnostic, assessment, files, sessionId }) {
       : []
     : (assessment?.matches || []).map((m) => ({
         ...m,
+        snapshot: assessment.evidenceSources?.find(source => source.id === m.sourceId),
         quote: medicalExcerpt(m.quote),
       }));
   return (

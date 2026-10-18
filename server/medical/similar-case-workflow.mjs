@@ -48,7 +48,7 @@ export const SIMILAR_CASE_GUIDANCE = `本轮只完成相似病例检索，不进
 若候选原文说明治疗结果或随访，提供 outcome.text 中文概括和 outcome.quote 连续原文，不得推测未记录的疗效。
 每条候选必须提供 comparison 五个维度 disease/stage/treatment/medications/demographics。current/candidate 是双方的简短中文事实；currentQuote 必须是本轮 read_patient_brief 或 read_source 返回的连续原文，candidateQuote 必须来自已取得摘要或本地记录连续原文；不要改写引文。relation 为 match/partial/different/unknown，reason 解释判断。缺失信息留空引文并标 unknown，不能将未知当不同，不能从复发推断肿瘤分期或从未提用药推断未用药。禁止自行编造相似度百分比，系统按有出处的维度计算。
 每个 current/candidate 概括只写对应引文实际支持的内容，不要把候选治疗经历写成当前患者经历。当前患者“疑似复发/性质未定”必须保留，不能改成已复发。只有出生年份时写出生年份，不自行按旧病历日期换算年龄。引文检验失败时修正引文；确实没有资料才标 unknown，不要用 unknown 掩盖可读取的明确事实。
-结果提交后结束，不再重新读档案或检索。只用于文献回顾和临床假设，不能由相似病例直接推导治疗方案。`;
+本地候选的 curatedSources 是医生在历史案例快照上记下的经验，不代表当前档案事实；clinicalSource 标明临床对照来源。当前档案候选的比较引文只能取其当前 diagnosis/keyLabs/treatments 等临床字段，不能引用历史经验、摘要或结局作为当前用药、检查或病程。历史精选经验由系统另列并保留快照来源。\n结果提交后结束，不再重新读档案或检索。只用于文献回顾和临床假设，不能由相似病例直接推导治疗方案。`;
 
 export function configureSimilarCaseTools(registry, workspace, run) {
   const allowed = new Set(['read_patient_brief','read_source','search_materials','read_skill','read_context_archive','similar_case_search','online_case_search','literature_fetch']);
@@ -108,11 +108,13 @@ export function configureSimilarCaseTools(registry, workspace, run) {
         const candidate = candidates.get(item.reference), article = fetched.get(item.reference);
         check(candidate,'CASE_REFERENCE','引用不在本轮结果中。可用 reference：'+[...candidates.keys()].join('、'));
         check(!item.quote || quoteInEvidence(item.quote,article?.abstract||''),'CASE_QUOTE','引文必须来自已经取得的摘要连续原文；没有摘要时留空，并注明仅题录。');
-        const candidateEvidence=candidate.local?evidenceText(candidate):(article?.abstract || '');
+        // Historical curation must never validate a quote about current clinical facts.
+        const {curatedSources, lessons: _lessons, tags: _tags, ...clinicalCandidate} = candidate;
+        const candidateEvidence=candidate.local?evidenceText(clinicalCandidate):(article?.abstract || '');
         const issues=comparisonIssues(item.comparison,currentEvidence.join('\n'),candidateEvidence);
         if(issues.length && comparisonCorrections++===0)check(false,'CASE_COMPARISON_EVIDENCE',`候选 ${item.reference} 对照需纠正：${issues.join('；')}。请使用已读取的连续原文，当前候选原文：${candidateEvidence.slice(0,9000)}`);
         const comparison=verifyComparison(item.comparison,currentEvidence.join('\n'),candidateEvidence).map(row=>({...row,reason:row.uncertainty?row.reason:row.currentQuote&&row.candidateQuote?`当前患者：${row.current}；候选病例：${row.candidate}。`:'缺少双方原文，暂不参与相似度计算。'}));
-        return {...item,...groundedCaseFindings(comparison),...(issues.length?{comparisonWarnings:issues}:{}),...(candidate.local&&candidate.starred?{starred:true,lessons:candidate.lessons||''}:{}),outcome:item.outcome?.quote && quoteInEvidence(item.outcome.quote,candidateEvidence)?item.outcome:undefined,comparison,sourceKind:candidate.local?'local':'online',evidence:{type:candidate.local?'local-record':article?.abstract?'abstract':'metadata',text:candidate.local?JSON.stringify(candidate):(article?.abstract || ''),retrievedAt:new Date().toISOString()},title:candidate.title || candidate.name || candidate.diagnosis || '本地病例',scope:candidate.local?'本地记录':article?.abstract?'已取得摘要，临床相似性待核对':'仅题录，未核实病例细节',url:candidate.local?undefined:`https://pubmed.ncbi.nlm.nih.gov/${item.reference}/`};
+        return {...item,...groundedCaseFindings(comparison),...(issues.length?{comparisonWarnings:issues}:{}),...(candidate.local&&candidate.starred?{starred:true,lessons:candidate.lessons||''}:{}),...(candidate.local?{clinicalSource:candidate.clinicalSource,curatedSources:structuredClone(curatedSources||[])}:{}),outcome:item.outcome?.quote && quoteInEvidence(item.outcome.quote,candidateEvidence)?item.outcome:undefined,comparison,sourceKind:candidate.local?'local':'online',evidence:{type:candidate.local?'local-record':article?.abstract?'abstract':'metadata',text:candidate.local?JSON.stringify(clinicalCandidate):(article?.abstract || ''),retrievedAt:new Date().toISOString()},title:candidate.title || candidate.name || candidate.diagnosis || '本地病例',scope:candidate.local?(candidate.clinicalSource?.type==='case-snapshot'?'本地案例快照（历史记录）':candidate.clinicalSource?.type==='patient-chart'?'本地患者当前档案':'本地记录'):article?.abstract?'已取得摘要，临床相似性待核对':'仅题录，未核实病例细节',url:candidate.local?undefined:`https://pubmed.ncbi.nlm.nih.gov/${item.reference}/`};
       });
       // Model prose is not a second source of clinical facts or missing-data
       // claims. The overview uses only recorded retrieval and comparison state.

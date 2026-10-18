@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { check, string } from "../errors.mjs";
 import { sortDiagnoses } from "../../shared/diagnoses.mjs";
+import { mutateCase } from "./case-mutations.mjs";
 
 // Local case library with similar-case search. Cases are structured
 // snapshots (diagnosis, demographics, key labs, treatments, outcome) plus a
@@ -60,23 +61,25 @@ export class CaseLibrary {
   // tags, summary, outcome) or toggle its "featured" mark. Only these fields
   // are patchable — the clinical snapshot itself stays point-in-time.
   update(id, patch = {}) {
-    const record = this.row(id);
+    return mutateCase(this, id, "update", patch, record => {
     const next = { ...record };
     if (patch.summary !== undefined)
       next.summary = string(patch.summary, "病例摘要", 5000);
     if (patch.lessons !== undefined)
-      next.lessons = string(patch.lessons, "经验教训", 2000);
+      next.lessons = patch.lessons === "" ? "" : string(patch.lessons, "经验教训", 2000);
     if (patch.outcome !== undefined)
       next.outcome = string(patch.outcome, "结局", 500);
     if (patch.tags !== undefined)
       next.tags = stringsList(patch.tags, "标签", 8, 30);
     if (patch.starred !== undefined) next.starred = Boolean(patch.starred);
+    if (["summary", "lessons", "outcome", "tags", "starred"].every(key => JSON.stringify(next[key]) === JSON.stringify(record[key]))) return record;
     next.revision = (record.revision || 0) + 1;
     next.text = composeText(next);
     this.store.db
       .prepare("UPDATE case_library SET data=? WHERE id=?")
       .run(JSON.stringify(next), id);
     return next;
+    });
   }
   addCase(input = {}) {
     const diagnosis = string(input.diagnosis, "主要诊断", 200);
@@ -135,10 +138,11 @@ export class CaseLibrary {
       starred,
     });
   }
-  removeCase(id) {
-    this.row(id);
+  removeCase(id, input = {}) {
+    return mutateCase(this, id, "delete", input, () => {
     this.store.db.prepare("DELETE FROM case_library WHERE id=?").run(id);
     return { ok: true };
+    });
   }
   // Similar-case search: optional structured narrowing plus deterministic
   // term-overlap scoring with explicit match reasons.
@@ -160,7 +164,7 @@ export class CaseLibrary {
     const charts = this.store.db.prepare("SELECT data FROM patients").all().map((row) => JSON.parse(row.data))
       .filter((p) => !p.archived && p.id !== excludePatientId && p.diagnoses?.length)
       .map((p) => {
-        const item = { id: `patient:${p.id}`, patientId: p.id, sourceType: "local-patient-chart",
+        const item = { id: `patient:${p.id}`, patientId: p.id, revision: p.revision || 0, sourceType: "local-patient-chart",
           diagnosis: p.diagnoses.map((d) => d.name).join("；"), icd10: p.diagnoses[0]?.code || "",
           age: p.birthYear ? new Date().getFullYear() - p.birthYear : null, gender: p.gender,
           keyLabs: (p.labs || []).slice(-10), treatments: (p.medications || []).map((m) => `${m.name}（${m.status || "unknown"}）`),
@@ -168,8 +172,34 @@ export class CaseLibrary {
         item.text = composeText(item);
         return item;
       });
-    const chartIds = new Set(charts.map((p) => p.patientId));
-    const scored = [...charts, ...library.filter((item) => (!excludePatientId || item.patientId !== excludePatientId) && !chartIds.has(item.patientId))]
+    // Current clinical facts and the doctor's historical curation have different
+    // provenance. Keep one patient candidate without discarding its saved notes.
+    const snapshotSource = item => ({ caseId: item.id, revision: item.revision || 0,
+      capturedAt: item.createdAt, starred: Boolean(item.starred), diagnosis: item.diagnosis,
+      lessons: item.lessons || "", summary: item.summary || "", outcome: item.outcome || "", tags: item.tags || [] });
+    const byPatient = new Map();
+    for (const item of library) {
+      if (excludePatientId && item.patientId === excludePatientId) continue;
+      const key = item.patientId || `case:${item.id}`;
+      if (!byPatient.has(key)) byPatient.set(key, []);
+      byPatient.get(key).push(item);
+    }
+    for (const snapshots of byPatient.values()) snapshots.sort((a, b) => Number(b.starred) - Number(a.starred) || b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+    const candidates = charts.map(item => {
+      const snapshots = byPatient.get(item.patientId) || [];
+      byPatient.delete(item.patientId);
+      const curatedSources = snapshots.filter(source => source.starred).map(snapshotSource);
+      return { ...item, starred: curatedSources.length > 0,
+        lessons: curatedSources.map(source => source.lessons).filter(Boolean).join("\n"),
+        tags: [...new Set(curatedSources.flatMap(source => source.tags))], curatedSources,
+        clinicalSource: { type: "patient-chart", patientId: item.patientId, revision: item.revision, updatedAt: item.createdAt } };
+    });
+    for (const snapshots of byPatient.values()) {
+      for (const item of snapshots) candidates.push({ ...item, curatedSources: snapshots.filter(source => source.starred).map(snapshotSource),
+        clinicalSource: { type: "case-snapshot", caseId: item.id, revision: item.revision || 0, capturedAt: item.createdAt } });
+    }
+    const selectedPatients = new Set();
+    const scored = candidates
       .map((item) => {
         const reasons = [];
         let score = 0;
@@ -230,12 +260,19 @@ export class CaseLibrary {
       })
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
+      .filter(({ case: item }) => {
+        if (!item.patientId) return true;
+        if (selectedPatients.has(item.patientId)) return false;
+        selectedPatients.add(item.patientId); return true;
+      })
       .slice(0, limit);
     return {
       count: scored.length,
       matches: scored.map(({ case: item, score, reasons }) => ({
         caseId: item.id,
         sourceType: item.sourceType,
+        clinicalSource: item.clinicalSource,
+        curatedSources: item.curatedSources,
         verification: "candidate-needs-clinical-review",
         diagnosis: item.diagnosis,
         icd10: item.icd10,

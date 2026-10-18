@@ -1908,7 +1908,7 @@ export function createServer(options = {}) {
         if (req.method === "PATCH")
           return send(res, 200, cases.update(parts[2], await body(req)));
         if (req.method === "DELETE")
-          return send(res, 200, cases.removeCase(parts[2]));
+          return send(res, 200, cases.removeCase(parts[2], await body(req)));
       }
       if (path === "/api/icd10" && req.method === "GET")
         return send(res, 200, {

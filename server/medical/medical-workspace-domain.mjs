@@ -220,7 +220,7 @@ export function createMedicalWorkspaceDomain({
               execute(plugin.definition.function.name, args, context),
           });
         const intakeRun = workspace.runs?.find(run => run.id === runId);
-        if (intakeRun?.policy?.workflow === "patient-assessment") configureAssessmentTools(registry, workspace, intakeRun);
+        if (intakeRun?.policy?.workflow === "patient-assessment") configureAssessmentTools(registry, workspace, intakeRun, { readPatient: patients ? () => patients().row(workspace.patientId) : null });
         if (intakeRun?.policy?.workflow === "similar-case-search") configureSimilarCaseTools(registry, workspace, intakeRun);
         if (intakeRun?.policy?.workflow === "patient-intake") {
           const sameFiles = run => JSON.stringify([...(run.fileIds || [])].sort()) === JSON.stringify([...(intakeRun.fileIds || [])].sort());

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './agent-runtime';
+import './intake-background.css';
 
 // File upload continues across in-app navigation. Once saved, the server owns the job.
 export const intakeUploads = new Map();
@@ -27,8 +28,8 @@ export function IntakeBackground({ onOpen }) {
     return ()=>{alive=false;clearInterval(timer);};
   },[]);
   if(!summary) return null;
-  return <aside aria-label="后台建档状态" style={{position:'fixed',right:24,bottom:24,zIndex:40,background:'var(--bg-panel, white)',border:'1px solid var(--border, #ddd)',borderRadius:12,padding:'12px 16px',boxShadow:'0 4px 18px #0001',maxWidth:340}}>
-    <p role="status" style={{margin:'0 0 8px'}}>患者建档：{[summary.running && `${summary.running} 项后台处理`,summary.drafts && `${summary.drafts} 份草稿待核对`,summary.failed && `${summary.failed} 项未完成`,summary.needsInput && `${summary.needsInput} 项待补充信息`].filter(Boolean).join(' · ')}</p>
+  return <aside aria-label="后台建档状态" className="intake-background-status">
+    <p role="status">患者建档：{[summary.running && `${summary.running} 项后台处理`,summary.drafts && `${summary.drafts} 份草稿待核对`,summary.failed && `${summary.failed} 项未完成`,summary.needsInput && `${summary.needsInput} 项待补充信息`].filter(Boolean).join(' · ')}</p>
     <button className="secondary" onClick={onOpen}>查看建档任务</button>
   </aside>;
 }

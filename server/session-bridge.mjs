@@ -4,6 +4,7 @@ import {requestsMedicalDeliverable} from '../shared/medical-delivery.mjs';
 import { collectWorkspaceDelivery } from "./core/workspace-delivery.mjs";
 import {similarCaseQuestion, similarCaseSearchScope} from './medical/similar-case-workflow.mjs';
 import { assessmentQuestion } from "./medical/assessment-tools.mjs";
+import { assessmentPatientSource } from "./medical/assessment-source.mjs";
 // Session Bridge：把「统一内核工作区（kind:"session"）」投影成首页医疗
 // 会话的 API 形状，并按会话类别双轨分派——新建会话走 WorkspaceService
 // （通用内核 + 医疗叠层），既有 sessions 表会话继续走 MedicalRuntime。
@@ -870,6 +871,7 @@ export class SessionBridge {
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
     const fileIds = this.selectMaterials(w, body.fileIds);
     const sources = this.buildSources(w, message, fileIds);
+    if (policy.workflow === "patient-assessment" && this.patientRecord) sources.push(assessmentPatientSource(this.patientRecord(w.patientId)));
     const handle = this.service.prepare(id, {
       revision: body.sessionRevision ?? body.revision ?? w.revision,
       message,
