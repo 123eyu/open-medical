@@ -34,10 +34,12 @@ async function createRecoveryDispatcher() {
   return new Agent({ allowH2: true, connect: { rejectUnauthorized: true } });
 }
 
+function destroyRecoveryDispatcher(dispatcher) {
+  try { void Promise.resolve(dispatcher.destroy()).catch(() => {}); } catch { /* disposal is best effort */ }
+}
+
 function closeRecoveryDispatcher(dispatcher, signal) {
-  const destroy = () => {
-    try { void Promise.resolve(dispatcher.destroy()).catch(() => {}); } catch { /* disposal is best effort */ }
-  };
+  const destroy = () => destroyRecoveryDispatcher(dispatcher);
   if (signal?.aborted) { destroy(); return; }
   signal?.addEventListener("abort", destroy, { once: true });
   // close drains the active response. Awaiting it here would deadlock a large
@@ -49,7 +51,7 @@ function closeRecoveryDispatcher(dispatcher, signal) {
 // Retry only before a response stream is handed to the caller. Never replay a
 // partially consumed model stream or a tool side effect.
 export async function requestProvider(fetchImpl, url, init, onStatus = () => {}, sleep = delay, recoveryFactory = createRecoveryDispatcher) {
-  let recoveryDispatcher, recoveryAttempted = false;
+  let recoveryDispatcher;
   try {
     for (let attempt = 0; attempt < 3; attempt++) {
       init.signal?.throwIfAborted();
@@ -60,12 +62,18 @@ export async function requestProvider(fetchImpl, url, init, onStatus = () => {},
         if (!(error instanceof TypeError) && !["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "EAI_AGAIN"].includes(error.code)) throw error;
         if (attempt === 2 || error.name === "AbortError")
           throw new AppError("PROVIDER_NETWORK", "模型连接失败，有限重试后仍不可用；检查点已保留", 502);
-        // A poisoned HTTP/2 connection can fail every retry immediately. Recover
-        // once using a request-owned connection; never override an explicitly
-        // supplied dispatcher (which may carry a caller's proxy/TLS policy).
-        if (!recoveryAttempted && !init.dispatcher &&
+        // Retire only this request's failed recovery pool. The next attempt
+        // must not reuse it after the same TLS alert; the three-attempt limit
+        // still permits at most two private dispatchers. Never override an
+        // explicit dispatcher carrying the caller's proxy/TLS policy.
+        if (!init.dispatcher &&
             (error.cause?.code ?? error.code) === "ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC") {
-          recoveryAttempted = true;
+          if (recoveryDispatcher) {
+            const failedDispatcher = recoveryDispatcher;
+            recoveryDispatcher = null;
+            destroyRecoveryDispatcher(failedDispatcher);
+          }
+          init.signal?.throwIfAborted();
           recoveryDispatcher = await recoveryFactory();
           init.signal?.throwIfAborted();
         }
