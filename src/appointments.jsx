@@ -84,14 +84,14 @@ export function AppointmentsPanel({ patient }) {
 
 // Lab values added since the doctor last marked them read.
 export function NewLabsNotice({ patientId, onOpenLabs }) {
-  const [labs, setLabs] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const load = useCallback(() => api(`/api/patients/${patientId}/labs/new`).then((v) => setLabs(v.labs)).catch(() => setLabs([])), [patientId]);
+  const [labs, setLabs] = useState(null), [keys, setKeys] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const load = useCallback(() => api(`/api/patients/${patientId}/labs/new`).then((v) => { setLabs(v.labs); setKeys(v.keys || []); }).catch(() => setLabs([])), [patientId]);
   useEffect(() => { load(); }, [load]);
   if (!labs?.length) return null;
   return <div className="new-labs" role="status" aria-label="待阅检验结果">
     <div><b>待阅检验结果 {labs.length} 项</b><span>{labs.slice(0, 6).map((l) => `${l.item} ${l.value}${l.unit || ""}（${l.date}）`).join("、")}{labs.length > 6 ? " 等" : ""}</span></div>
     {onOpenLabs && <button className="text-button" onClick={onOpenLabs}>看趋势</button>}
-    <button className="secondary" disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/patients/${patientId}/labs/reviewed`, "POST", {}); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); } }}>标记已阅</button>
+    <button className="secondary" disabled={busy || !keys.length} onClick={async () => { setBusy(true); try { await api(`/api/patients/${patientId}/labs/reviewed`, "POST", { keys: keys.slice(0, 6) }); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); } }}>{labs.length > 6 ? "标记以上 6 项已阅" : "标记已阅"}</button>
     {error && <p className="error-text">{error}</p>}
   </div>;
 }

@@ -23,6 +23,7 @@ export class FollowUpManager {
   ) {
     Object.assign(this, { store, runtime, now, pollMs, autoStart });
     store.db.exec('CREATE TABLE IF NOT EXISTS followup_applications(request_id TEXT PRIMARY KEY,patient_id TEXT NOT NULL,fingerprint TEXT NOT NULL,jobs TEXT NOT NULL)');
+    store.db.exec('CREATE TABLE IF NOT EXISTS followup_creation_requests(request_id TEXT PRIMARY KEY,patient_id TEXT NOT NULL,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
     this.inFlight = new Set();
     this.stopped = false;
     for (const row of store.db
@@ -72,6 +73,30 @@ export class FollowUpManager {
       .map((r) => JSON.parse(r.data));
   }
   create(patientId, input) {
+    return sqliteTransaction(this.store.db, () => {
+      this.patientRow(patientId);
+      check(input && typeof input === "object" && !Array.isArray(input), "INVALID_INPUT", "随访计划参数无效");
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const fingerprint = createHash("sha256").update(JSON.stringify({
+        name: input.name, once: input.once === true, intervalDays: input.once === true ? null : input.intervalDays,
+        firstDueAt: input.firstDueAt, checklist: input.checklist || [], questionnaire: input.questionnaire || null,
+        externalConsent: input.externalConsent === true,
+      })).digest("hex");
+      if (requestId) {
+        const previous = this.store.db.prepare("SELECT * FROM followup_creation_requests WHERE request_id=?").get(requestId);
+        if (previous) {
+          check(previous.patient_id === patientId && previous.fingerprint === fingerprint, "REQUEST_CONFLICT", "本次随访已保存且提交内容不同，请先核对已有计划；如需另建，请放弃本次重试后重新新建", 409);
+          const row = this.store.db.prepare("SELECT data FROM follow_ups WHERE id=? AND patient_id=?").get(previous.job_id, patientId);
+          check(row, "REQUEST_CONFLICT", "本次随访曾保存，但已被删除。请核对后另建计划", 409);
+          return { ...JSON.parse(row.data), replayed: true };
+        }
+      }
+      const job = this.createNew(patientId, input);
+      if (requestId) this.store.db.prepare("INSERT INTO followup_creation_requests VALUES (?,?,?,?)").run(requestId, patientId, fingerprint, job.id);
+      return job;
+    });
+  }
+  createNew(patientId, input) {
     const patient = this.patientRow(patientId);
     check(
       !patient.archived,

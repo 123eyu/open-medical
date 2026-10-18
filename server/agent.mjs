@@ -857,6 +857,7 @@ export function createServer(options = {}) {
         401,
       );
   }
+  let shuttingDown = false, shutdownPromise;
   const server = http.createServer(async (req, res) => {
     if (options.desktopAccessToken) res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -867,6 +868,7 @@ export function createServer(options = {}) {
       "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src 'self' blob:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     );
     try {
+      check(!shuttingDown, "SERVER_STOPPING", "服务正在关闭，请稍后重新连接", 503);
       const url = new URL(req.url, `http://${req.headers.host}`);
       const path = url.pathname;
       // This single public route authenticates with WeCom signature + encrypted corp ID.
@@ -957,8 +959,13 @@ export function createServer(options = {}) {
         });
       if (path === "/api/skills" && req.method === "GET")
         return send(res, 200, { skills: skills.list() });
-      if (path === "/api/bootstrap" && req.method === "GET")
-        return send(res, 200, {
+      if (path === "/api/bootstrap" && req.method === "GET") {
+        const controller = new AbortController();
+        const disconnected = () => {
+          if (!res.writableEnded) controller.abort(new AppError("REQUEST_ABORTED", "请求已断开", 499));
+        };
+        res.once("close", disconnected);
+        try { return send(res, 200, {
           token: secret,
           demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
@@ -1024,7 +1031,7 @@ export function createServer(options = {}) {
           knowledge: {
             enabled: true,
             count: guidelines.list().length,
-            rag: await guidelines.ragStatus(),
+            rag: await guidelines.ragStatus({ signal: controller.signal }),
           },
           materials: {
             enabled: true,
@@ -1037,7 +1044,8 @@ export function createServer(options = {}) {
           drg: { enabled: true, ...drg.settings() },
           cases: cases.counts(),
           wechat: { enabled: chatFollowups.config("wechat").enabled },
-        });
+        }); } finally { res.removeListener("close", disconnected); }
+      }
       if (path.startsWith("/api/knowledge/playback/") && ["GET", "HEAD"].includes(req.method)) {
         const file = knowledgeOrganizer.playbackFile(path.split("/").at(-1));
         const info = await stat(file.path), range = req.headers.range;
@@ -2021,7 +2029,7 @@ export function createServer(options = {}) {
           if (req.method === "GET") return send(res, 200, schedule.appointments(pid, { status: url.searchParams.get("status") || undefined }));
           if (req.method === "POST") return send(res, 201, schedule.create(pid, await body(req)));
         }
-        if (parts[3] === "labs" && parts.length === 5 && parts[4] === "new" && req.method === "GET") return send(res, 200, { labs: schedule.newLabs(pid) });
+        if (parts[3] === "labs" && parts.length === 5 && parts[4] === "new" && req.method === "GET") return send(res, 200, schedule.newLabsSnapshot(pid));
         if (parts[3] === "labs" && parts.length === 5 && parts[4] === "reviewed" && req.method === "POST") return send(res, 200, schedule.markLabsReviewed(pid, (await body(req)).keys));
         if (parts[3] === "lab-display" && parts.length === 4) {
           if (req.method === "GET") return send(res, 200, patients.labDisplay(pid));
@@ -2607,7 +2615,11 @@ export function createServer(options = {}) {
     care.start();
     extensions.start();
   });
-  server.shutdown = async () => {
+  server.shutdown = () => {
+    if (shutdownPromise) return shutdownPromise;
+    shuttingDown = true;
+    guidelines.stopStatusQueries?.();
+    shutdownPromise = (async () => {
     await personalRegression.stop();
     workspaces.stopping = true;
     scheduler.stop();
@@ -2642,12 +2654,24 @@ export function createServer(options = {}) {
     await workspaces.scheduler.drain();
     await workspaces.recovery.drain();
     await workspaces.extensions.close();
-    if (databasePath === ":memory:")
-      { rmSync(vectorDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); rmSync(knowledgeRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
     await followups.drain();
     await care.drain();
-    sockets.close();
-    store.close();
+    try {
+      const vectorClosures = await Promise.allSettled([vectorStore.close(), materialVectors.close()]);
+      const failed = vectorClosures.find(result => result.status === "rejected");
+      if (databasePath === ":memory:") {
+        // A timed-out native initializer can still own this path. Leave it in
+        // place rather than race cleanup against an unconfirmed shutdown.
+        if (!failed) rmSync(vectorDir, { recursive: true, force: true });
+        rmSync(knowledgeRoot, { recursive: true, force: true });
+      }
+      if (failed) throw failed.reason;
+    } finally {
+      sockets.close();
+      store.close();
+    }
+    })();
+    return shutdownPromise;
   };
   return server;
 }

@@ -8,6 +8,7 @@ import { sqliteTransaction } from "../sqlite-transaction.mjs";
 export const APPOINTMENT_STATUS = Object.freeze({ scheduled: "已预约", attended: "已到诊", missed: "未到诊", cancelled: "已取消" });
 const DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const labKey = (lab) => createHash("sha256").update(JSON.stringify([lab.item, lab.value, lab.unit || "", lab.date])).digest("hex").slice(0, 32);
+const labReviewToken = (patientId, lab) => createHash("sha256").update(JSON.stringify([patientId, labKey(lab)])).digest("hex").slice(0, 32);
 const localDate = (ms) => { const d = new Date(ms); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 
 export class PatientSchedule {
@@ -128,13 +129,21 @@ export class PatientSchedule {
     }
     return out;
   }
+  newLabsSnapshot(patientId) {
+    const labs = this.newLabs(patientId);
+    return { labs, keys: labs.map(lab => labReviewToken(patientId, lab)) };
+  }
   markLabsReviewed(patientId, keys) {
-    const patient = this.patients.row(identifier(patientId));
-    const current = (patient.labs || []).map(labKey);
-    const chosen = Array.isArray(keys) ? keys.filter((k) => current.includes(k)) : current;
-    const put = this.db.prepare("INSERT OR IGNORE INTO lab_reviews VALUES (?,?,?)"), at = new Date(this.now()).toISOString();
-    sqliteTransaction(this.db, () => { for (const key of chosen) put.run(patient.id, key, at); });
-    this.store.audit(null, "labs.reviewed", { patientId: patient.id, count: chosen.length });
-    return { reviewed: chosen.length, remaining: this.newLabs(patient.id).length };
+    check(Array.isArray(keys) && keys.length > 0 && keys.length <= 1000 && keys.every(key => typeof key === "string" && /^[a-f0-9]{32}$/.test(key)), "INVALID_INPUT", "请先读取待阅检验，并明确提交已核对条目的 keys（1–1000 项）");
+    return sqliteTransaction(this.db, () => {
+      const patient = this.patients.row(identifier(patientId));
+      const current = new Map((patient.labs || []).map(lab => [labReviewToken(patient.id, lab), labKey(lab)]));
+      const unique = [...new Set(keys)], chosen = unique.filter(key => current.has(key));
+      const put = this.db.prepare("INSERT OR IGNORE INTO lab_reviews VALUES (?,?,?)"), at = new Date(this.now()).toISOString();
+      let reviewed = 0;
+      for (const key of chosen) reviewed += Number(put.run(patient.id, current.get(key), at).changes);
+      this.store.audit(null, "labs.reviewed", { patientId: patient.id, count: reviewed });
+      return { reviewed, alreadyReviewed: chosen.length - reviewed, noLongerCurrent: unique.length - chosen.length, remaining: this.newLabs(patient.id).length };
+    });
   }
 }

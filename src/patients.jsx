@@ -1,3 +1,4 @@
+import { useClinicalDraft } from "./clinical-drafts";
 import { parsePastedMessages } from "../shared/message-import.mjs";
 import { CampaignPanel } from "./care-inbox";
 import { ChatFollowupsPanel } from "./chat-followups";
@@ -1132,7 +1133,9 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
       .toISOString()
       .slice(0, 16);
   };
-  const [form, setForm] = useState(
+  const [storedDraft, setStoredDraft] = useClinicalDraft(patientId, `followupPlan:${job?.id || "new"}`, null);
+  const [initialDraft] = useState(() => ({
+    form: (
     editing
       ? {
           name: job.name,
@@ -1147,10 +1150,18 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
           firstDueAt: defaultDue(),
           checklist: "",
           externalConsent: false,
-        },
-  );
-  const [withSurvey, setWithSurvey] = useState(false);
-  const [questionnaire, setQuestionnaire] = useState(() => emptyQuestionnaire());
+        }
+    ),
+    withSurvey: false,
+    questionnaire: emptyQuestionnaire(),
+    requestId: crypto.randomUUID(),
+    revision: job?.revision,
+  }));
+  const currentDraft = storedDraft || initialDraft;
+  const { form, withSurvey, questionnaire } = currentDraft;
+  const setForm = value => setStoredDraft({ ...currentDraft, form: value });
+  const setWithSurvey = value => setStoredDraft({ ...currentDraft, withSurvey: value });
+  const setQuestionnaire = value => setStoredDraft({ ...currentDraft, questionnaire: value });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const set = (key) => (e) =>
@@ -1160,6 +1171,8 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
     });
   const submit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setStoredDraft(currentDraft);
     setSaving(true);
     setError("");
     try {
@@ -1177,17 +1190,19 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
         await api(
           `/api/patients/${patientId}/followups/${job.id}`,
           "PATCH",
-          { ...payload, revision: job.revision },
+          { ...payload, revision: currentDraft.revision },
         );
       } else {
         await api(`/api/patients/${patientId}/followups`, "POST", {
           ...payload,
+          requestId: currentDraft.requestId,
           externalConsent: form.externalConsent,
           ...(withSurvey
             ? { questionnaire: buildQuestionnaire(questionnaire) }
             : {}),
         });
       }
+      setStoredDraft(null);
       await onCreated();
     } catch (err) {
       setError(err.message);
@@ -1201,6 +1216,7 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
       onClose={onClose}
     >
       <form className="modal-form" onSubmit={submit}>
+        <fieldset disabled={saving}>
         <label>
           计划名称
           <input value={form.name} onChange={set("name")} required autoFocus />
@@ -1261,6 +1277,8 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
         <button className="primary" disabled={saving}>
           {editing ? "保存修改" : "创建随访计划"}
         </button>
+        <button type="button" className="secondary" onClick={() => { if (window.confirm("放弃本次输入与重试？已经保存的随访计划不会删除，请先核对已有计划。")) { setStoredDraft(null); onClose(); } }}>放弃本次输入与重试</button>
+        </fieldset>
       </form>
     </Modal>
   );

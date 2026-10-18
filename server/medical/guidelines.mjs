@@ -5,7 +5,7 @@ import { locateKnowledgeEvidence, knowledgeCitationUrl } from "./knowledge-evide
 import { fuseKnowledgeQueries } from "./knowledge-query.mjs";
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
 import { createHash } from "node:crypto";
-import { check, string } from "../errors.mjs";
+import { check, string, AppError } from "../errors.mjs";
 import { KNOWLEDGE_STATES, knowledgeMetadata, externalUseAllowed, optionalSourceUrl, optionalReviewDate } from "./knowledge-metadata.mjs";
 
 // Local clinical guideline library. Documents (usually PDFs extracted to
@@ -20,9 +20,23 @@ export const EDUCATION_COLLECTION = "患教素材";
 const sha256 = (value) =>
   createHash("sha256").update(value).digest("hex");
 
+// Cancels only this reader's wait, not the shared vector-store operation.
+function statusResult(promise, signal) {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const aborted = () => { signal.removeEventListener("abort", aborted); reject(signal.reason); };
+    signal.addEventListener("abort", aborted, { once: true });
+    Promise.resolve(promise).then(
+      value => { signal.removeEventListener("abort", aborted); resolve(value); },
+      error => { signal.removeEventListener("abort", aborted); reject(error); },
+    );
+  });
+}
+
 export class GuidelineLibrary {
   constructor(store, embedder = null, vectorStore = null, { expandQuery = null } = {}) {
     this.expandQuery = expandQuery;
+    this.statusController = new AbortController();
     this.store = store;
     this.activeIndexWrites = 0;
     this.indexTasks = new Map();
@@ -155,10 +169,16 @@ export class GuidelineLibrary {
       this.deletingCollection = false;
     }
   }
-  async ragStatus() {
+  stopStatusQueries() {
+    this.statusController.abort(new AppError("SERVER_STOPPING", "服务正在关闭，请稍后重新连接", 503));
+  }
+  async ragStatus({ signal: callerSignal } = {}) {
+    const signal = callerSignal ? AbortSignal.any([callerSignal, this.statusController.signal]) : this.statusController.signal;
+    signal.throwIfAborted();
     const stats = this.vectorStore
-      ? await this.vectorStore.stats().catch(error => ({backend:"unavailable",chunks:0,models:[],error:indexError(error)}))
+      ? await statusResult(this.vectorStore.stats().catch(error => ({backend:"unavailable",chunks:0,models:[],error:indexError(error)})), signal)
       : { backend: "none", chunks: 0, models: [] };
+    signal.throwIfAborted();
     const current = this.embedder?.model || null;
     const indexedModels = stats.models.map((m) => m.model);
     const stale =

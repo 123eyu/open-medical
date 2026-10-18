@@ -31,8 +31,8 @@ export function scheduleTools(getSchedule) {
       execute: ({ appointmentId, ...input }) => schedule().update(appointmentId, input),
     },
     {
-      definition: definition("patient_new_labs", "读取某患者尚未被医生标记已阅的检验结果。医生在对话中说已看过时，可设置 markReviewed=true 全部标记已阅。", { patientId: text, markReviewed: { type: "boolean" } }, ["patientId"]),
-      execute: ({ patientId, markReviewed }) => markReviewed ? schedule().markLabsReviewed(patientId) : { labs: schedule().newLabs(patientId) },
+      definition: definition("patient_new_labs", "读取某患者尚未被医生标记已阅的检验结果。读取时同时返回与结果一一对应的 keys。仅在医生明确确认看过这些具体结果后设置 markReviewed=true，并传入本次已读条目的 keys；不得标记未展示或后来新增的结果。", { patientId: text, markReviewed: { type: "boolean" }, keys: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 1000, description: "从先前读取结果中取得、并已由医生核对的条目 keys" } }, ["patientId"]),
+      execute: ({ patientId, markReviewed, keys }) => markReviewed ? schedule().markLabsReviewed(patientId, keys) : schedule().newLabsSnapshot(patientId),
     },
   ];
 }

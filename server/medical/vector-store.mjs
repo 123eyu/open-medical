@@ -3,6 +3,7 @@
 // columnar files on disk). One table per embedding model so dimension
 // changes never mix vectors. Falls back gracefully: when the native
 // module is unavailable the knowledge base degrades to full-text matching.
+import { AppError } from "../errors.mjs";
 import {
   Schema,
   Field,
@@ -18,6 +19,9 @@ export class LanceVectorStore {
     this.init = null;
     this.unavailable = false;
     this.pendingWrite = Promise.resolve();
+    this.closing = false;
+    this.closed = false;
+    this.closePromise = null;
   }
   // Lazy connect: construction is synchronous so composition roots can hold
   // the store before async resources exist; first use awaits the connect.
@@ -34,13 +38,34 @@ export class LanceVectorStore {
     })();
     return store;
   }
-  async ensureDb() {
+  async ensureDb(acceptedWrite = false) {
+    if (this.closed || (this.closing && !acceptedWrite))
+      throw new AppError("VECTOR_CLOSED", "向量索引正在关闭", 503);
     await this.init;
+    if (this.closed || (this.closing && !acceptedWrite))
+      throw new AppError("VECTOR_CLOSED", "向量索引正在关闭", 503);
     if (this.unavailable)
       throw new Error(
         `LanceDB 不可用（${this.loadError}）；知识检索已降级为全文匹配`,
       );
     return this.db;
+  }
+  close({ timeoutMs = 5000 } = {}) {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true;
+    // Native connect cannot be aborted. Retain its eventual connection and
+    // dispose it even if the bounded caller wait reports a timeout.
+    const disposed = Promise.all([this.init, this.pendingWrite]).then(() => {
+      try { this.db?.close(); } finally { this.closed = true; }
+    });
+    let timer;
+    this.closePromise = Promise.race([
+      disposed,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new AppError("VECTOR_CLOSE_TIMEOUT", "向量索引关闭超时；部分资源可能稍后释放，未确认退出成功", 503)), timeoutMs);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    return this.closePromise;
   }
   static encodeModel(model) {
     return Buffer.from(String(model), "utf8").toString("base64url");
@@ -56,6 +81,7 @@ export class LanceVectorStore {
     return `chunks_${this.constructor.encodeModel(model)}`;
   }
   write(operation) {
+    if (this.closing || this.closed) return Promise.reject(new AppError("VECTOR_CLOSED", "向量索引正在关闭", 503));
     const result = this.pendingWrite.then(operation);
     // Serialize creation and mutations; failed writes do not block later work.
     this.pendingWrite = result.catch(() => {});
@@ -65,7 +91,7 @@ export class LanceVectorStore {
   async upsertDoc(docId, model, rows) {
     checkRows(docId, rows);
     return this.write(async () => {
-      const db = await this.ensureDb(),
+      const db = await this.ensureDb(true),
         name = this.tableName(model);
       if (!(await db.tableNames()).includes(name)) {
         if (rows.length)
@@ -98,7 +124,7 @@ export class LanceVectorStore {
   async removeDocs(ids) {
     if (!ids.length) return;
     return this.write(async () => {
-      const db = await this.ensureDb();
+      const db = await this.ensureDb(true);
       const predicate = "doc_id IN (" + ids.map(sqlString).join(",") + ")";
       for (const name of await db.tableNames()) {
         if (!name.startsWith("chunks_")) continue;
@@ -132,7 +158,7 @@ export class LanceVectorStore {
   }
   async dropOtherModels(model) {
     return this.write(async () => {
-      const db = await this.ensureDb();
+      const db = await this.ensureDb(true);
       const keep = this.tableName(model);
       for (const name of await db.tableNames())
         if (name.startsWith("chunks_") && name !== keep)
