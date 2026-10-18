@@ -257,7 +257,7 @@ export function KnowledgeView({
                   onReview={review}
                   onIndex={reindex}
                   onOrganize={setOrganizing}
-                  onDelete={setDeleting}
+                  onDelete={doc => { setError(""); setDeleting(doc); }}
                   busy={busy}
                   onImport={() => setImporting(true)}
                 />
@@ -396,12 +396,26 @@ export function KnowledgeView({
             >
               取消
             </button>
+            {deleting.conflict && <button
+              className="secondary"
+              disabled={busy}
+              onClick={() => perform(async () => {
+                const doc = await api(`/api/knowledge/${deleting.id}`);
+                setDeleting(null);
+                setReader({ doc, highlight: null });
+              })}
+            >查看最新资料</button>}
             <button
               className="primary"
-              disabled={busy}
+              disabled={busy || deleting.conflict}
               onClick={() =>
                 perform(async () => {
-                  await api(`/api/knowledge/${deleting.id}`, "DELETE");
+                  try {
+                    await api(`/api/knowledge/${deleting.id}`, "DELETE", { expectedRevision: deleting.revision || 0 });
+                  } catch (failure) {
+                    if (failure.code === "REVISION_CONFLICT") setDeleting(current => current ? { ...current, conflict: true } : current);
+                    throw failure;
+                  }
                   setDeleting(null);
                   setNotice("资料已删除。");
                 })

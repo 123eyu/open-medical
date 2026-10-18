@@ -176,7 +176,7 @@ export class DemoPack {
     // Remove dependencies before their charts; keep the ledger if any step fails.
     for (const r of resources.filter(r => r.kind !== "patient" && r.kind !== "collection")) {
       if (this.exists(r.kind, r.id)) {
-        if (r.kind === "knowledge") await this.guidelines.removeDocument(r.id);
+        if (r.kind === "knowledge") await this.guidelines.removeDocument(r.id, { expectedRevision: this.guidelines.docRow(r.id).revision || 0 });
         else if (r.kind === "case") this.cases.removeCase(r.id);
         else if (r.kind === "session") this.sessions.removeSession(r.id);
         else if (r.kind === "trial") {

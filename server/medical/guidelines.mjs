@@ -373,13 +373,18 @@ export class GuidelineLibrary {
     void indexKnowledgeDoc(this, id).catch(() => {});
     return { docId: id, indexing: this.docRow(id).indexing };
   }
-  removeDocument(id) {
-    check(!this.indexTasks.has(id), "KNOWLEDGE_BUSY", "资料正在建立索引，请完成后再删除", 409);
-    this.store.db.prepare("DELETE FROM knowledge_embedding_batches WHERE doc_id=?").run(id);
-    this.docRow(id);
-    this.beforeRemoveDocument?.(id);
-    this.store.db.prepare("DELETE FROM guideline_chunks WHERE doc_id=?").run(id);
-    this.store.db.prepare("DELETE FROM guideline_docs WHERE id=?").run(id);
+  removeDocument(id, input = {}) {
+    sqliteTransaction(this.store.db, () => {
+      const doc = this.docRow(id);
+      check(input.expectedRevision === (doc.revision || 0), "REVISION_CONFLICT", "资料已被修改，请查看最新资料后重新确认删除", 409);
+      check(!this.deletingCollection && !this.indexTasks.has(id), "KNOWLEDGE_BUSY", "资料正在建立索引或删除，请完成后再删除", 409);
+      this.beforeRemoveDocument?.(id);
+      this.store.db.prepare("DELETE FROM knowledge_embedding_batches WHERE doc_id=?").run(id);
+      this.store.db.prepare("DELETE FROM guideline_chunks WHERE doc_id=?").run(id);
+      this.store.db.prepare("DELETE FROM guideline_docs WHERE id=?").run(id);
+      this.store.audit(null, "knowledge.document.deleted", { docId: id, revision: doc.revision || 0 });
+    });
+    // Retained files are removed only after the revision-checked DB commit.
     if (this.afterRemoveDocuments) return this.afterRemoveDocuments([id]).then(() => ({ ok: true }));
     return { ok: true };
   }

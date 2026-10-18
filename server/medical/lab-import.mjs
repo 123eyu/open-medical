@@ -1,4 +1,7 @@
-import { check, AppError } from "../errors.mjs";
+import { check, AppError, identifier } from "../errors.mjs";
+import { createHash } from "node:crypto";
+import { sqliteTransaction } from "../sqlite-transaction.mjs";
+const hash = value => createHash("sha256").update(value).digest("hex");
 
 // 检验结果表格导入（「能导出文件的医院」适配器）：医生从 LIS/Excel 导出
 // CSV 或直接粘贴单元格，逐行匹配患者后生成 patient-update 档案提案——
@@ -84,10 +87,11 @@ export class LabImporter {
         patient = byName.get(name) || null;
       }
       if (!patient) return { ...row, status: "no-patient", reason: number ? "编号未匹配到患者" : "姓名未匹配到患者，请先建档或补充编号" };
-      return { ...row, status: "ready", patientId: patient.id, patientName: patient.name, labs: [{ ...base, value: Number(input.value) }] };
+      return { ...row, status: "ready", patientId: patient.id, patientName: patient.name, matchedPatientNumber: patient.patientNumber || "", patientBirthYear: patient.birthYear || null, patientRevision: patient.revision, labs: [{ ...base, value: Number(input.value) }] };
     });
     return {
       rows: out,
+      fingerprint: hash(JSON.stringify({ text, rows: out })),
       stats: {
         total: out.length,
         ready: out.filter((r) => r.status === "ready").length,
@@ -100,31 +104,97 @@ export class LabImporter {
 
   // 采纳预览中 status==="ready" 的行（医生可再剔除），按患者分组后逐人
   // 生成 patient-update 提案；确认仍在患者档案完成。
-  commit({ text, selectedRows }) {
-    check(Array.isArray(selectedRows) && selectedRows.length >= 1 && selectedRows.length <= 500, "INVALID_INPUT", "请选择要导入的行");
-    const preview = this.preview(text);
-    const chosen = selectedRows.map((number) => preview.rows.find((row) => row.row === number && row.status === "ready"))
-      .filter(Boolean);
-    check(chosen.length >= 1, "INVALID_INPUT", "所选行中没有可导入的记录，请刷新预览后重选");
-    const grouped = new Map();
-    for (const row of chosen) {
-      if (!grouped.has(row.patientId)) grouped.set(row.patientId, { patientName: row.patientName, labs: [] });
-      grouped.get(row.patientId).labs.push(...row.labs);
-    }
-    const proposals = [];
-    for (const [patientId, entry] of grouped) {
-      const action = this.pending.propose({
-        type: "patient-update",
-        patientId,
-        payload: { labs: entry.labs },
-        summary: `导入检验结果 ${entry.labs.length} 项（${[...new Set(entry.labs.map((l) => l.item))].slice(0, 3).join("、")}${entry.labs.length > 3 ? " 等" : ""}）`,
-      });
-      proposals.push({ id: action.id, patientId, patientName: entry.patientName, labs: entry.labs.length });
-    }
-    return {
-      proposals,
-      skipped: preview.stats.total - chosen.length,
-      note: "已生成待确认提案；请到患者档案查看本次变更并保存。",
-    };
+  commit({ text, selectedRows, fingerprint, requestId }) {
+    check(
+      Array.isArray(selectedRows) &&
+        selectedRows.length >= 1 &&
+        selectedRows.length <= 500 &&
+        selectedRows.every(Number.isSafeInteger) &&
+        new Set(selectedRows).size === selectedRows.length,
+      "INVALID_INPUT",
+      "请选择不重复的有效导入行",
+    );
+    identifier(requestId);
+    check(
+      typeof text === "string" &&
+        text.length <= 200000 &&
+        typeof fingerprint === "string" &&
+        /^[a-f0-9]{64}$/.test(fingerprint),
+      "INVALID_INPUT",
+      "请先预览并核对检验表格",
+    );
+    const requestFingerprint = hash(
+      JSON.stringify({
+        text,
+        selectedRows: [...selectedRows].sort((a, b) => a - b),
+        fingerprint,
+      }),
+    );
+    const db = this.patients.store.db;
+    return sqliteTransaction(db, () => {
+      const key = `lab-import:${requestId}`;
+      const receipt = db.prepare("SELECT value FROM meta WHERE key=?").get(key);
+      // An already committed submission remains the same submission even if
+      // patient identities/revisions subsequently change. Never rematch a retry.
+      if (receipt) {
+        const saved = JSON.parse(receipt.value);
+        check(
+          saved.fingerprint === requestFingerprint,
+          "REQUEST_CONFLICT",
+          "本次检验提案已经生成，但重试内容已变化。请先核对已有提案，再返回重新预览",
+          409,
+        );
+        return { ...saved.result, replayed: true };
+      }
+      const preview = this.preview(text);
+      check(
+        preview.fingerprint === fingerprint,
+        "IMPORT_CHANGED",
+        "患者身份、档案版本或原表内容已变化。尚未生成任何提案，请返回重新预览并核对患者",
+        409,
+      );
+      const chosen = selectedRows.map((number) =>
+        preview.rows.find((row) => row.row === number),
+      );
+      check(
+        chosen.every((row) => row?.status === "ready"),
+        "INVALID_INPUT",
+        "所选行中存在不可导入记录，请重新预览后核对",
+      );
+      const grouped = new Map();
+      for (const row of chosen) {
+        if (!grouped.has(row.patientId))
+          grouped.set(row.patientId, {
+            patientName: row.patientName,
+            labs: [],
+          });
+        grouped.get(row.patientId).labs.push(...row.labs);
+      }
+      const proposals = [];
+      for (const [patientId, entry] of grouped) {
+        const action = this.pending.propose({
+          type: "patient-update",
+          patientId,
+          payload: { labs: entry.labs },
+          summary: `导入检验结果 ${entry.labs.length} 项（${[...new Set(entry.labs.map((l) => l.item))].slice(0, 3).join("、")}${entry.labs.length > 3 ? " 等" : ""}）`,
+        });
+        proposals.push({
+          id: action.id,
+          patientId,
+          patientName: entry.patientName,
+          labs: entry.labs.length,
+        });
+      }
+      const result = {
+        proposals,
+        skipped: preview.stats.total - chosen.length,
+        note: "已生成待确认提案；请到患者档案查看本次变更并保存。",
+      };
+      db.prepare("INSERT INTO meta VALUES (?,?)").run(
+        key,
+        JSON.stringify({ fingerprint: requestFingerprint, result }),
+      );
+      return result;
+    });
   }
 }

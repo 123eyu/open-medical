@@ -2328,7 +2328,7 @@ export function createServer(options = {}) {
           if (req.method === "PATCH")
             return send(res, 200, guidelines.updateMetadata(sub[0], await body(req)));
           if (req.method === "DELETE")
-            return send(res, 200, await guidelines.removeDocument(sub[0]));
+            return send(res, 200, await guidelines.removeDocument(sub[0], await body(req)));
         }
       }
       if (parts[0] === "api" && parts[1] === "doctor") {
