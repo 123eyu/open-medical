@@ -43,7 +43,10 @@ export async function requestProvider(fetchImpl, url, init, onStatus = () => {},
     const requested = header === null ? NaN : /^\d+(\.\d+)?$/.test(header)
       ? Number(header) * 1000 : Date.parse(header) - Date.now();
     const waitMs = Math.min(5000, Math.max(250, Number.isFinite(requested) ? requested : 300 * 2 ** attempt));
-    await response.body?.cancel();
+    // An errored error-response body may reject cancellation after a socket
+    // failure; disposing it must not prevent the bounded pre-stream retry.
+    try { await response.body?.cancel(); } catch { /* best-effort disposal */ }
+    init.signal?.throwIfAborted();
     onStatus({ status: "retrying", attempt: attempt + 1, reason: "http", httpStatus: response.status });
     await sleep(waitMs, undefined, { signal: init.signal });
   }

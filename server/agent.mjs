@@ -1,3 +1,4 @@
+import { habitMutation, habitRevision } from './medical/habit-concurrency.mjs';
 import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
 import { PersonalRegression } from './medical/personal-regression.mjs';
@@ -1636,7 +1637,7 @@ export function createServer(options = {}) {
         const query = p.diagnoses.map(d => d.name).join(' ');
         return send(res, 200, { enabled, matches: enabled && query ? cases.similar({ caseText: query.slice(0, 4000), diagnosis: p.diagnoses[0]?.name, excludePatientId: p.id, limit: 3 }).matches.filter(m => m.score >= 2) : [] });
       }
-      if (path === '/api/learning/changes' && req.method === 'GET') return send(res, 200, { changes: store.db.prepare('SELECT id,habit_id,decision,created_at FROM habit_history ORDER BY id DESC LIMIT 30').all() });
+      if (path === '/api/learning/changes' && req.method === 'GET') return send(res, 200, { changes: store.db.prepare('SELECT id,habit_id,decision,created_at FROM habit_history ORDER BY id DESC LIMIT 30').all().map(change => ({ ...change, revision: habitRevision(store.db, change.habit_id) })) });
       if (path === '/api/learning/month' && req.method === 'GET') {
         const now = new Date(), start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(), end = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const learned = store.db.prepare("SELECT COUNT(*) n FROM doctor_memories WHERE status='confirmed' AND created_at>=? AND created_at<?").get(start, end).n;
@@ -1663,7 +1664,18 @@ export function createServer(options = {}) {
         return send(res, 200, pending.reviewLog.clear({ includeStated: input.includeStated === true }));
       }
       if (parts[1] === 'pending-actions' && parts.length === 4 && parts[3] === 'review-draft' && req.method === 'PATCH') return send(res, 200, pending.saveReview(parts[2], await body(req)));
-      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 5 && parts[4] === 'decision' && req.method === 'POST') { const input = await body(req); return send(res, 200, pending.habitLearner.decide(Number(parts[3]), input.decision, input)); }
+      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 4 && req.method === 'GET') {
+        const memory = doctor.memoryRow(Number(parts[3]));
+        const all = store.db.prepare('SELECT id,source FROM doctor_memories').all();
+        const descendants = new Set([memory.id]);
+        for (let changed = true; changed;) {
+          changed = false;
+          for (const row of all) if (!descendants.has(row.id) && descendants.has(JSON.parse(row.source || '{}').replaces)) { descendants.add(row.id); changed = true; }
+        }
+        const related = doctor.memories().filter(m => ['confirmed', 'paused', 'deleted'].includes(m.status) && (descendants.has(m.id) || (memory.topic && m.topic === memory.topic)));
+        return send(res, 200, { ...memory, related });
+      }
+      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 5 && parts[4] === 'decision' && req.method === 'POST') { const input = await body(req); return send(res, 200, habitMutation(store.db, Number(parts[3]), input.decision, input, () => pending.habitLearner.decide(Number(parts[3]), input.decision, { ...input, requestId: undefined }), { required: true })); }
       if (path === "/api/pending-actions" && req.method === "GET") {
         const limit = Number(url.searchParams.get("limit") ?? 100), offset = Number(url.searchParams.get("offset") ?? 0);
         const actions = pending.list({
@@ -2335,20 +2347,23 @@ export function createServer(options = {}) {
           }
           if (parts.length === 4 && req.method === "DELETE") {
             const id = Number(parts[3]);
-            return send(res, 200, runtime.doctor.deleteMemory(id));
+            const input = await body(req);
+            return send(res, 200, habitMutation(store.db, id, "memory-delete", input, () => runtime.doctor.deleteMemory(id), { required: true }));
           }
           if (parts.length === 5) {
             const id = Number(parts[3]);
-            if (req.method === "POST" && parts[4] === "confirm")
-              return send(res, 200, runtime.doctor.confirmMemory(id));
-            if (req.method === "POST" && parts[4] === "dismiss")
-              return send(res, 200, runtime.doctor.dismissMemory(id));
-            if (req.method === "POST" && parts[4] === "pin")
-              return send(
-                res,
-                200,
-                runtime.doctor.pinMemory(id, (await body(req)).pinned === true),
-              );
+            if (req.method === "POST" && parts[4] === "confirm") {
+              const input = await body(req);
+              return send(res, 200, habitMutation(store.db, id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id), { required: true }));
+            }
+            if (req.method === "POST" && parts[4] === "dismiss") {
+              const input = await body(req);
+              return send(res, 200, habitMutation(store.db, id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id), { required: true }));
+            }
+            if (req.method === "POST" && parts[4] === "pin") {
+              const input = await body(req);
+              return send(res, 200, habitMutation(store.db, id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true), { required: true }));
+            }
           }
         }
         if (parts[2] === "consolidate" && req.method === "POST") {

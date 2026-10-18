@@ -1,3 +1,4 @@
+import { habitRevision } from './habit-concurrency.mjs';
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
 import { createHash } from "node:crypto";
 import { AppError, check, string } from "../errors.mjs";
@@ -184,6 +185,7 @@ export class DoctorProfile {
       .all(...args)
       .map((row) => ({
         ...row,
+        revision: habitRevision(this.store.db, row.id),
         pinned: Boolean(row.pinned),
         source: JSON.parse(row.source),
         rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null"),
@@ -197,7 +199,7 @@ export class DoctorProfile {
       )
       .get(id);
     check(row, "NOT_FOUND", "记忆条目不存在", 404);
-    return { ...row, pinned: Boolean(row.pinned), source: JSON.parse(row.source), rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null") };
+    return { ...row, revision: habitRevision(this.store.db, row.id), pinned: Boolean(row.pinned), source: JSON.parse(row.source), rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null") };
   }
   addMemory({
     kind = "explicit",

@@ -443,7 +443,7 @@ export class ReviewLog {
   clear({ includeStated = false } = {}) {
     return sqliteTransaction(this.db, () => {
       this.db.exec(
-        `DELETE FROM review_diffs; DELETE FROM review_sessions; DELETE FROM habit_feedback; DELETE FROM habit_patterns; DELETE FROM habit_history; DELETE FROM learning_events; DELETE FROM doctor_memories WHERE kind='consolidated'${includeStated ? " OR json_extract(source,'$.type')='stated'" : ""};`,
+        `DELETE FROM review_diffs; DELETE FROM review_sessions; DELETE FROM habit_feedback; DELETE FROM habit_patterns; DELETE FROM habit_history; DELETE FROM habit_mutation_receipts; UPDATE habit_revision_epoch SET epoch=epoch+1 WHERE id=1; DELETE FROM learning_events; DELETE FROM doctor_memories WHERE kind='consolidated'${includeStated ? " OR json_extract(source,'$.type')='stated'" : ""};`,
       );
       // Pending drafts retain clinical content but lose references to erased learning data.
       for (const row of this.db

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./agent-runtime";
+import { useHabitMutation } from "./habit-mutation";
+import { useHabitDraft } from "./habit-drafts";
 import "./learning-loop.css";
 const sectionNames = {
   diagnoses: "诊断",
@@ -168,11 +170,14 @@ export function LearningSettings() {
           </div>
           <fieldset className="learning-privacy" disabled={busy}>
             <legend>用我过去的档案作为 AI 参考范例</legend>
-            {provider && provider !== "local" && (prefs.examples || "local") === "local" && (
-              <p className="muted" role="note">
-                当前使用云端模型（{provider}），「仅本地模型」实际不会参考历史档案；如需参考请选择「始终使用」（会先脱敏）。
-              </p>
-            )}
+            {provider &&
+              provider !== "local" &&
+              (prefs.examples || "local") === "local" && (
+                <p className="muted" role="note">
+                  当前使用云端模型（{provider}
+                  ），「仅本地模型」实际不会参考历史档案；如需参考请选择「始终使用」（会先脱敏）。
+                </p>
+              )}
             <div className="learning-radio-cards">
               {[
                 [
@@ -658,10 +663,12 @@ export function LearningDangerZone({ onClear }) {
   );
 }
 export function HabitLedger({ onChange }) {
+  const mutate = useHabitMutation();
+  const [conflict, setConflict] = useHabitDraft("conflict", null);
   const [habits, setHabits] = useState([]),
     [error, setError] = useState(""),
-    [editing, setEditing] = useState(null),
-    [text, setText] = useState(""),
+    [editing, setEditing] = useHabitDraft("editing", null),
+    [text, setText] = useHabitDraft("text", ""),
     [busy, setBusy] = useState(false);
   const load = () =>
     api("/api/learning/habits")
@@ -686,19 +693,31 @@ export function HabitLedger({ onChange }) {
       window.removeEventListener("habits-changed", load);
     };
   }, []);
-  const decide = async (id, decision, extra = {}) => {
+  const decide = async (memory, decision, extra = {}) => {
+    const id = memory.id;
     setBusy(true);
     try {
-      await api(`/api/learning/habits/${id}/decision`, "POST", {
+      await mutate(`/api/learning/habits/${id}/decision`, "POST", memory, {
         decision,
         ...extra,
       });
       setEditing(null);
+      setText("");
+      setConflict(null);
       setError("");
       await load();
       await onChange?.();
     } catch (e) {
       setError(e.message);
+      if (e.status === 409 || e.code === "REVISION_CONFLICT") {
+        try {
+          const current = await api(`/api/learning/habits/${id}`);
+          setConflict(current);
+          await load();
+        } catch (readError) {
+          setError(`${e.message}；${readError.message}`);
+        }
+      }
     } finally {
       setBusy(false);
     }
@@ -707,6 +726,67 @@ export function HabitLedger({ onChange }) {
     <section className="doctor-section habit-ledger" aria-label="我的习惯">
       <h3>我的习惯</h3>
       {error && <p role="alert">{error}</p>}
+      {editing && (
+        <div className="habit-editor" role="region" aria-label="编辑习惯措辞">
+          <p className="muted">开始编辑时：{editing.content}</p>
+          <label>
+            习惯措辞
+            <textarea value={text} onChange={(e) => setText(e.target.value)} />
+          </label>
+          {conflict && (
+            <div role="status">
+              <p>当前记录已调整。你的草稿已保留，请对照以下当前内容。</p>
+              {(conflict.related?.length ? conflict.related : [conflict]).map(
+                (current) => (
+                  <div key={current.id}>
+                    <p>
+                      当前内容：{current.content}（
+                      {{
+                        confirmed: "生效中",
+                        paused: "已停用",
+                        deleted: "已删除",
+                        dismissed: "已被替代",
+                      }[current.status] || current.status}
+                      ）
+                    </p>
+                    {current.status !== "dismissed" && (
+                      <button
+                        disabled={busy}
+                        onClick={() => {
+                          setEditing(current);
+                          setConflict(null);
+                          setError("");
+                        }}
+                      >
+                        已核对，保留草稿并基于此版本继续编辑
+                      </button>
+                    )}
+                  </div>
+                ),
+              )}
+            </div>
+          )}
+          <div className="habit-actions">
+            <button
+              disabled={busy || !text.trim() || !!conflict}
+              onClick={() => decide(editing, "edit", { content: text })}
+            >
+              保存措辞
+            </button>
+            <button
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                setEditing(null);
+                setText("");
+                setConflict(null);
+              }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
       {!habits.length && (
         <p className="muted">你说出的偏好和反复修改的写法，会记在这里。</p>
       )}
@@ -738,21 +818,20 @@ export function HabitLedger({ onChange }) {
               <div className="habit-actions">
                 <button
                   className="secondary"
-                  disabled={busy}
+                  disabled={busy || !!editing}
                   onClick={() =>
-                    decide(
-                      h.id,
-                      h.status === "confirmed" ? "disable" : "restore",
-                    )
+                    decide(h, h.status === "confirmed" ? "disable" : "restore")
                   }
                 >
                   {h.status === "confirmed" ? "停用" : "恢复"}
                 </button>
                 <button
                   className="secondary"
-                  disabled={busy}
+                  disabled={busy || !!editing}
                   onClick={() => {
-                    setEditing(h.id);
+                    setEditing(h);
+                    setConflict(null);
+                    setError("");
                     setText(h.content);
                   }}
                 >
@@ -761,8 +840,8 @@ export function HabitLedger({ onChange }) {
                 {h.status !== "deleted" && (
                   <button
                     className="secondary"
-                    disabled={busy}
-                    onClick={() => decide(h.id, "delete")}
+                    disabled={busy || !!editing}
+                    onClick={() => decide(h, "delete")}
                   >
                     删除
                   </button>
@@ -774,8 +853,8 @@ export function HabitLedger({ onChange }) {
                 已暂停{ledger.conflict ? "：最近常被你改回" : ""} ·{" "}
                 <button
                   className="text-button"
-                  disabled={busy}
-                  onClick={() => decide(h.id, "restore")}
+                  disabled={busy || !!editing}
+                  onClick={() => decide(h, "restore")}
                 >
                   恢复
                 </button>
@@ -786,32 +865,6 @@ export function HabitLedger({ onChange }) {
             )}
             {stated(h) && ledger.conflict && h.status === "confirmed" && (
               <p className="habit-status muted">最近常被改回，可能已不适用</p>
-            )}
-            {editing === h.id && (
-              <div className="habit-editor">
-                <label>
-                  习惯措辞
-                  <textarea
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                  />
-                </label>
-                <div className="habit-actions">
-                  <button
-                    disabled={busy || !text.trim()}
-                    onClick={() => decide(h.id, "edit", { content: text })}
-                  >
-                    保存措辞
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => setEditing(null)}
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
             )}
             <details className="habit-details">
               <summary>详情</summary>
@@ -875,23 +928,27 @@ export function HabitLedger({ onChange }) {
   );
 }
 export function RememberedNotice({ memories: initial = [] }) {
+  const mutate = useHabitMutation();
   const [memories, setMemories] = useState(initial),
     [error, setError] = useState("");
   useEffect(() => {
+    if (error) return;
     const timer = setTimeout(() => setMemories([]), 5000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [error]);
   if (!memories.length) return null;
   return (
     <div className="review-save-warning remembered-notice" role="status">
       ✓ 记下了：
-      {memories.length > 1 ? `${memories.length} 条习惯` : memories[0].content}{" "}
+      {memories.length > 1
+        ? `${memories.length} 条习惯`
+        : memories[0].content}{" "}
       <button
         className="text-button"
         onClick={async () => {
           try {
             for (const m of memories)
-              await api(`/api/learning/habits/${m.id}/decision`, "POST", {
+              await mutate(`/api/learning/habits/${m.id}/decision`, "POST", m, {
                 decision: "undo",
               });
             setMemories([]);
@@ -930,7 +987,7 @@ export function HabitSuggestion({ patientId }) {
       return [];
     }
   });
-  const [paused, setPaused] = useState(() => {
+  const [paused] = useState(() => {
     const raw = sessionStorage.getItem(`habit-paused:${patientId}`);
     sessionStorage.removeItem(`habit-paused:${patientId}`);
     try {
@@ -945,16 +1002,7 @@ export function HabitSuggestion({ patientId }) {
       {paused.map((id) => (
         <p role="status" key={id}>
           已暂停一条习惯：最近常被你改回 ·{" "}
-          <button
-            onClick={async () => {
-              await api(`/api/learning/habits/${id}/decision`, "POST", {
-                decision: "restore",
-              });
-              setPaused(paused.filter((h) => h !== id));
-            }}
-          >
-            恢复
-          </button>
+          <a href={`/?view=settings&doctor=1#habit-${id}`}>查看并恢复</a>
         </p>
       ))}
     </>
@@ -1145,6 +1193,7 @@ export function LearningMonth() {
   ) : null;
 }
 export function LearningChanges() {
+  const mutate = useHabitMutation();
   const [changes, setChanges] = useState([]),
     [error, setError] = useState("");
   const load = () =>
@@ -1177,9 +1226,10 @@ export function LearningChanges() {
           <button
             onClick={async () => {
               try {
-                await api(
+                await mutate(
                   `/api/learning/habits/${c.habit_id}/decision`,
                   "POST",
+                  c,
                   {
                     historyId: c.id,
                     decision: ["activated", "stated", "restore"].includes(
@@ -1189,6 +1239,7 @@ export function LearningChanges() {
                       : "restore",
                   },
                 );
+                window.dispatchEvent(new Event("habits-changed"));
                 await load();
               } catch (e) {
                 setError(e.message);

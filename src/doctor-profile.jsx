@@ -1,6 +1,12 @@
-import { LearningStats, HabitLedger, LearningDangerZone, memorySourceLabel } from "./learning-loop";
+import {
+  LearningStats,
+  HabitLedger,
+  LearningDangerZone,
+  memorySourceLabel,
+} from "./learning-loop";
 import { useEffect, useRef, useState } from "react";
 import { api } from "./agent-runtime";
+import { useHabitMutation } from "./habit-mutation";
 import { Check, Trash2, RotateCcw, Loader2, Sparkles, Eye } from "lucide-react";
 
 const TEXT_FIELDS = [
@@ -22,6 +28,7 @@ const MEMORY_TABS = [
 ];
 
 export function DoctorProfilePanel() {
+  const mutate = useHabitMutation();
   const memoryGeneration = useRef(0);
   const [profile, setProfile] = useState(null);
   const [fields, setFields] = useState({});
@@ -42,7 +49,11 @@ export function DoctorProfilePanel() {
         specialty: value.fields?.specialty || "",
         note: value.fields?.note || "",
       });
-      setLists(Object.fromEntries(LIST_FIELDS.map(([key]) => [key, value.fields?.[key] || []])));
+      setLists(
+        Object.fromEntries(
+          LIST_FIELDS.map(([key]) => [key, value.fields?.[key] || []]),
+        ),
+      );
     }
     return value;
   };
@@ -72,7 +83,6 @@ export function DoctorProfilePanel() {
       setNotice("偏好已保存，之后整理时会参考。");
     } catch (err) {
       setError(err.message);
-
     } finally {
       setBusy(false);
     }
@@ -81,21 +91,32 @@ export function DoctorProfilePanel() {
   const memoryAction = async (id, action, body) => {
     setError("");
     try {
-      await api(`/api/doctor/memories/${id}/${action}`, "POST", body || {});
+      await mutate(
+        `/api/doctor/memories/${id}/${action}`,
+        "POST",
+        memories.find((m) => m.id === id),
+        body || {},
+      );
       await Promise.all([loadMemories(), loadProfile(true)]);
       window.dispatchEvent(new Event("habits-changed"));
     } catch (err) {
       setError(err.message);
+      if (err.status === 409) await loadMemories();
     }
   };
   const deleteMemory = async (id) => {
     setError("");
     try {
-      await api(`/api/doctor/memories/${id}`, "DELETE");
+      await mutate(
+        `/api/doctor/memories/${id}`,
+        "DELETE",
+        memories.find((m) => m.id === id),
+      );
       await Promise.all([loadMemories(), loadProfile(true)]);
       window.dispatchEvent(new Event("habits-changed"));
     } catch (err) {
       setError(err.message);
+      if (err.status === 409) await loadMemories();
     }
   };
   const consolidate = async (useModel) => {
@@ -158,16 +179,48 @@ export function DoctorProfilePanel() {
       [key]: prev[key].filter((_, i) => i !== index),
     }));
 
-  if (!profile) return error ? <div className="form-error" role="alert"><p>{error}</p><button className="secondary" onClick={() => { setError(""); loadProfile().catch(err => setError(err.message)); }}>重新加载医生档案</button></div> : <p className="muted" role="status">正在加载医生档案…</p>;
+  if (!profile)
+    return error ? (
+      <div className="form-error" role="alert">
+        <p>{error}</p>
+        <button
+          className="secondary"
+          onClick={() => {
+            setError("");
+            loadProfile().catch((err) => setError(err.message));
+          }}
+        >
+          重新加载医生档案
+        </button>
+      </div>
+    ) : (
+      <p className="muted" role="status">
+        正在加载医生档案…
+      </p>
+    );
 
   return (
     <div className="doctor-panel">
       {error && (
         <p className="form-error" role="alert">
-          {error} <button className="text-button" onClick={() => loadProfile().then(() => setError("")).catch(err => setError(err.message))}>放弃未保存偏好并载入最新配置</button>
+          {error}{" "}
+          <button
+            className="text-button"
+            onClick={() =>
+              loadProfile()
+                .then(() => setError(""))
+                .catch((err) => setError(err.message))
+            }
+          >
+            放弃未保存偏好并载入最新配置
+          </button>
         </p>
       )}
-      {notice && <p className="form-notice" role="status">{notice}</p>}
+      {notice && (
+        <p className="form-notice" role="status">
+          {notice}
+        </p>
+      )}
 
       <details className="doctor-section">
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>
@@ -179,7 +232,8 @@ export function DoctorProfilePanel() {
         {TEXT_FIELDS.map(([key, label, placeholder]) => (
           <label className="doctor-field" key={key}>
             <span>{label}</span>
-            <input disabled={busy}
+            <input
+              disabled={busy}
               value={fields[key] || ""}
               placeholder={placeholder}
               onChange={(e) =>
@@ -193,7 +247,8 @@ export function DoctorProfilePanel() {
             <legend>{label}</legend>
             {(lists[key] || []).map((item, index) => (
               <div className="doctor-list-row" key={index}>
-                <input disabled={busy}
+                <input
+                  disabled={busy}
                   aria-label={`${label} 第 ${index + 1} 条`}
                   value={item}
                   onChange={(e) => setListItem(key, index, e.target.value)}
@@ -223,7 +278,7 @@ export function DoctorProfilePanel() {
           </button>
           <button
             className="secondary"
-            onClick={() => loadProfile().catch(err => setError(err.message))}
+            onClick={() => loadProfile().catch((err) => setError(err.message))}
             disabled={busy}
           >
             <RotateCcw size={14} /> 重读
@@ -235,7 +290,9 @@ export function DoctorProfilePanel() {
       <HabitLedger onChange={() => loadProfile(true)} />
       <details className="doctor-section doctor-summary-preview">
         <summary>整理时参考的偏好摘要</summary>
-        <pre className="doctor-digest">{profile.digest || "暂无偏好，写下一条即可开始。"}</pre>
+        <pre className="doctor-digest">
+          {profile.digest || "暂无偏好，写下一条即可开始。"}
+        </pre>
       </details>
 
       <section className="doctor-section">
@@ -302,9 +359,7 @@ export function DoctorProfilePanel() {
             <li key={m.id} className={`memory memory-${m.status}`}>
               <div className="memory-main">
                 <p>{m.content}</p>
-                <small>
-                  {memorySourceLabel(m)}
-                </small>
+                <small>{memorySourceLabel(m)}</small>
               </div>
               <div className="memory-actions">
                 {(m.status === "pending" || m.status === "open") && (
@@ -352,7 +407,9 @@ export function DoctorProfilePanel() {
           )}
         </ul>
       </section>
-      <LearningDangerZone onClear={() => Promise.all([loadProfile(true), loadMemories(tab)])} />
+      <LearningDangerZone
+        onClear={() => Promise.all([loadProfile(true), loadMemories(tab)])}
+      />
     </div>
   );
 }

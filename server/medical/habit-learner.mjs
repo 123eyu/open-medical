@@ -1,3 +1,4 @@
+import { habitMutation } from './habit-concurrency.mjs';
 import { localModel } from "./personal-context.mjs";
 import {
   equivalentTerm,
@@ -7,7 +8,6 @@ import {
   describeHabitRule,
 } from "../../shared/review-diff.mjs";
 import { check } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
 const norm = normalizeReviewText;
 const frequencyGroups = [
   ["bid", "每日两次", "每日2次"],
@@ -441,13 +441,14 @@ export class HabitLearner {
     }
     return created;
   }
-  decide(id, decision, { content, historyId } = {}) {
+  decide(id, decision, input = {}) {
+    const { content, historyId } = input;
     check(
       ["undo", "disable", "restore", "delete", "edit"].includes(decision),
       "INVALID_INPUT",
       "习惯操作无效",
     );
-    return sqliteTransaction(this.db, () => {
+    return habitMutation(this.db, id, decision, input, () => {
       const memory = this.doctor.memoryRow(id);
       if (historyId !== undefined)
         check(
@@ -460,6 +461,10 @@ export class HabitLearner {
           "这条习惯已有后续调整，请在习惯账本查看当前状态",
           409,
         );
+      if (decision === "edit") {
+        check(typeof content === 'string' && content.trim() && content.length <= 2000, 'INVALID_INPUT', '请填写有效的习惯措辞');
+        if (content.trim() === memory.content.trim()) return memory;
+      }
       this.db
         .prepare(
           "INSERT INTO habit_history(habit_id,decision,snapshot,created_at) VALUES (?,?,?,?)",
@@ -536,7 +541,7 @@ export class HabitLearner {
         this.db
           .prepare("UPDATE doctor_memories SET status='dismissed' WHERE id=?")
           .run(id);
-        return saved;
+        return this.doctor.memoryRow(saved.id);
       }
       this.db
         .prepare(
