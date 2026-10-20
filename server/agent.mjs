@@ -732,7 +732,8 @@ export function createServer(options = {}) {
     platform: options.wechatBridgePlatform ?? process.platform,
   });
   // 企微智能机器人通道:先建实例再交给 ChatFollowups 注册,start 后按配置自动拉起长连接。
-  const wecomAibot = options.chatAibot || new WecomAibotChannel({ log: (message) => console.error(`[aibot] ${message}`), provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief });
+  // skills 注入群聊自动回复的起草提示词(医生按群勾选技能)。
+  const wecomAibot = options.chatAibot || new WecomAibotChannel({ log: (message) => console.error(`[aibot] ${message}`), provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, skills });
   const chatFollowups = new ChatFollowups({ store, patients, followups, directory: vaultDir, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, aibot: wecomAibot, ...options.chatFollowups });
   wecomAibot.attach(chatFollowups);
   // 微信历史导入:向导式组件下载/备份 + 内置 wx-cli 协议桥接(仅 127.0.0.1)。

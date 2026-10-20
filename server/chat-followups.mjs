@@ -93,6 +93,9 @@ export class ChatFollowups {
     if (channel === 'wecom-aibot') {
       // 自动起草只进待审核队列,永不自动发送;需要明确授权模型参与。
       c.autoReply = Boolean(input.autoReply && input.autoReplyConsent);
+      // 群聊自动回复是独立授权:开启后,医生逐群配置的群可自动回复(红旗走固定
+      // 安全话术,普通回复须过出站筛查,否则回落待审核)。
+      c.groupAutoReply = Boolean(input.groupAutoReply && input.groupAutoReplyConsent);
     }
     if (channel === 'wechat') c.autoReply = Boolean(input.autoReply && input.autoReplyConsent);
     c.autoSummarize = Boolean(c.autoUntil && input.autoSummarize);
