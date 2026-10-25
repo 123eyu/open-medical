@@ -27,6 +27,10 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const [medEdit, setMedEdit] = useClinicalDraft(detail.id, "medEdit", null);
   const [labEdit, setLabEdit] = useClinicalDraft(detail.id, "labEdit", null);
   const [labNotice, setLabNotice] = useState("");
+  const [expandedRecords, setExpandedRecords] = useState({});
+  useEffect(() => { setExpandedRecords({}); }, [detail.id]);
+  const labStart = expandedRecords.labs ? 0 : Math.max(0, draft.labs.length - 12);
+  const visitStart = expandedRecords.visits ? 0 : Math.max(0, draft.visits.length - 8);
   const [pendingMutation, setPendingMutation] = useClinicalDraft(detail.id, "mutation", null);
   const [labError, setLabError] = useState("");
   const [newMed, setNewMed] = useClinicalDraft(detail.id, "medication", { name: "", dose: "", frequency: "", status: "unknown", source: "" });
@@ -364,15 +368,21 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       </section>}
 
       {(!section || section === 'labs') && <section>
-        <h3>检验记录</h3>
+        <h3>检验记录 · 共 {draft.labs.length} 条</h3>
+        {draft.labs.length > 12 && <p>
+          {expandedRecords.labs ? `已显示全部 ${draft.labs.length} 条，按录入顺序` : `显示最近录入 12 条 / 共 ${draft.labs.length} 条`}
+          <button type="button" className="text-button" disabled={Boolean(labEdit)} aria-expanded={!!expandedRecords.labs} onClick={() => setExpandedRecords({ ...expandedRecords, labs: !expandedRecords.labs })}>
+            {expandedRecords.labs ? "收起较早检验记录" : `显示全部 ${draft.labs.length} 条检验记录`}
+          </button>
+        </p>}
         <p id="lab-value-help">仅录入精确数值；定性结果及带比较符的结果请保留原始报告。</p>
         {labError && <p role="alert" className="error">{labError}</p>}
         {labNotice && <p role="status">{labNotice}</p>}
         <ul className="clinical-rows">
-          {draft.labs.slice(-12).map((l, index, visible) => {
-            const realIndex = draft.labs.length - visible.length + index;
+          {draft.labs.slice(labStart).map((l, index) => {
+            const realIndex = labStart + index;
             return (
-              <li key={`${l.item}-${l.date}-${index}`}>
+              <li key={`${l.item}-${l.date}-${realIndex}`}>
                 <span>
                   <b>{l.item}</b> {l.value}
                   {l.unit || ""} · {fmtDate(l.date)}
@@ -447,12 +457,18 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       </section>}
 
       {(!section || section === 'visits') && <section>
-        <h3>就诊记录</h3>
+        <h3>就诊记录 · 共 {draft.visits.length} 条</h3>
+        {draft.visits.length > 8 && <p>
+          {expandedRecords.visits ? `已显示全部 ${draft.visits.length} 条，按录入顺序` : `显示最近录入 8 条 / 共 ${draft.visits.length} 条`}
+          <button type="button" className="text-button" aria-expanded={!!expandedRecords.visits} onClick={() => setExpandedRecords({ ...expandedRecords, visits: !expandedRecords.visits })}>
+            {expandedRecords.visits ? "收起较早就诊记录" : `显示全部 ${draft.visits.length} 条就诊记录`}
+          </button>
+        </p>}
         <ul className="clinical-rows">
-          {draft.visits.slice(-8).map((v, index, visible) => {
-            const realIndex = draft.visits.length - visible.length + index;
+          {draft.visits.slice(visitStart).map((v, index) => {
+            const realIndex = visitStart + index;
             return (
-              <li key={`${v.date}-${index}`}>
+              <li key={`${v.date}-${realIndex}`}>
                 <span>
                   {fmtDate(v.date)} · {v.reason}
                   {v.note ? ` · ${v.note}` : ""}
