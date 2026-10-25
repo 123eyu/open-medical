@@ -13,6 +13,7 @@ import {
 import { api } from "./agent-runtime";
 import { artifactLines } from "../shared/medical.mjs";
 import { diffLines } from "diff";
+import { hasCurrentArtifactReview } from "../shared/artifact-review-display.mjs";
 import { eventDateWarnings } from "../shared/timeline-display.mjs";
 import { diagnosisStatus, DIAGNOSIS_STATUS_SHORT } from "../shared/diagnoses.mjs";
 
@@ -101,24 +102,26 @@ export function StepsFlow({ events, running, fallbackText }) {
 }
 
 /* ---------- 产物行文本（预览/diff 用） ---------- */
-export function artifactToLines(a) {
+export function artifactToLines(a, { preview = false } = {}) {
   if (!a) return [];
   const lines = [];
-  lines.push(`【${a.title || "未命名产物"}】`);
+  if (!preview) lines.push(`【${a.title || "未命名产物"}】`);
+  const sectionCount = [a.events?.length, a.items?.length, a.observations?.length, a.pico].filter(Boolean).length;
+  const showSectionHeading = !preview || sectionCount > 1;
   if (a.events?.length) {
-    lines.push("— 时间线 —");
+    if (showSectionHeading) lines.push("— 时间线 —");
     for (const e of a.events) lines.push([`${e.date} ${e.event}`, ...eventDateWarnings(e).map(warning => `【${warning}】`)].join(" "));
   }
   if (a.items?.length) {
-    lines.push("— 条目 —");
+    if (showSectionHeading) lines.push("— 条目 —");
     for (const it of a.items) lines.push(it);
   }
   if (a.observations?.length) {
-    lines.push("— 检验摘录 —");
+    if (showSectionHeading) lines.push("— 检验摘录 —");
     for (const o of a.observations) lines.push(`${o.name}: ${o.value}${o.unit || ""}`);
   }
   if (a.pico) {
-    lines.push("— PICO —");
+    if (showSectionHeading) lines.push("— PICO —");
     lines.push(`P ${a.pico.population || ""}`);
     lines.push(`I ${a.pico.intervention || ""}`);
     lines.push(`C ${a.pico.comparison || ""}`);
@@ -144,6 +147,9 @@ function ArtifactReview({ artifact, onReview }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const inFlight = useRef(false);
+  const [editing, setEditing] = useState(false);
+  const currentReview = hasCurrentArtifactReview(artifact);
+  const expanded = !currentReview || editing || Boolean(error);
   useEffect(() => { setAttested(false); }, [artifact.version]);
   if (!onReview) return null;
   return <form className="artifact-review" aria-label="本机复核结果" onSubmit={async event => {
@@ -152,22 +158,27 @@ function ArtifactReview({ artifact, onReview }) {
     inFlight.current = true; setBusy(true); setError(""); setNotice("");
     try {
       await onReview({ version: artifact.version, decision, note: note.trim(), attested: true });
-      setAttested(false); setNote(""); setNotice("本机复核记录已保存。");
+      setAttested(false); setNote(""); setEditing(false); setNotice("本机复核记录已保存。");
     } catch (err) {
       setError(err.code === "REVISION_CONFLICT" ? "结果版本已更新，复核说明已保留。请重新查看当前内容并确认后提交。" : err.message);
       if (err.code === "REVISION_CONFLICT") setAttested(false);
     } finally { inFlight.current = false; setBusy(false); }
   }}>
     <h4>本机复核</h4>
-    <fieldset disabled={busy}>
+    {artifact.review && <div className="artifact-review-summary">
+      <p><b>{currentReview ? STATUS_TEXT[artifact.review.decision] : `上次复核：${STATUS_TEXT[artifact.review.decision] || artifact.review.decision}（非当前版本）`}</b> · 已核对第 {artifact.review.reviewedVersion} 版</p>
+      <p>{artifact.review.note}</p>
+      <small>{artifact.review.reviewer || "本机使用者"}{artifact.review.at ? ` · ${new Date(artifact.review.at).toLocaleString()}` : ""}</small>
+    </div>}
+    {!expanded && <button type="button" className="secondary" onClick={() => setEditing(true)}>重新复核</button>}
+    {expanded && <fieldset disabled={busy}>
       <label>复核决定<select value={decision} onChange={event => setDecision(event.target.value)}><option value="approved">已复核</option><option value="rejected">需修订</option></select></label>
       <label>复核说明（必填）<textarea required maxLength={3000} rows={3} value={note} onChange={event => setNote(event.target.value)} /></label>
       <label><input type="checkbox" checked={attested} onChange={event => setAttested(event.target.checked)} />我已检查当前第 {artifact.version} 版的原文与适用范围</label>
       <button type="submit" className="primary" disabled={!note.trim() || !attested}>{busy ? "保存中…" : "保存复核记录"}</button>
-    </fieldset>
+    </fieldset>}
     {error && <p role="alert" className="error-text">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    {artifact.review && <p className="muted">最近复核：{STATUS_TEXT[artifact.review.decision]} · {artifact.review.note}</p>}
   </form>;
 }
 export function AcceptanceView({ artifact, previous, onSource, onClose, onReview }) {
@@ -211,7 +222,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
         <div className="accept-main">
           {view === "preview" && (
             <div className="acc-doc">
-              {artifact.type === "similar_cases" ? <SimilarCases key={artifact.id} artifact={artifact} /> : cur.map((l, i) => (
+              {artifact.type === "similar_cases" ? <SimilarCases key={artifact.id} artifact={artifact} /> : artifactToLines(artifact, { preview: true }).map((l, i) => (
                 <p key={i} className={l.startsWith("【") || l.startsWith("—") ? "acc-head" : ""}>{l}</p>
               ))}
             </div>

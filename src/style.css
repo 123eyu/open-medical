@@ -5071,3 +5071,7 @@ nav.toolbox .session b{font-weight:500;}
 .artifact-review label { display: block; font-size: 13px; line-height: 1.6; }
 .artifact-review textarea, .artifact-review select { display: block; width: 100%; margin-top: 4px; }
 .artifact-review input[type="checkbox"] { width: auto; margin-right: 6px; }
+
+.artifact-review-summary { overflow-wrap:anywhere; margin-bottom:12px; }
+.artifact-review-summary p { margin:6px 0; line-height:1.7; }
+.artifact-review-summary small { display:block; color:var(--muted); line-height:1.6; }
