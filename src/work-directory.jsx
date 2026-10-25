@@ -167,8 +167,8 @@ const catalog = [
     Search,
     "联网检索",
   ],
-  ["care", "患者消息", "查看患者消息，处理回复草稿与客户联系。", "医疗工具", Inbox, "患者沟通"],
-  ["followups", "随访", "管理随访计划、待办和患者反馈。", "医疗工具", MessageSquare, "随访管理"],
+  ["care", "患者消息", "查看患者消息，处理回复草稿与客户联系。", "医疗工具", Inbox, ""],
+  ["followups", "随访", "管理随访计划、待办和患者反馈。", "医疗工具", MessageSquare, ""],
   ["research", "临床试验", "管理试验方案，按入排标准开展患者初筛。", "科研工具", BookOpen, "试验初筛"],
   [
     "clinical-ref",
@@ -215,7 +215,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       <header className="directory-heading">
         <div>
           <h1>资料与工具</h1>
-          {medical && <p>还没有资料？<button className="text-button" onClick={() => onNavigate("examples")}>用默认示例体验这些功能</button></p>}
+          {medical && <p><button className="text-button" onClick={() => onNavigate("examples")}>查看示例资料与任务</button></p>}
 
         </div>
       </header>
@@ -256,9 +256,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
             <h2>{name}</h2>
             <p>{desc}</p>
             <footer>
-              <small>
-                {state.label || status}
-              </small>
+              {(state.label || status) && <small>{state.label || status}</small>}
               <span className="tool-card-action">
                 {state.action}{" "}
                 →

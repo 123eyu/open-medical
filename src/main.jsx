@@ -1682,7 +1682,7 @@ function App() {
                     <Menu size={18} />
                   </IconButton>
                   <div className="heading-copy">
-                    {!session?.patientId && <small>Agent 对话</small>}
+                    {!session?.patientId && <small>任务对话</small>}
                     <h1>{session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session && (
@@ -2320,12 +2320,12 @@ function App() {
                     <span>
                       {!config?.modelConfigured && (
                         <>
-                          {session?.patientId && "未配置模型，当前仅按规则整理材料。"}
+                          未配置模型，当前仅按规则整理材料。
                           <button
                             className="text-button"
                             onClick={() => setModal("model")}
                           >
-                            {session?.patientId ? "配置模型" : "未配置模型，点击配置后使用 AI Agent"}
+                            配置模型
                           </button>
                         </>
                       )}
@@ -2703,7 +2703,7 @@ function App() {
                             </div>
                             <p>
                               {INTENTS[run.policy?.intent] || "医疗任务"} ·{" "}
-                              {run.mode === "local" ? "本地整理" : "Agent 执行"}
+                              {run.mode === "local" ? "本地整理" : "模型处理"}
                             </p>
                             <p>{session.messages.find(m => m.role === "user" && m.runId === run.id)?.content}</p>
                             <details className="run-conversation">

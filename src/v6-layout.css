@@ -358,6 +358,7 @@
   width: 100%;
 }
 .directory-tools .tool-card-action {
+  margin-left: auto;
   background: white;
   border: 1px solid var(--border);
   border-radius: 5px;

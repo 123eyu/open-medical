@@ -834,7 +834,6 @@ export function PatientsView({
                 onOpenTask={onOpenWorkspace}
               />
               </div>
-              <h3 className="followup-merged-title">随访问卷</h3>
               <div>
               <SurveyPanel
                 key={`surveys-${detail.id}`}

@@ -25,7 +25,7 @@ export function CareTasksPanel({ patient, onChanged }) {
   }, [patient.id, status, offset, refresh]);
   const saved = () => { setEditing(null); setRefresh((n) => n + 1); setNotice("跟进记录已保存"); onChanged?.(); };
   return <section className="detail-panel care-tracking" aria-label="检查与转诊跟进">
-    <header className="care-tracking-header"><div><h3>让检查和转诊有下文</h3><p className="muted">记下何时跟进，收到结果后核对，再登记告知情况。这里记录实际处理，不会自动发送消息。</p></div>
+    <header className="care-tracking-header"><div><h3>检查与转诊跟进</h3><p className="muted">记下何时跟进，收到结果后核对，再登记告知情况。这里记录实际处理，不会自动发送消息。</p></div>
       <button className="primary" disabled={patient.archived} onClick={() => setEditing({ action: "create" })}><Plus size={14} /> 新增待跟进</button></header>
     <div className="toolbar-actions"><button className={`chip ${status === "active" ? "active" : ""}`} onClick={() => { setStatus("active"); setOffset(0); }}>进行中</button><button className={`chip ${status === "closed" ? "active" : ""}`} onClick={() => { setStatus("closed"); setOffset(0); }}>已结束</button><button className="text-button" onClick={() => setRefresh((n) => n + 1)} aria-label="刷新跟进事项"><RotateCw size={14} /></button></div>
     {error && <p className="error-text" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
