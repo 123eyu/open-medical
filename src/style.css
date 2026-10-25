@@ -4997,18 +4997,22 @@ nav.toolbox .session b{font-weight:500;}
 .palette-trigger kbd { font: inherit; font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 0 6px; background: var(--soft); }
 
 /* 首页驾驶舱数字行：打开即见今天有什么在等我。 */
-.home-cockpit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
-.cockpit-card { display: grid; gap: 3px; justify-items: start; text-align: left; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--ink); min-height: 84px; }
-.cockpit-card:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+.home-cockpit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-bottom: 16px; padding: 10px 0; border-block: 1px solid var(--border); }
+.cockpit-card { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "number label" "number hint"; gap: 3px 12px; align-content: center; justify-items: start; text-align: left; min-width: 0; padding: 4px 16px; border: 0; border-radius: 0; background: transparent; color: var(--ink); min-height: 56px; }
+.cockpit-card + .cockpit-card { border-left: 1px solid var(--border); }
+.cockpit-card:first-child { padding-left: 0; }
+.cockpit-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cockpit-card:hover { background: var(--accent-soft); }
 .cockpit-card.urgent .cockpit-number { color: var(--danger); }
-.cockpit-number { font-size: 26px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 7px; }
+.cockpit-number { grid-area: number; align-self: center; font-size: 24px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 7px; }
 .cockpit-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); display: inline-block; }
-.cockpit-label { font-size: 13px; font-weight: 600; }
-.cockpit-card small { color: var(--muted); font-size: 11.5px; }
-@media (max-width: 720px) { .home-cockpit { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cockpit-label { grid-area: label; font-size: var(--meta-size, 14px); font-weight: 600; line-height: 1.4; }
+.cockpit-card small { grid-area: hint; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .home-cockpit { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 0; } .cockpit-card:nth-child(3) { border-left: 0; padding-left: 0; } }
 
 /* 首页驾驶舱双栏：左今日名单，右待确认预览。 */
-.home-dashboard { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; margin-bottom: 22px; }
+.home-dashboard { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; margin-bottom: 18px; }
+.home-dashboard.home-dashboard-single { grid-template-columns: minmax(0, 1fr); }
 .dash-today, .dash-pending { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px 16px; }
 .dash-today header, .dash-pending header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
 .dash-today h3, .dash-pending h3 { font-size: 14.5px; margin: 0; }

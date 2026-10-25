@@ -23,7 +23,6 @@ import {
   Search,
   Stethoscope,
   X,
-  Sparkles,
 } from "lucide-react";
 import { requestCareSetup, setupProgress } from "./care-setup";
 import { api, medicalEnabled } from "./agent-runtime";
@@ -122,7 +121,7 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
       <CockpitCard value={pendingCount} label="待确认与复核" hint={pendingCount ? "AI 草稿等待你核对" : "没有待确认事项"} onClick={() => onView?.("review")} />
       <CockpitCard value={counts.messages || 0} label="患者消息" hint={(counts.messages || 0) ? "有未处理消息" : "暂无新消息"} urgent={(counts.messages || 0) > 0} onClick={() => onView?.("care")} />
     </section>
-    {(overview.items?.length || pending.length) ? <section className="home-dashboard" aria-label="今日名单与待确认">
+    {(overview.items?.length || pending.length) ? <section className={`home-dashboard${pending.length ? "" : " home-dashboard-single"}`} aria-label="今日名单与待确认">
       <div className="dash-today">
         <header><h3>今天要处理的</h3>{overview.total > overview.items.length ? <button type="button" className="text-button" onClick={() => onView?.("agenda")}>全部 {overview.total} 项</button> : null}</header>
         <ul>{overview.items.map(item => <li key={item.id}>
@@ -153,7 +152,7 @@ const isImageName = (name) => /\.(png|jpe?g|webp)$/i.test(name || "");
 export const MEDICAL_WORKFLOWS = [
   {
     id: "intake-full",
-    title: "收治病例全流程",
+    title: "整理收治资料",
     icon: ClipboardList,
     category: "clinical",
     desc: "时间线、检验摘录与用药信息一次整理",
@@ -395,7 +394,7 @@ export function WorkbenchHome({
     if (!config || !medicalEnabled(config)) return;
     api("/api/extensions/prefs").then(setWorkbenchPrefs).catch(() => {});
   }, [config]);
-  const customFlows = (workbenchPrefs?.quickTasks || []).map((q) => ({ ...q, icon: Sparkles, category: "mine", output: "按你的专属技能" }));
+  const customFlows = (workbenchPrefs?.quickTasks || []).map((q) => ({ ...q, icon: ClipboardList, category: "mine", output: "按所选模板整理" }));
   const allFlows = [...customFlows, ...MEDICAL_WORKFLOWS];
   const starterFlows = (workbenchPrefs?.starters || []).map((id) => allFlows.find((f) => f.id === id)).filter(Boolean);
   const selectedFlow = allFlows.find((flow) => flow.id === flowId);
@@ -557,7 +556,7 @@ export function WorkbenchHome({
           <b>
             {query
               ? "没有找到匹配的任务"
-              : "你的第一项医疗任务，从这里开始"}
+              : "暂无任务记录"}
           </b>
           <p>
             {query
@@ -569,20 +568,21 @@ export function WorkbenchHome({
     </div>
   );
   return (
-    <main id="main" className="workbench-hub">
+    <main id="main" className={`workbench-hub${isHome ? " hub-home" : ""}`}>
       <div className="hub-page-head">
         <span>
           {isHome
             ? "个人工作空间"
             : "工作空间 / 任务记录"}
         </span>
-        <span>
-          {new Date().toLocaleDateString("zh-CN", {
+        <div className="hub-page-actions">
+          {isHome && !demoEntryHidden && <button type="button" className="text-button" disabled={starting || uploading} onClick={() => onView("examples")}>示例体验<ArrowUpRight size={13} aria-hidden="true" /></button>}
+          <span>{new Date().toLocaleDateString("zh-CN", {
             month: "long",
             day: "numeric",
             weekday: "long",
-          })}
-        </span>
+          })}</span>
+        </div>
       </div>
       {attachmentError && <p className="error-text" role="alert">操作未完成：{attachmentError}</p>}
       {error && (
@@ -602,17 +602,11 @@ export function WorkbenchHome({
       )}
       {isHome ? (
         <>
-      {!demoEntryHidden && <section className="hub-demo-entry"><div><b>第一次使用？从默认示例开始</b><p>无需上传资料，直接体验患者问答、随访、知识检索和科研工具。</p></div><button type="button" className="primary" disabled={starting || uploading} onClick={() => onView("examples")}>选择示例体验</button></section>}
       <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
           <BackupStatus />
-          <section className="hub-intro hub-intro-compact">
-            <span className="agent-eyebrow">你的医疗工作 Agent</span>
-            <h1>想做什么，直接说。</h1>
-            <p>查患者、统计分组、安排随访、整理病历、查文献，直接在这里开始。</p>
-          </section>
           <form className="hub-composer" onSubmit={submit}>
             <div className="hub-composer-caption">
-              <span>{selectedFlow ? selectedFlow.title : "新任务"}</span>
+              <h1>{selectedFlow ? selectedFlow.title : "新任务"}</h1>
               {!selectedFlow && (prompt || attached || patientId || projectId) && <button type="button" disabled={starting || uploading} onClick={onClearDraft}>清空草稿</button>}
               {selectedFlow && (
                 <button
@@ -670,7 +664,7 @@ export function WorkbenchHome({
               <textarea
                 ref={inputRef}
                 aria-label="任务内容"
-                placeholder="描述目标，或添加文件后告诉我怎么处理。无需先选择工具…"
+                placeholder="例如：整理本次病历，并标出缺失资料。可先添加材料或关联患者。"
                 value={prompt}
                 onChange={(e) => {
                   setPrompt(e.target.value);
@@ -723,7 +717,7 @@ export function WorkbenchHome({
                   }
                 }}
                 disabled={starting}
-                rows={4}
+                rows={3}
               />
             )}
             {skillMention && (
@@ -904,7 +898,7 @@ export function WorkbenchHome({
                   ? `将沿用「${selectedPatient.name}」的病例材料直接发起任务，发送后仍可在右侧核对范围。Enter 发送 · Shift + Enter 换行`
                   : "Enter 发送 · Shift + Enter 换行"}
           </p>
-          <section className="agent-starters" aria-label="任务灵感">
+          <section className="agent-starters" aria-label="常用任务">
             <div className="agent-starter-row">
               {starterFlows.length ? starterFlows.map((flow) => <button key={flow.id} aria-pressed={flowId === flow.id} disabled={starting || uploading} onClick={() => chooseFlow(flow)}>{flow.title}</button>)
                 : [["timeline", "整理病历"], ["evidence", "准备循证检索"], ["patient-edu", "撰写患教材料"]].map(([id,label]) => <button key={id} aria-pressed={flowId === id} disabled={starting || uploading} onClick={() => chooseFlow(MEDICAL_WORKFLOWS.find(f => f.id === id))}>{label}</button>)}
@@ -912,13 +906,13 @@ export function WorkbenchHome({
               <button aria-expanded={showAllFlows} onClick={() => setShowAllFlows(!showAllFlows)}>{showAllFlows ? "收起模板" : "更多任务模板"}</button>
             </div>
             {showAllFlows && <div className="agent-template-library">
-              <div className="hub-section-head"><h2>从模板开始</h2><div className="hub-category">{[...(customFlows.length ? [["mine","我的模板"]] : []),["clinical","临床与患者"],["research","科研与循证"]].map(([id,label]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(id)}>{label}</button>)}</div></div>
+              <div className="hub-section-head"><h2>任务模板</h2><div className="hub-category">{[...(customFlows.length ? [["mine","我的模板"]] : []),["clinical","临床与患者"],["research","科研与循证"]].map(([id,label]) => <button key={id} aria-pressed={category === id} onClick={() => setCategory(id)}>{label}</button>)}</div></div>
               <p className="muted">选择后会填入任务要求，你可以修改再发送。</p>
               <div className="agent-template-grid">{allFlows.filter(f => f.category === category).map(flow => <button key={flow.id} disabled={starting || uploading} aria-pressed={flow.id === flowId} onClick={() => chooseFlow(flow)}><flow.icon size={18}/><span><b>{flow.title}</b><small>{flow.desc}</small></span></button>)}</div>
             </div>}
           </section>
           {medicalEnabled(config) && <section className="hub-customize" aria-label="定制我的工作台">
-            <div><Sparkles size={15} /><b>按你的习惯定制</b><span>{customFlows.length ? `已有 ${customFlows.length} 个专属模板，` : ""}说出医院模板或提醒要求，确认后就会长进工作台。</span></div>
+            <div><b>模板与提醒规则</b><span>{customFlows.length ? `已保存 ${customFlows.length} 个模板。` : ""}填写医院模板或提醒要求，核对后保存。</span></div>
             <div className="hub-customize-actions">{CUSTOMIZE_EXAMPLES.slice(0, 3).map(([label, text]) => <button key={label} disabled={starting || uploading} onClick={() => { setFlowId(""); setPrompt(text); inputRef.current?.focus(); }}>{label}</button>)}
               <button className="text-button" onClick={() => { requestSettingsTab("workbench"); onView?.("settings"); }}>管理自动化规则<ArrowRight size={13} /></button></div>
           </section>}

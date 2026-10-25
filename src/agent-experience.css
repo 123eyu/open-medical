@@ -91,3 +91,23 @@
 .hub-customize-actions button:not(.text-button) { border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 7px 11px; font-size: 12px; color: var(--ink); }
 .hub-customize-actions button:not(.text-button):hover { background: #e7efe3; border-color: #a3bba6; }
 .hub-customize-actions .text-button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; margin-left: auto; }
+
+/* Daily work uses the same left edge for its queue and task input. */
+.v6-shell .hub-home { padding-top: 20px; }
+.v6-shell .hub-home .hub-page-head { align-items: center; margin-bottom: 14px; }
+.hub-page-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; flex-wrap: wrap; }
+.hub-page-actions .text-button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; font-size: 13px; }
+.v6-shell .hub-home .hub-composer { max-width: none; border-radius: 8px; box-shadow: none; padding: 14px 16px; }
+.v6-shell .hub-home .hub-composer-caption h1 { margin: 0; font-size: var(--body-size, 16px); line-height: 1.5; font-weight: 600; color: var(--ink); letter-spacing: 0; }
+.v6-shell .hub-home .hub-composer textarea { min-height: 96px; }
+.v6-shell .hub-home .hub-composer-hint,
+.hub-home .agent-starters,
+.hub-home .agent-setup-note { max-width: none; }
+.hub-home .agent-starters { margin-block: 16px; }
+.hub-home .hub-customize { border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 14px 0 0; background: transparent; }
+.hub-home .hub-customize > div:first-child { flex-wrap: wrap; }
+.hub-home .hub-customize > div:first-child span { flex: 1 1 260px; }
+@media (max-width: 700px) {
+  .v6-shell .hub-home .hub-page-head { flex-wrap: wrap; gap: 4px 12px; }
+  .hub-page-actions { gap: 12px; }
+}
