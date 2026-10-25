@@ -51,7 +51,7 @@ export function CareTasksPanel({ patient, onChanged }) {
 
 function CareTaskModal({ patient, task, action, onClose, onSaved }) {
   const creating = action === "create";
-  const [form, setForm] = useState({ title: "", kind: "test", dueAt: localTime(Date.now() + 86400000), note: "", source: "", communication: "communicated", nextDueAt: "", nextName: "" });
+  const [form, setForm] = useState({ title: "", kind: "test", dueAt: localTime(action === "reschedule" ? task.dueAt : Date.now() + 86400000), note: "", source: "", communication: "communicated", nextDueAt: "", nextName: "" });
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const inFlight = useRef(false), requestId = useRef(crypto.randomUUID());
   const field = (name) => ({ value: form[name], onChange: (e) => setForm((prev) => ({ ...prev, [name]: e.target.value })) });

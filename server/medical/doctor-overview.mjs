@@ -97,7 +97,7 @@ export class DoctorOverview {
     // ---------- patient messages ----------
     for (const row of db.prepare("SELECT patient_id,COUNT(*) n,MIN(time) oldest FROM patient_messages WHERE processed=0 AND patient_id IS NOT NULL GROUP BY patient_id").all()) {
       add({ id: `messages:${row.patient_id}`, kind: "messages", patientId: row.patient_id,
-        title: `发来 ${row.n} 条消息`, detail: "查看原文，决定是否回复或记入档案", at: time(row.oldest), weight: 6,
+        title: `${row.n} 条聊天记录待整理`, detail: "查看原文，决定是否回复或记入档案", at: time(row.oldest), weight: 6,
         count: row.n, action: { type: "patient", tab: "messages", label: "处理消息" } });
     }
     const inbox = db.prepare("SELECT COUNT(*) n FROM patient_messages WHERE patient_id IS NULL").get().n;
