@@ -74,7 +74,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
     <div className="history-layout">
       <div className="history-main">
         <section className="history-card history-summary" aria-label="病史摘要">
-          <header><div><span className="history-kicker">CLINICAL HISTORY</span><h3>病史摘要</h3></div><button className="text-button" disabled={patient.archived || busy} onClick={editSummary}><Pencil size={14}/>{summary?.text ? '编辑摘要' : '补充摘要'}</button></header>
+          <header><div><h3>病史摘要</h3></div><button className="text-button" disabled={patient.archived || busy} onClick={editSummary}><Pencil size={14}/>{summary?.text ? '编辑摘要' : '补充摘要'}</button></header>
           {editor ? <form onSubmit={saveSummary} aria-label="编辑病史摘要"><fieldset disabled={busy}>
             {SUMMARY_FIELDS.map(([key,label])=><label key={key}>{label}<textarea rows={2} maxLength={SUMMARY_LIMIT} required value={editor[key]} onChange={e=>setEditor({...editor,[key]:e.target.value})} placeholder={key==='current'?'截至哪次就诊，患者目前状态如何？':key==='problems'?'当前需要处理的症状、功能影响或临床问题；保留疑似表述。':'起病 → 关键治疗 → 近期变化。'}/><small>{editor[key].length} / {SUMMARY_LIMIT}</small></label>)}
             {summary?.text && !concise && <details><summary>参考既有病史记录</summary><p className="clinical-summary-text">{summary.text}</p></details>}
@@ -111,7 +111,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
 
         </section>
         <section className="history-card history-problems" aria-label="诊断列表">
-          <header><div><span className="history-kicker">DIAGNOSES</span><h3>确诊与疑似诊断 <small>{total} 项记录</small></h3></div><button className="text-button" onClick={onEdit}>编辑诊断 <ArrowUpRight size={14}/></button></header>
+          <header><div><h3>确诊与疑似诊断 <small>{total} 项记录</small></h3></div><button className="text-button" onClick={onEdit}>编辑诊断 <ArrowUpRight size={14}/></button></header>
           <nav className="history-status-nav" aria-label="诊断分类">{[['all','全部诊断',total],...['confirmed','suspected'].map(id=>[id,DIAGNOSIS_STATUS_SHORT[id],counts[id]])].map(([id,label,count])=><button key={id} className={filter===id?'selected':''} aria-pressed={filter===id} onClick={()=>setFilter(id)}><span>{label}</span><strong>{count}<small>项</small></strong></button>)}</nav>
           <label className="history-search"><Search size={17}/><input type="search" aria-label="搜索诊断与病史记录" placeholder="搜索诊断、ICD 编码或备注" value={query} onChange={e=>setQuery(e.target.value)}/></label>
           <div className="history-filter-caption"><span>{filter==='all'?'全部分类':DIAGNOSIS_STATUS_LABELS[filter]} · {matches.reduce((sum,g)=>sum+g.items.length,0)} 项</span>{(filter!=='all' || query) && <button className="text-button" onClick={()=>{setFilter('all');setQuery('');}}>清除筛选</button>}</div>
@@ -123,7 +123,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
         {!!uncertain.length && <section className="history-card" aria-label="资料中的不确定记录"><header><h3>资料中的不确定记录</h3></header><ul className="history-findings">{uncertain.map((d,i)=><li key={i}><b>{d.name}</b>{d.note && <p>{d.note}</p>}<RecordSource sources={diagnosisSources(d)} onSource={sourceLink}/></li>)}</ul></section>}
         {!!findings.length && <section className="history-card" aria-label="检查发现"><header><h3>检查发现 <small>{findings.length} 项</small></h3></header><ul className="history-findings">{findings.map((d,i)=><li key={i}><b>{d.name}</b>{d.date && <time>{d.date}</time>}{d.note && <p>{d.note}</p>}<RecordSource sources={diagnosisSources(d)} onSource={sourceLink}/></li>)}</ul></section>}
         <section className="history-card history-journey" aria-label="病程时间线">
-          <header><div><span className="history-kicker">PATIENT JOURNEY</span><h3>病程时间线</h3></div><CalendarDays size={19}/></header>
+          <header><div><h3>病程时间线</h3></div><CalendarDays size={19}/></header>
           <p className="history-muted">按就诊记录由近到远 · {history.length} 次记录</p>
           {visits.length ? <ol>{visits.map((visit,i)=><li key={`${visit.date}-${i}`}><time>{visit.date || '日期未记录'}</time><h4>{visit.reason}</h4>{visit.note && <details className="history-visit-note"><summary>就诊补充说明</summary><p>{visit.note}</p></details>}<RecordSource sources={diagnosisSources(visit)} onSource={sourceLink}/></li>)}</ol> : <div className="history-empty compact"><CalendarDays size={26}/><p>登记就诊经过后，在这里回顾病程节点。</p></div>}
           <footer className="history-journey-actions">{history.length>4 && <button className="text-button history-expand" aria-expanded={allVisits} onClick={()=>setAllVisits(!allVisits)}>{allVisits?'收起较早记录':`展开其余 ${history.length-4} 次就诊`}</button>}

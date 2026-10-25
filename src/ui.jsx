@@ -338,7 +338,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
           )}
         </div>
         <div className="ps-col">
-          <h5>近期检验</h5>
+          <h5>最近录入检验</h5>
           {(p.labs || []).length ? (
             (p.labs || []).slice(-3).reverse().map((l, i) => (
               <div className="vital" key={i}>
