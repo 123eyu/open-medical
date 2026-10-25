@@ -51,6 +51,7 @@ import {
   medicalEnabled,
 } from "./agent-runtime";
 import { artifactLines, artifactTitle, INTENTS } from "../shared/medical.mjs";
+import { eventDateWarnings } from "../shared/timeline-display.mjs";
 import "./style.css";
 import "./business-layout.css";
 import "./v6-layout.css";
@@ -244,14 +245,9 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
                 {event.source.line}
                 <ChevronRight size={12} />
               </button>
-              {event.ambiguousDates && (
-                <small className="error-text">
-                  同一行包含多个日期，当前按首个日期索引，请核对事件归属。
-                </small>
-              )}
-              {!event.dateValid && (
-                <span className="error-text">日期需要修正</span>
-              )}
+              {eventDateWarnings(event).map(warning => (
+                <small className="error-text" key={warning}>{warning}</small>
+              ))}
             </li>
           ))}
         </ol>

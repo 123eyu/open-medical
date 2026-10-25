@@ -38,6 +38,13 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
   const latest = datedHistory[0];
   const counts = Object.fromEntries(Object.keys(DIAGNOSIS_STATUS_LABELS).map(status => [status, groups.find(g => g.status === status)?.items.length || 0]));
   const total = clinicalGroups.reduce((sum,g)=>sum+g.items.length,0);
+  const otherDiagnosisSummary = [
+    uncertain.length && `待核对 ${uncertain.length} 项`,
+    findings.length && `影像与检验发现 ${findings.length} 项`,
+  ].filter(Boolean).join('、');
+  const diagnosisEmptyText = otherDiagnosisSummary
+    ? `暂无确诊或疑似诊断；另有${otherDiagnosisSummary}，见本页相应分类。`
+    : '尚未登记诊断';
   const matches = clinicalGroups.filter(g => filter === 'all' || filter === g.status).map(g=>({...g,items:g.items.filter(d=>[d.name,d.code,d.note,...diagnosisSources(d)].filter(Boolean).join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))})).filter(g=>g.items.length);
   const sourceLink = (source, navigate = false) => {
     const name = citedFileName(source);
@@ -92,7 +99,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
             {concise ? <dl className="history-snapshot">{SUMMARY_FIELDS.map(([key,label])=><div key={key}><dt>{label}</dt><dd className="clinical-summary-text">{concise[key]}</dd></div>)}</dl> : <>
               <dl className="history-snapshot">
                 <div><dt>最近记录</dt><dd>{latest ? <>{latest.date} · {latest.reason}</> : '尚无已注明日期的就诊记录'}</dd></div>
-                <div><dt>诊断概况</dt><dd>{clinicalGroups.flatMap(g=>g.items).slice(0,3).map(d=><span className="history-snapshot-item" key={d.name}>{d.name} · {DIAGNOSIS_STATUS_SHORT[groups.find(g=>g.items.includes(d)).status]}</span>)}{!total && '尚未登记诊断'}{total>3 && <small>另有 {total-3} 项，见下方诊断列表</small>}</dd></div>
+                <div><dt>诊断概况</dt><dd>{clinicalGroups.flatMap(g=>g.items).slice(0,3).map(d=><span className="history-snapshot-item" key={d.name}>{d.name} · {DIAGNOSIS_STATUS_SHORT[groups.find(g=>g.items.includes(d)).status]}</span>)}{!total && diagnosisEmptyText}{total>3 && <small>另有 {total-3} 项，见下方诊断列表</small>}</dd></div>
                 <div><dt>既往经过</dt><dd>{datedHistory.length>1 ? `${datedHistory.at(-1).date} · ${datedHistory.at(-1).reason}` : '尚无更早的就诊记录'}</dd></div>
               </dl>
               <p className="history-muted">以上为档案中的记录要点；当前状态与病程摘要尚未整理。</p>
@@ -104,11 +111,11 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
 
         </section>
         <section className="history-card history-problems" aria-label="诊断列表">
-          <header><div><span className="history-kicker">DIAGNOSES</span><h3>诊断 <small>{total} 项记录</small></h3></div><button className="text-button" onClick={onEdit}>编辑诊断 <ArrowUpRight size={14}/></button></header>
+          <header><div><span className="history-kicker">DIAGNOSES</span><h3>确诊与疑似诊断 <small>{total} 项记录</small></h3></div><button className="text-button" onClick={onEdit}>编辑诊断 <ArrowUpRight size={14}/></button></header>
           <nav className="history-status-nav" aria-label="诊断分类">{[['all','全部诊断',total],...['confirmed','suspected'].map(id=>[id,DIAGNOSIS_STATUS_SHORT[id],counts[id]])].map(([id,label,count])=><button key={id} className={filter===id?'selected':''} aria-pressed={filter===id} onClick={()=>setFilter(id)}><span>{label}</span><strong>{count}<small>项</small></strong></button>)}</nav>
           <label className="history-search"><Search size={17}/><input type="search" aria-label="搜索诊断与病史记录" placeholder="搜索诊断、ICD 编码或备注" value={query} onChange={e=>setQuery(e.target.value)}/></label>
           <div className="history-filter-caption"><span>{filter==='all'?'全部分类':DIAGNOSIS_STATUS_LABELS[filter]} · {matches.reduce((sum,g)=>sum+g.items.length,0)} 项</span>{(filter!=='all' || query) && <button className="text-button" onClick={()=>{setFilter('all');setQuery('');}}>清除筛选</button>}</div>
-          {matches.length ? matches.map(group=><div className={`history-diagnosis-group ${group.status}`} key={group.status}><h4><span/>{group.label}<small>{group.items.length}</small></h4><ul>{group.items.map((d,i)=><li key={`${d.name}-${i}`}><div className="history-diagnosis-title"><h5>{d.name}</h5><span className={`history-diagnosis-badge ${group.status}`}>{DIAGNOSIS_STATUS_SHORT[group.status]}</span></div><div className="history-diagnosis-meta">{d.code && <span>ICD · {d.code}</span>}<span>{d.date ? `记录日期 · ${d.date}` : '日期未记录'}</span></div>{d.note && <p className="history-diagnosis-note">{d.note}</p>}<RecordSource sources={diagnosisSources(d)} onSource={sourceLink}/></li>)}</ul></div>) : <div className="history-empty compact"><Stethoscope size={26}/><p>{total ? '没有符合条件的诊断记录' : '尚未登记诊断'}</p>{!total && <button className="text-button" onClick={onEdit}>添加诊断记录 <ArrowUpRight size={14}/></button>}</div>}
+          {matches.length ? matches.map(group=><div className={`history-diagnosis-group ${group.status}`} key={group.status}><h4><span/>{group.label}<small>{group.items.length}</small></h4><ul>{group.items.map((d,i)=><li key={`${d.name}-${i}`}><div className="history-diagnosis-title"><h5>{d.name}</h5><span className={`history-diagnosis-badge ${group.status}`}>{DIAGNOSIS_STATUS_SHORT[group.status]}</span></div><div className="history-diagnosis-meta">{d.code && <span>ICD · {d.code}</span>}<span>{d.date ? `记录日期 · ${d.date}` : '日期未记录'}</span></div>{d.note && <p className="history-diagnosis-note">{d.note}</p>}<RecordSource sources={diagnosisSources(d)} onSource={sourceLink}/></li>)}</ul></div>) : <div className="history-empty compact"><Stethoscope size={26}/><p>{total ? '没有符合条件的诊断记录' : diagnosisEmptyText}</p>{!total && <button className="text-button" onClick={onEdit}>添加诊断记录 <ArrowUpRight size={14}/></button>}</div>}
         </section>
       </div>
       <aside className="history-aside">

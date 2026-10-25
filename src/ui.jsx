@@ -13,6 +13,8 @@ import {
 import { api } from "./agent-runtime";
 import { artifactLines } from "../shared/medical.mjs";
 import { diffLines } from "diff";
+import { eventDateWarnings } from "../shared/timeline-display.mjs";
+import { diagnosisStatus, DIAGNOSIS_STATUS_SHORT } from "../shared/diagnoses.mjs";
 
 /* ---------- 工具名中文名（医疗 + 通用） ---------- */
 const TOOL_NAMES = {
@@ -105,7 +107,7 @@ export function artifactToLines(a) {
   lines.push(`【${a.title || "未命名产物"}】`);
   if (a.events?.length) {
     lines.push("— 时间线 —");
-    for (const e of a.events) lines.push(`${e.date} ${e.event}`);
+    for (const e of a.events) lines.push([`${e.date} ${e.event}`, ...eventDateWarnings(e).map(warning => `【${warning}】`)].join(" "));
   }
   if (a.items?.length) {
     lines.push("— 条目 —");
@@ -203,7 +205,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose }) {
             <div className="acc-doc">
               {[...(artifact.events || []), ...(artifact.observations || []).map(o=>({event:`${o.name}：${o.value} ${o.unit || ""}`, source:o.source}))].filter(e=>e.source).map((e, i) => (
                 <div className="src-row" key={i}>
-                  <span>{e.date} · {e.event}</span>
+                  <span>{e.date} · {e.event}{eventDateWarnings(e).map(warning => <small className="error-text" key={warning}>{warning}</small>)}</span>
                   <button className="source-link" onClick={() => onSource(e.source)}>
                     {e.source.sourceName}{e.source.page ? ` · P${e.source.page}` : ""} · L{e.source.line}
                     <ArrowUpRight size={12} />
@@ -262,7 +264,10 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
   if (!patient && !detail) return null;
   const p = detail || patient;
   const allergies = (p.allergies || []).map((a) => (typeof a === "string" ? a : a.substance || a.name || "")).filter(Boolean);
-  const diagnoses = (p.diagnoses || []).map((d) => (typeof d === "string" ? d : d.name || d.diagnosis || "")).filter(Boolean);
+  const diagnoses = (p.diagnoses || []).map((d) => {
+    const name = typeof d === "string" ? d : d.name || d.diagnosis || "";
+    return name ? `${name}（${DIAGNOSIS_STATUS_SHORT[diagnosisStatus(typeof d === "string" ? d : { ...d, name })]}）` : "";
+  }).filter(Boolean);
   const meds = p.medications || [];
   const counts = p.counts || {};
   return (

@@ -314,3 +314,14 @@
   flex-shrink: 0;
   min-height: 44px;
 }
+
+.patient-overview .overview-diagnosis-group h4 {
+  margin: 0 0 6px;
+  color: var(--overview-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.patient-overview .overview-diagnosis-group + .overview-diagnosis-group {
+  border-top: 1px solid #edf0ed;
+  padding-top: 10px;
+}

@@ -6,9 +6,7 @@ import {
   Pill,
 } from "lucide-react";
 import {
-  clinicalDiagnoses,
-  diagnosisStatus,
-  DIAGNOSIS_STATUS_SHORT,
+  groupDiagnoses,
 } from "../shared/diagnoses.mjs";
 import "./patient-overview.css";
 
@@ -22,7 +20,8 @@ function OverviewLink({ children, onClick }) {
 }
 
 export function PatientOverview({ patient, session, groups, onNavigate }) {
-  const diagnoses = clinicalDiagnoses(patient.diagnoses);
+  const diagnosisGroups = groupDiagnoses(patient.diagnoses);
+  const diagnosisCount = diagnosisGroups.reduce((total, group) => total + group.items.length, 0);
   const visits = [...(patient.visits || [])].sort((a, b) =>
     String(b.date || "").localeCompare(String(a.date || "")),
   );
@@ -68,28 +67,26 @@ export function PatientOverview({ patient, session, groups, onNavigate }) {
               <ClipboardList size={18} aria-hidden="true" />
               诊断摘要
             </h3>
-            <span>{diagnoses.length} 项</span>
+            <span>已保存 {diagnosisCount} 项</span>
           </header>
           <div className="overview-card-body">
-            {diagnoses.length ? (
-              <ul className="overview-diagnosis-list">
-                {diagnoses.slice(0, 4).map((d, i) => (
-                  <li key={i}>
-                    <strong>{typeof d === "string" ? d : d.name}</strong>
-                    <span className="overview-status">
-                      {DIAGNOSIS_STATUS_SHORT[diagnosisStatus(d)]}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            {diagnosisCount ? (
+              diagnosisGroups.map((group) => (
+                <div className="overview-diagnosis-group" key={group.status}>
+                  <h4>{group.label} · {group.items.length} 项</h4>
+                  <ul className="overview-diagnosis-list">
+                    {group.items.slice(0, 2).map((d, i) => (
+                      <li key={i}><strong>{d.name}</strong></li>
+                    ))}
+                  </ul>
+                  {group.items.length > 2 && (
+                    <p className="overview-meta">另有 {group.items.length - 2} 项{group.label}记录</p>
+                  )}
+                </div>
+              ))
             ) : (
               <p className="overview-empty">
                 尚未登记诊断，可在诊断与病史中补充。
-              </p>
-            )}
-            {diagnoses.length > 4 && (
-              <p className="overview-meta">
-                另有 {diagnoses.length - 4} 项，查看完整诊断了解详情
               </p>
             )}
           </div>
@@ -233,7 +230,7 @@ export function PatientOverview({ patient, session, groups, onNavigate }) {
       <nav className="overview-record-links" aria-label="档案内容导航">
         <span>档案资料</span>
         {[
-          ["诊断", diagnoses.length, "diagnoses"],
+          ["诊断相关记录", diagnosisCount, "diagnoses"],
           ["用药记录", medications.length, "medications"],
           ["就诊记录", visits.length, "visits"],
           ["资料文件", session.files?.length || 0, "library"],
