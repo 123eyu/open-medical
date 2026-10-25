@@ -5060,3 +5060,10 @@ nav.toolbox .session b{font-weight:500;}
 .research-table td:nth-child(3) { white-space: nowrap; }
 .research-table td:first-child,
 .research-table td:nth-child(4) { overflow-wrap: anywhere; }
+
+.artifact-review { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.artifact-review h4 { margin: 0 0 10px; }
+.artifact-review fieldset { display: grid; gap: 10px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.artifact-review label { display: block; font-size: 13px; line-height: 1.6; }
+.artifact-review textarea, .artifact-review select { display: block; width: 100%; margin-top: 4px; }
+.artifact-review input[type="checkbox"] { width: auto; margin-right: 6px; }

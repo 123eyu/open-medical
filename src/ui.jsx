@@ -136,7 +136,41 @@ export function artifactToLines(a) {
 
 /* ---------- 结果阅读（叠加层） ---------- */
 const STATUS_TEXT = { draft: "草稿", approved: "已复核", rejected: "需修订" };
-export function AcceptanceView({ artifact, previous, onSource, onClose }) {
+function ArtifactReview({ artifact, onReview }) {
+  const [note, setNote] = useState("");
+  const [attested, setAttested] = useState(false);
+  const [decision, setDecision] = useState("approved");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const inFlight = useRef(false);
+  useEffect(() => { setAttested(false); }, [artifact.version]);
+  if (!onReview) return null;
+  return <form className="artifact-review" aria-label="本机复核结果" onSubmit={async event => {
+    event.preventDefault();
+    if (inFlight.current || !attested || !note.trim()) return;
+    inFlight.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      await onReview({ version: artifact.version, decision, note: note.trim(), attested: true });
+      setAttested(false); setNote(""); setNotice("本机复核记录已保存。");
+    } catch (err) {
+      setError(err.code === "REVISION_CONFLICT" ? "结果版本已更新，复核说明已保留。请重新查看当前内容并确认后提交。" : err.message);
+      if (err.code === "REVISION_CONFLICT") setAttested(false);
+    } finally { inFlight.current = false; setBusy(false); }
+  }}>
+    <h4>本机复核</h4>
+    <fieldset disabled={busy}>
+      <label>复核决定<select value={decision} onChange={event => setDecision(event.target.value)}><option value="approved">已复核</option><option value="rejected">需修订</option></select></label>
+      <label>复核说明（必填）<textarea required maxLength={3000} rows={3} value={note} onChange={event => setNote(event.target.value)} /></label>
+      <label><input type="checkbox" checked={attested} onChange={event => setAttested(event.target.checked)} />我已检查当前第 {artifact.version} 版的原文与适用范围</label>
+      <button type="submit" className="primary" disabled={!note.trim() || !attested}>{busy ? "保存中…" : "保存复核记录"}</button>
+    </fieldset>
+    {error && <p role="alert" className="error-text">{error}</p>}
+    {notice && <p role="status">{notice}</p>}
+    {artifact.review && <p className="muted">最近复核：{STATUS_TEXT[artifact.review.decision]} · {artifact.review.note}</p>}
+  </form>;
+}
+export function AcceptanceView({ artifact, previous, onSource, onClose, onReview }) {
   const [view, setView] = useState(previous ? "diff" : "preview");
   if (!artifact) return null;
   const cur = artifactToLines(artifact);
@@ -154,6 +188,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose }) {
       <div className="accept-bar"><button className="text-button" onClick={onClose}>‹ 返回对话</button><h3>查看相似病例</h3></div>
       <div className="case-reader-body">
         <SimilarCases key={artifact.id} artifact={artifact}/>
+        <ArtifactReview key={artifact.id + "-review"} artifact={artifact} onReview={onReview} />
 
       </div>
     </div>
@@ -231,6 +266,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose }) {
           )}
         </div>
         <aside className="accept-side">
+          <ArtifactReview key={artifact.id} artifact={artifact} onReview={onReview} />
           <p className="side-label">信息缺口与适用范围</p>
           {checklist.length ? (
             checklist.map((c, i) => (

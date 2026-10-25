@@ -239,6 +239,7 @@ export class MedicalRuntime {
       : requestedMode === "code"
         ? "local"
         : requestedMode;
+    check(body.workflow !== "knowledge-answer" || mode !== "local", "MODEL_REQUIRED", "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
     const modeProfile = {
       requested: requestedMode,
       tools: !["minimal", "code"].includes(requestedMode),

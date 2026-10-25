@@ -494,13 +494,43 @@ function App() {
     [sessions, setSessions] = useState([]),
     [session, setSession] = useState(null),
     [activeId, setActiveId] = useState(initialLocation.view === "workbench" ? initialLocation.id : ""),
-    [draft, setDraft] = useState(""),
+    [draft, setDraftValue] = useState(""),
     [consent, setConsent] = useState(false);
   const [questionSelection, setQuestionSelection] = useState({});
   const questionDrafts = useRef(new Map());
+  const draftWorkflows = useRef(new Map());
+  const rememberedQuestions = useRef(new Map());
+  const draftContext = useRef({ key: "", text: "" });
   // 患者页一键入口带到下一次发送的显式工作流（如治疗方案评估），
   // 草稿模式下医生核对后手动发送时一并提交。
   const pendingWorkflowRef = useRef("");
+  const setDraft = (value) => {
+    const next = typeof value === "function" ? value(draftContext.current.text) : value;
+    draftContext.current.text = next;
+    questionDrafts.current.set(draftContext.current.key, next);
+    draftWorkflows.current.set(draftContext.current.key, pendingWorkflowRef.current);
+    setDraftValue(next);
+  };
+  const activateDraft = (key) => {
+    const text = questionDrafts.current.get(key) || "";
+    draftContext.current = { key, text };
+    pendingWorkflowRef.current = draftWorkflows.current.get(key) || "";
+    setDraftValue(text);
+  };
+  const clearDraft = (key) => {
+    questionDrafts.current.set(key, "");
+    if (draftContext.current.key === key) {
+      draftContext.current.text = "";
+      setDraftValue("");
+    }
+  };
+  const restoreDraft = (key, text, workflow) => {
+    if (questionDrafts.current.get(key)) return;
+    questionDrafts.current.set(key, text);
+    draftWorkflows.current.set(key, workflow);
+    if (draftContext.current.key === key) activateDraft(key);
+  };
+  const draftKeyFor = (data, runId) => data.patientId ? `${data.id}:${runId || "new"}` : data.id;
   const [accessMode, setAccessMode] = useState("each");
   const [thinking, setThinking] = useState("disabled");
   const [pickedSkills, setPickedSkills] = useState([]),
@@ -638,10 +668,10 @@ function App() {
   const questionIds = conversationRunIds(session?.runs, questionRunId);
   const canFollowQuestion = questionRun?.status === "completed" && questionRun?.mode !== "local";
   const chooseQuestion = (runId) => {
-    questionDrafts.current.set(session.id + ":" + (questionRunId || "new"), draft);
+    rememberedQuestions.current.set(session.id, runId);
     setQuestionSelection({ sessionId: session.id, runId });
     setAcceptId("");
-    setDraft(questionDrafts.current.get(session.id + ":" + (runId || "new")) || "");
+    activateDraft(draftKeyFor(session, runId));
     setError("");
     setNotice("");
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -711,6 +741,9 @@ function App() {
       const data = await api(`/api/sessions/${encodeURIComponent(id)}`);
       if (version === generation.current) {
         setSession(data);
+        const runId = rememberedQuestions.current.has(data.id) ? rememberedQuestions.current.get(data.id) : data.runs.at(-1)?.id;
+        if (data.patientId) setQuestionSelection({ sessionId: data.id, runId });
+        activateDraft(draftKeyFor(data, runId));
         setMeters((m) => ({ ...m, ...metersFromSession(data) }));
         setArtifactId("");
         setCitation(null);
@@ -737,7 +770,6 @@ function App() {
     setMeters({ chars: 0, tokens: 0, rounds: 0, retrievals: 0, compacted: false });
     activeRef.current = id;
     setActiveId(id);
-    setDraft("");
     setConsent(false);
     setSidebar(false);
     setReferencedPatients([]);
@@ -854,6 +886,7 @@ function App() {
       setSession(data);
       setMeters({ chars: 0, tokens: 0, rounds: 0, retrievals: 0, compacted: false });
       setLoading(false);
+      activateDraft(data.id);
       setDraft("");
       setConsent(false);
       setSidebar(false);
@@ -896,8 +929,8 @@ function App() {
                                 (m) => m.runId === r.id && m.role === "user",
                               );
                               if (original) {
-                                setDraft(original.content);
                                 pendingWorkflowRef.current = r.policy?.workflow || "";
+                                setDraft(original.content);
                                 setConsent(false);
                                 if (r.fileIds.some(id => !session.files.some(f => f.id === id))) setError("原任务的部分材料已删除，本次重试只载入仍存在的材料，请核对依据范围。");
                                 setFileSelection((prev) => ({
@@ -930,16 +963,23 @@ function App() {
                           )}
                         </details>
   );
-  async function send(e, override = {}, refreshedSession, retryOnConflict = false) {
+  async function send(e, override = {}, refreshedSession, retryOnConflict = false, submissionContext) {
     e?.preventDefault();
     const text = override.message || draft.trim();
     if (!text || loading) return;
+    const pendingWorkflow = override.workflow ?? pendingWorkflowRef.current;
+    const modelEnabled = Boolean(config?.modelConfigured) && accessMode !== "local";
+    if (pendingWorkflow === "knowledge-answer" && !modelEnabled) {
+      setError("知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
+      return;
+    }
     // 执行中追加要求：统一内核会话（kind:"session"）走 steer 指令队列，与
     // 项目工作区一致；旧引擎会话没有该通道，提交会被服务端以「正在执行」
     // 拒绝并提示，保持原有行为。
     const executing = activeRun?.busy || Boolean(persistedRunning);
     if (executing && e && session?.kind === "session" && persistedRunning?.id) {
-      setDraft("");
+      const steerKey = draftContext.current.key;
+      clearDraft(steerKey);
       setPickedSkills([]);
       setMention(null);
       try {
@@ -952,7 +992,7 @@ function App() {
         setNotice("补充要求已加入队列，助手会在下一步接收。");
       } catch (err) {
         setError(err.message);
-        setDraft(text);
+        restoreDraft(steerKey, text, pendingWorkflow);
       }
       return;
     }
@@ -960,13 +1000,13 @@ function App() {
     if (!current) current = await create();
     if (!current || sendingRef.current.has(current.id)) return;
     const id = current.id;
-    questionDrafts.current.delete(id + ":" + (questionRunId || "new"));
+    const submittedDraftKey = submissionContext?.key || draftContext.current.key;
     sendingRef.current.add(id);
     followOutput.current = true;
     lastScrollTop.current = 0;
     setError("");
     setNotice("");
-    setDraft("");
+    clearDraft(submittedDraftKey);
     setPickedSkills([]);
     setMention(null);
     setRuns((prev) => ({
@@ -974,10 +1014,8 @@ function App() {
       [id]: { busy: true, partial: "", events: [] },
     }));
     let started = false;
-    const modelEnabled =
-      Boolean(config?.modelConfigured) && accessMode !== "local";
-    const pendingWorkflow = pendingWorkflowRef.current;
-    pendingWorkflowRef.current = "";
+    let failed = false;
+
     const req = modeToRequest(modelEnabled, {
       message: text,
     });
@@ -1058,6 +1096,8 @@ function App() {
         },
       );
     } catch (err) {
+      failed = true;
+      restoreDraft(submittedDraftKey, text, pendingWorkflow);
       // 首次发送被 revision 冲突拒绝（并发上传/重命名晚到时）：重取快照
       // 自动重发一次，用户无需手动「刷新核对后再发送」。
       if (
@@ -1067,28 +1107,37 @@ function App() {
       ) {
         const fresh = await api(`/api/sessions/${id}`).catch(() => null);
         if (fresh) {
-          setDraft((current) => current || text);
           sendingRef.current.delete(id);
-          return await send(null, override, fresh, true);
+          return await send(null, { ...override, message: text, workflow: pendingWorkflow }, fresh, true, { key: submittedDraftKey });
         }
       }
       if (activeRef.current === id) {
         setError(err.message);
-        if (!started) setDraft((current) => current || text);
+        if (draftContext.current.key === submittedDraftKey) setDraft((current) => current || text);
       }
       setRuns((prev) => ({
         ...prev,
         [id]: { ...prev[id], error: err.message },
       }));
     } finally {
+      if (!failed && !questionDrafts.current.get(submittedDraftKey)) {
+        draftWorkflows.current.delete(submittedDraftKey);
+        if (draftContext.current.key === submittedDraftKey) pendingWorkflowRef.current = "";
+      }
       sendingRef.current.delete(id);
       setRuns((prev) => ({ ...prev, [id]: { ...prev[id], busy: false } }));
       try {
         const data = await api(`/api/sessions/${encodeURIComponent(id)}`);
         if (activeRef.current === id) {
           setSession(data);
-          if (data.patientId && data.runs.at(-1)?.id !== current.runs.at(-1)?.id)
-            setQuestionSelection({ sessionId: id, runId: data.runs.at(-1)?.id });
+          if (data.patientId && data.runs.at(-1)?.id !== current.runs.at(-1)?.id && draftContext.current.key === submittedDraftKey) {
+            const runId = data.runs.at(-1)?.id;
+            rememberedQuestions.current.set(id, runId);
+            setQuestionSelection({ sessionId: id, runId });
+            const nextKey = draftKeyFor(data, runId);
+            if (failed) restoreDraft(nextKey, text, pendingWorkflow);
+            activateDraft(nextKey);
+          }
           setMeters((m) => ({ ...m, ...metersFromSession(data) }));
         }
         await refreshList();
@@ -1256,11 +1305,18 @@ function App() {
     navigate("patients", { id: route.id, tab: route.id ? route.tab || "overview" : undefined });
   };
   const openTask = async (id, options = {}) => {
-    pendingWorkflowRef.current = options.workflow || "";
     setView("workbench", { id, tab: options.tab });
     const data = await select(id);
     if (data) {
-      if (data.patientId && (options.draft || options.newQuestion)) setQuestionSelection({ sessionId: data.id, runId: null });
+      if (data.patientId && (options.draft || options.newQuestion)) {
+        rememberedQuestions.current.set(data.id, null);
+        setQuestionSelection({ sessionId: data.id, runId: null });
+        activateDraft(draftKeyFor(data, null));
+      }
+      if (options.workflow) {
+        pendingWorkflowRef.current = options.workflow;
+        draftWorkflows.current.set(draftContext.current.key, options.workflow);
+      }
       setTab(options.tab || "materials");
       setArtifactId(
         options.artifactId ||
@@ -1309,6 +1365,8 @@ function App() {
       );
     }
     setQuestionSelection({ sessionId: data.id, runId: null });
+    rememberedQuestions.current.set(data.id, null);
+    activateDraft(draftKeyFor(data, null));
     send(null, { message: prompt, skills, conversationParentRunId: null }, data);
   };
   const modelEnabled =
@@ -1737,6 +1795,7 @@ function App() {
                     <AlertCircle size={16} />
                     <span>{error}</span>
                     {!config && <button onClick={init}>重新连接</button>}
+                    {pendingWorkflowRef.current === "knowledge-answer" && !modelEnabled && <><button onClick={() => setModal("model")}>配置模型</button><button onClick={() => navigate("knowledge")}>返回知识库检索原文</button></>}
                     {!session && config && <button onClick={() => navigate("tasks")}>返回任务记录</button>}
                     <IconButton
                       title="关闭错误提示"
@@ -1756,6 +1815,15 @@ function App() {
                   <AcceptanceView
                     artifact={acceptArtifact}
                     previous={acceptArtifact.history?.at(-1)}
+                    onReview={async review => {
+                      try {
+                        await api(`/api/sessions/${session.id}/artifacts/${acceptArtifact.id}/review`, "POST", review);
+                      } catch (err) {
+                        if (err.code === "REVISION_CONFLICT") await updateSession();
+                        throw err;
+                      }
+                      await updateSession();
+                    }}
                     onSource={openSource}
                     onClose={() => {
                       setAcceptId("");

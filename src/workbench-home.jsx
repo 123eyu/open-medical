@@ -318,7 +318,7 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
   }, []);
   const modeLabel = { off: "已关闭", draft: "草稿模式", auto: "自动回复" };
   const items = [
-    { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已连接" : "未配置", action: "去连接", open: onModelSettings },
+    { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已配置" : "未配置", action: "去连接", open: onModelSettings },
     { id: "knowledge", label: "导入医生知识库", done: facts.knowledge === true, state: facts.knowledge == null ? "未检测" : facts.knowledge ? "已有资料" : "暂无资料", action: "导入资料", open: () => onView?.("knowledge") },
     // 微信/企微接入有封号风险且非必需，不再出现在新手清单；仍可在 设置→高级 里配置。
     ...(facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestCareSetup(); onView?.("care"); } }] : []),

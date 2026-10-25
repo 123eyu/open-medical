@@ -778,6 +778,7 @@ export class SessionBridge {
   // 返回 {kind:"workspace", handle} | {kind:"legacy", handle}；本地规则
   // 模式返回 {kind:"local", plan}，由 executeSend 同步执行。
   prepareSend(id, body) {
+    check(body.workflow !== "knowledge-answer" || resolveMode(body.mode || "local") !== "local", "MODEL_REQUIRED", "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
     if (!this.isSessionWorkspace(id))
       return { kind: "legacy", handle: this.runtime.prepare(id, body) };
     const w = this.requireSessionWorkspace(id);
@@ -798,7 +799,7 @@ export class SessionBridge {
     const requestedMode = body.mode || "local";
     const mode = resolveMode(requestedMode);
     const policy = medicalPolicy(message);
-    if (body.workflow === "patient-intake") policy.workflow = "patient-intake";
+    if (["patient-intake", "knowledge-answer"].includes(body.workflow)) policy.workflow = body.workflow;
     if (body.requestId !== undefined)
       check(
         !this.service.store.hasRequest(id, body.requestId),
@@ -1419,8 +1420,9 @@ export class SessionBridge {
         const w = bridge.requireSessionWorkspace(sessionId);
         const message = string(body.message, "任务", 200000);
         const mode = resolveMode(body.mode);
+        check(body.workflow !== "knowledge-answer" || mode !== "local", "MODEL_REQUIRED", "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
         const policy = medicalPolicy(message);
-    if (body.workflow === "patient-intake") policy.workflow = "patient-intake";
+        if (["patient-intake", "knowledge-answer"].includes(body.workflow)) policy.workflow = body.workflow;
         const fileIds = bridge.selectMaterials(w, body.fileIds || []);
         const sources = bridge.buildSources(w, message, fileIds);
         if (mode === "local")

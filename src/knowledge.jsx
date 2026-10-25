@@ -137,7 +137,7 @@ export function KnowledgeView({
       const task = await api("/api/sessions", "POST", {
         title: title.slice(0, 100),
       });
-      await onOpenTask(task.id, { draft });
+      await onOpenTask(task.id, { draft, workflow: "knowledge-answer" });
     });
   const prepareSource = (doc, range) =>
     createTask(
