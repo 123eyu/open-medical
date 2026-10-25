@@ -73,9 +73,9 @@ function BackupStatus() {
   };
   return <p className={`backup-status ${status.warning ? "warn" : "ok"}`} role="status">
     <i aria-hidden="true" />
-    上次备份：{when}{status.fresh ? " ✓" : status.lastBackupAt ? " · 超过一天" : " · 建议立即备份"}
-    <button type="button" className="text-button" disabled={busy} onClick={run}>{busy ? "正在备份…" : "立即备份"}</button>
-    <small>备份保存在本机 {status.directory}</small>
+    上次数据库备份：{when}{status.fresh ? " ✓" : status.lastBackupAt ? " · 超过一天" : " · 建议备份数据库"}
+    <button type="button" className="text-button" disabled={busy} onClick={run}>{busy ? "正在备份数据库…" : "立即备份数据库"}</button>
+    <small>数据库备份保存在本机 {status.directory}。会话附件原文件、项目文件、知识库原件与模型配置需另行备份。</small>
     {error && <span role="alert">{error}</span>}
   </p>;
 }
@@ -108,7 +108,7 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   if (!overview) return null;
   const counts = overview.counts || {};
   const pendingCount = overview.work?.total ?? 0;
-  const dueToday = (counts.visit || 0) + (counts.followup || 0);
+  const careTodoCount = (counts.visit || 0) + (counts.followup || 0);
   const openItem = item => {
     const a = item.action || {};
     if (a.type === "patient" && item.patientId) onPatient?.({ id: item.patientId, tab: a.tab });
@@ -117,7 +117,7 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   };
   return <>
     <section className="home-cockpit" aria-label="今日概览">
-      <CockpitCard value={dueToday} label="今日复诊与随访" hint={dueToday ? "含逾期未登记" : "今天没有到期事项"} onClick={() => onView?.("agenda")} />
+      <CockpitCard value={careTodoCount} label="复诊与随访待办" hint={careTodoCount ? "含提前提醒与逾期未登记事项" : "暂无复诊与随访待办"} onClick={() => onView?.("agenda")} />
       <CockpitCard value={counts.risk || 0} label="风险提醒" hint={(counts.risk || 0) ? "有指标或随访预警" : "无活跃预警"} urgent={(counts.risk || 0) > 0} onClick={() => onView?.("agenda")} />
       <CockpitCard value={pendingCount} label="待确认与复核" hint={pendingCount ? "AI 草稿等待你核对" : "没有待确认事项"} onClick={() => onView?.("review")} />
       <CockpitCard value={counts.messages || 0} label="患者消息" hint={(counts.messages || 0) ? "有未处理消息" : "暂无新消息"} urgent={(counts.messages || 0) > 0} onClick={() => onView?.("care")} />
