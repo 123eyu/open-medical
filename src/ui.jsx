@@ -312,6 +312,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
         <span className="p-ava" title={patientIdentityLabel(p)}>{(p.name || "?").slice(0, 1)}</span>
         <div className="p-id">
           <b>{p.name}{p.gender || p.birthYear ? ` · ${p.gender === "female" ? "女" : p.gender === "male" ? "男" : ""}${p.birthYear ? ` ${p.birthYear}年生` : ""}` : ""}</b>
+          {session?.patientId && <span className="ps-patient-number">编号：{p.patientNumber || '未编号'}</span>}
           <span>
             {[...(diagnoses || []), ...(p.tags || []), ...(p.groups || [])]
               .slice(0, 3)

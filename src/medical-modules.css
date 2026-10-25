@@ -364,7 +364,7 @@ fieldset.trial-form {
 .patient-question-history button[aria-current="true"] { border-color: #2b705b; }
 .patient-question-history button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .patient-question-history button small { flex-shrink: 0; color: #607267; }
-.patient-question-context { color: #53665b; font-size: 13px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.patient-question-context { color: #53665b; font-size: var(--meta-size, 13px); line-height: 1.6; padding: 8px 4px; overflow-wrap: anywhere; }
 .patient-question-context span { display: block; white-space: normal; }
 @media (max-width: 600px) { .patient-question-actions { align-items: flex-start; } .patient-question-actions p { max-width: 22ch; } }
 
@@ -471,3 +471,18 @@ fieldset.trial-form {
 .education-broadcast-row { display: flex; flex-wrap: wrap; gap: 12px 18px; }
 .education-broadcast-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .education-broadcast-row select { min-width: 220px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+
+.patient-conversation .conversation-head { min-height:60px; padding-block:12px; }
+.patient-conversation .heading-copy h1 { margin-top:0; }
+.patient-conversation .patient-question-nav { padding-block:10px; }
+.patient-conversation .patient-question-history { margin-top:8px; }
+.patient-task-preparation { margin:0 0 12px; }
+.patient-task-preparation .prepare-materials { margin:0 0 8px; }
+.patient-task-options summary { cursor:pointer; color:var(--muted); font-size:var(--meta-size, 14px); }
+.patient-task-options .workflow-grid { margin-top:10px; }
+.patient-conversation .patient-summary { max-width:100%; }
+.patient-conversation .ps-head { flex-wrap:wrap; background:#f4f7f3; }
+.patient-conversation .ps-head .p-id { flex:1; min-width:0; overflow-wrap:anywhere; }
+.patient-conversation .ps-patient-number { display:block; }
+.patient-conversation .ps-badges { flex-wrap:wrap; }
+@media(max-width:600px) { .patient-conversation .patient-summary.compact .ps-grid { grid-template-columns:1fr; } .patient-conversation .ps-col { border-right:0; border-bottom:1px solid var(--border); } .patient-conversation .ps-col:last-child { border-bottom:0; } }

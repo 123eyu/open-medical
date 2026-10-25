@@ -1572,7 +1572,7 @@ function App() {
         </aside>
         <div className="product-content" id="main-content" tabIndex={-1}>
           {view !== "tools" && TOOL_VIEWS.includes(view) && <nav className="page-trail" aria-label="当前位置"><button onClick={() => navigate("tools")}>资料与工具</button><ChevronRight size={14}/><span>{VIEW_LABELS[view]}</span></nav>}
-          {view === "workbench" && session?.patientId && <nav className="page-trail" aria-label="当前患者"><button onClick={() => openPatient({id:session.patientId})}><Stethoscope size={15}/>{patientsList.find(p => p.id === session.patientId)?.name || "患者档案"}</button><ChevronRight size={14}/><span>当前对话与成果保存在此患者下</span></nav>}
+          {view === "workbench" && session?.patientId && <nav className="page-trail" aria-label="当前患者"><button onClick={() => openPatient({id:session.patientId})}><Stethoscope size={15}/>返回患者档案</button></nav>}
           {listError && <div className="navigation-notice" role="alert"><span>{listError}</span><button className="secondary" onClick={() => refreshList()}>重新加载列表</button></div>}
           {!config ? (<main id="main" className="workbench-hub">
                 {error ? <div className="connection-recovery" role="alert">
@@ -1673,7 +1673,7 @@ function App() {
             />
           ) : (
             <div className={`shell ${inspector ? "with-inspector" : ""}`}>
-              <main id="main" className="conversation">
+              <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""}`}>
                 <div className="conversation-head">
                   <IconButton
                     title="显示会话列表"
@@ -1682,9 +1682,7 @@ function App() {
                     <Menu size={18} />
                   </IconButton>
                   <div className="heading-copy">
-                    <small>
-                      {session?.patientId ? "患者关联任务" : "Agent 对话"}
-                    </small>
+                    {!session?.patientId && <small>Agent 对话</small>}
                     <h1>{session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session && (
@@ -1747,7 +1745,7 @@ function App() {
                     {inspector ? "收起资料" : "查看资料"}
                   </button>
                 </div>
-                {session && (
+                {session && !session.patientId && (
                   <div className="task-context-bar">
                     {!session.patientId && (session.files.length > 0 ||
                       session.artifacts.length > 0) && (
@@ -1780,14 +1778,7 @@ function App() {
                         </span>
                       </div>
                     )}
-                    {session.patientId && (
-                      <button
-                        className="text-button"
-                        onClick={() => openPatient({ id: session.patientId })}
-                      >
-                        患者档案 <ChevronRight size={12} />
-                      </button>
-                    )}
+
                   </div>
                 )}
                 {error && (
@@ -1854,7 +1845,8 @@ function App() {
                       />
                     )}
                     {(!session?.messages.length || (session?.patientId && !questionRunId && !busy)) && (
-                      <div className="welcome task-preparation">
+                      <div className={session?.patientId ? "patient-task-preparation" : "welcome task-preparation"}>
+                        {!session?.patientId && <>
                         <div className="welcome-symbol">
                           {session?.files.length ? (
                             <FolderOpen size={24} />
@@ -1864,15 +1856,14 @@ function App() {
                         </div>
                         <p className="eyebrow">直接提问，或描述任务</p>
                         <h2>
-                          {session?.patientId ? "这次想了解患者的哪方面？" : session?.files.length
+                          {session?.files.length
                             ? "材料已就绪，可以直接开始。"
                             : "有什么可以帮你？"}
                         </h2>
                         <p>
-                          {session?.patientId
-                            ? "可以直接问这位患者的新问题。病历资料会共享，以前的聊天不会自动带入。"
-                            : "咨询、指标解读这类问题会直接回答；整理病历、写文书时助手会自动选择合适的技能模板，需要时再添加材料。"}
+                          咨询、指标解读这类问题会直接回答；整理病历、写文书时助手会自动选择合适的技能模板，需要时再添加材料。
                         </p>
+                        </>}
                         <button
                           className="secondary prepare-materials"
                           disabled={!config || uploading}
@@ -1890,7 +1881,10 @@ function App() {
                             ? `核对本次选中的 ${selectedFileIds.length} 份材料`
                             : "添加任务材料"}
                         </button>
-                        {!draft.trim() && (
+                        {!draft.trim() && (session?.patientId ? <details className="patient-task-options">
+                          <summary>常用任务</summary>
+                          <div className="workflow-grid">{WORKFLOWS.map(flow => <button key={flow.id} onClick={() => selectWorkflow(flow)}><flow.icon size={19}/><b>{flow.title}</b><span>{flow.desc}</span><ChevronRight size={15}/></button>)}</div>
+                        </details> : (
                           <div className="workflow-grid">
                             {WORKFLOWS.map((flow) => (
                               <button
@@ -1904,11 +1898,11 @@ function App() {
                               </button>
                             ))}
                           </div>
-                        )}
-                        <div className="welcome-note">
+                        ))}
+                        {!session?.patientId && <div className="welcome-note">
                           <ShieldCheck size={14} />
                           未配置模型时自动本地整理；智能模式下，输入与材料外发前需勾选同意。
-                        </div>
+                        </div>}
                       </div>
                     )}
                     {session?.messages.filter((m) => !session.patientId || questionIds.has(m.runId)).map((m) => (
@@ -2133,7 +2127,7 @@ function App() {
                     </div>
                   )}
                   {session?.patientId && <div className="patient-question-context" role="status">
-                    {busy ? "正在处理当前问题，可补充要求。" : canFollowQuestion ? <>继续追问 · {session.messages.find(m => m.role === "user" && m.runId === [...questionIds].at(-1))?.content}</> : "新问题 · 使用患者档案与所选资料"}
+                    {busy ? "正在处理当前问题，可补充要求。" : canFollowQuestion ? <>继续追问 · {session.messages.find(m => m.role === "user" && m.runId === [...questionIds].at(-1))?.content}</> : "新问题 · 使用患者档案与所选资料；以前的聊天不会自动带入。"}
                     {!busy && questionRunId && !canFollowQuestion && <span>这次问答未形成可追问的模型回答。再次发送会独立开始。</span>}
                   </div>}
                   <form className="composer" onSubmit={send}>
@@ -2326,11 +2320,12 @@ function App() {
                     <span>
                       {!config?.modelConfigured && (
                         <>
+                          {session?.patientId && "未配置模型，当前仅按规则整理材料。"}
                           <button
                             className="text-button"
                             onClick={() => setModal("model")}
                           >
-                            未配置模型，点击配置后使用 AI Agent
+                            {session?.patientId ? "配置模型" : "未配置模型，点击配置后使用 AI Agent"}
                           </button>
                         </>
                       )}
