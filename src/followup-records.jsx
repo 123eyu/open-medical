@@ -14,6 +14,8 @@ const date = (value) => new Date(value).toLocaleString("zh-CN");
 // recorded when the doctor submits its outcome, checklist and notes.
 export function FollowupRecords({
   patientId,
+  refreshKey = 0,
+  onRefresh,
   onChanged,
   onOpenPatient,
   onOpenTask,
@@ -25,6 +27,7 @@ export function FollowupRecords({
   const [outcomeFilter, setOutcomeFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
+  const loadedView = useRef("");
   const [addendum, setAddendum] = useState(null);
   const [addendumNote, setAddendumNote] = useState("");
   const [editing, setEditing] = useClinicalDraft(patientId || "global", "followupEditing", null);
@@ -47,7 +50,9 @@ export function FollowupRecords({
     setError("");
   };
   useEffect(() => {
-    setRecords(null);
+    const view = JSON.stringify([patientId, history, offset, query, outcomeFilter]);
+    if (loadedView.current !== view) setRecords(null);
+    loadedView.current = view;
     refresh().catch((err) => setError(err.message));
     const timer = setInterval(() => {
       if (!document.hidden) refresh().catch((err) => setError(err.message));
@@ -56,7 +61,7 @@ export function FollowupRecords({
       generation.current++;
       clearInterval(timer);
     };
-  }, [patientId, history, offset, query, outcomeFilter]);
+  }, [patientId, history, offset, query, outcomeFilter, refreshKey]);
   const saveAddendum = async (event) => {
     event.preventDefault();
     if (inFlight.current) return;
@@ -71,7 +76,7 @@ export function FollowupRecords({
       setAddendum(null);
       setAddendumNote("");
       setNotice("补充记录已保存，原记录保留。");
-      await refresh();
+      if (onRefresh) onRefresh(); else await refresh();
       await onChanged?.();
     } catch (err) {
       setError(err.message);
@@ -109,7 +114,7 @@ export function FollowupRecords({
         "随访结果已保存，可在随访记录中查看。" +
           (form.nextDueAt ? "下次提醒已安排。" : ""),
       );
-      await refresh();
+      if (onRefresh) onRefresh(); else await refresh();
       await onChanged?.();
     } catch (err) {
       setError(err.message);
@@ -167,7 +172,7 @@ export function FollowupRecords({
         <button
           className="text-button"
           disabled={busy || Boolean(editing)}
-          onClick={() => refresh().catch((err) => setError(err.message))}
+          onClick={() => onRefresh ? onRefresh() : refresh().catch((err) => setError(err.message))}
         >
           刷新
         </button>
@@ -244,7 +249,7 @@ export function FollowupRecords({
           </label>
         )}
       </div>
-      {!records && <p role="status">正在读取随访记录…</p>}
+      {!records && !error && <p role="status">正在读取随访记录…</p>}
       {records && !records.reminders.length && (
         <p className="memory-empty">
           {query || (outcomeFilter && history)

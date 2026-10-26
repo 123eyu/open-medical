@@ -119,6 +119,8 @@ export function PatientsView({
   };
   const [messages, setMessages] = useState([]);
   const [followups, setFollowups] = useState([]);
+  const [followupRefresh, setFollowupRefresh] = useState(0);
+  const refreshFollowupPanels = () => setFollowupRefresh(value => value + 1);
   const [risks, setRisks] = useState([]);
   const [proposals, setProposals] = useState([]);
   const [createProposals, setCreateProposals] = useState([]);
@@ -830,6 +832,8 @@ export function PatientsView({
               <FollowupRecords
                 key={detail.id}
                 patientId={detail.id}
+                refreshKey={followupRefresh}
+                onRefresh={refreshFollowupPanels}
                 onChanged={refreshPatient}
                 onOpenTask={onOpenWorkspace}
               />
@@ -838,8 +842,9 @@ export function PatientsView({
               <SurveyPanel
                 key={`surveys-${detail.id}`}
                 patientId={detail.id}
+                refreshKey={followupRefresh}
+                onRefresh={refreshFollowupPanels}
                 onChanged={refreshPatient}
-                onError={setError}
               />
               </div>
               <h3 className="followup-merged-title">提醒计划（{followups.length}）</h3>

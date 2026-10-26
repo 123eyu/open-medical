@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
+export { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
 import { check, identifier, string } from "./errors.mjs";
 
 // Structured follow-up questionnaires. The questionnaire rides on a follow-up
@@ -129,22 +131,6 @@ export function normalizeQuestionnaire(input) {
   return questionnaire;
 }
 
-export function renderQuestionnaire(questionnaire) {
-  const tag = { single: "单选", multi: "多选", number: "数值", text: "简答" };
-  const lines = [`【随访问卷】${questionnaire.title}`, "请按题号逐题回复，例如：1. 经常", ""];
-  questionnaire.questions.forEach((question, index) => {
-    lines.push(
-      `${index + 1}. ${question.text}（${tag[question.type]}${question.required ? "" : "，可不答"}）`,
-    );
-    if (question.options)
-      lines.push(
-        `   ${question.options.map((option, i) => `${i + 1}) ${option.label}`).join("  ")}`,
-      );
-    else if (question.type === "number" && question.unit)
-      lines[lines.length - 1] += ` 单位：${question.unit}`;
-  });
-  return lines.join("\n").slice(0, 2000);
-}
 
 // Deterministic parser. A reply only counts as survey answers when at least
 // one line is numbered (「1. …」 / 「1、…」 / 「1) …」); free-form chatter in the
