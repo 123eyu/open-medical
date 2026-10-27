@@ -7,6 +7,10 @@ import { PatientProposalComparison } from "./patient-proposal";
 
 const TYPES = { "patient-create": "建档提案", "patient-update": "档案更新", "followup-create": "随访提醒", "case-save": "病例入库", "care-message": "发送消息", "care-campaign": "随访计划", "care-settings": "自动化设置", "care-bind": "关联微信客户", "care-group-message": "客户群群发", "care-education-broadcast": "患教群发", "patient-group-suggest": "分组建议", "patient-grouping": "患者分组", "trial-batch": "批量 AI 初筛", "trial-enrollment": "试验入组状态", "ext-change": "工作台扩展", "ext-install": "技能安装" };
 export { PENDING_REFRESH_EVENT } from "./agent-runtime";
+const PENDING_OPEN_EVENT = "care-pending-open";
+export function requestPendingReview(actionId) {
+  window.dispatchEvent(new CustomEvent(PENDING_OPEN_EVENT, { detail: { actionId } }));
+}
 
 // 长摘要默认折叠，避免几千字病历全文把确认按钮顶出视野；展开后仍可滚动。
 function TogglePre({ text }) {
@@ -158,7 +162,15 @@ function PendingReviewOverlay({ action, busy, error, onConfirm, onReject, onClos
 
 export function PendingTray() {
   const tray = useRef(null);
+  const requestGeneration = useRef(0);
+  const reviewGeneration = useRef(0);
+  const pages = useRef(1);
+  const resolving = useRef(false);
   const [actions, setActions] = useState([]);
+  const [total, setTotal] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -166,20 +178,49 @@ export function PendingTray() {
   const [reviewing, setReviewing] = useState(null);
   const [remembered, setRemembered] = useState(null);
   const [note, setNote] = useState("");
-  const load = useCallback(() => api("/api/pending-actions?status=pending")
-    .then((data) => setActions((data.actions || []).filter((a) => ["patient-create", "patient-update", "followup-create", "case-save"].includes(a.type) || a.type === "patient-grouping" || a.type === "patient-group-suggest" || a.type?.startsWith("care-") || a.type?.startsWith("trial-") || a.type?.startsWith("ext-"))))
-    .catch(() => {}), []);
+  const load = useCallback(async ({ actionId } = {}) => {
+    const request = ++requestGeneration.current;
+    setLoading(true);
+    try {
+      // Refresh every loaded page together so a resolved row cannot shift the
+      // offset and silently hide the next proposal.
+      const rows = [];
+      let data, offset = 0;
+      for (let page = 0; page < pages.current || (actionId && !rows.some(action => action.id === actionId)); page++) {
+        data = await api(`/api/pending-actions?status=pending&limit=100&offset=${offset}`);
+        if (request !== requestGeneration.current) return;
+        rows.push(...data.actions);
+        offset = data.nextOffset;
+        if (offset === null || rows.length >= data.counts.pending) break;
+      }
+      setActions([...new Map(rows.map(action => [action.id, action])).values()]);
+      setTotal(data.counts.pending); setHasMore(offset !== null && rows.length < data.counts.pending); setLoadError("");
+      return rows;
+    } catch (e) {
+      if (request === requestGeneration.current) { setLoadError(e.message); setTotal(null); }
+    } finally { if (request === requestGeneration.current) setLoading(false); }
+  }, []);
   useEffect(() => {
+    const openReview = async (event) => {
+      const request = ++reviewGeneration.current;
+      setOpen(true); setError(""); setReviewing(null); setRejecting(null);
+      const actionId = event.detail?.actionId;
+      const rows = await load({ actionId });
+      if (!actionId || !rows || request !== reviewGeneration.current) return;
+      const action = rows.find(row => row.id === actionId);
+      if (!action) { setError("这条提案已处理，请查看当前待确认队列。"); return; }
+      setReviewing(action);
+    };
     load();
     const timer = setInterval(() => { if (document.visibilityState === "visible") load(); }, 20000);
     window.addEventListener(PENDING_REFRESH_EVENT, load);
-    return () => { clearInterval(timer); window.removeEventListener(PENDING_REFRESH_EVENT, load); };
+    window.addEventListener(PENDING_OPEN_EVENT, openReview);
+    return () => { requestGeneration.current++; reviewGeneration.current++; clearInterval(timer); window.removeEventListener(PENDING_REFRESH_EVENT, load); window.removeEventListener(PENDING_OPEN_EVENT, openReview); };
   }, [load]);
-  useEffect(() => { if (!actions.length) setOpen(false); }, [actions.length]);
   useEffect(() => {
-    if (!open) return;
+    if (!open || reviewing) return;
     const dismiss = (event) => {
-      if (event.type === "keydown" ? event.key === "Escape" : !tray.current?.contains(event.target)) setOpen(false);
+      if (event.type === "keydown" ? event.key === "Escape" : !tray.current?.contains(event.target)) { reviewGeneration.current++; setOpen(false); }
     };
     document.addEventListener("pointerdown", dismiss);
     document.addEventListener("keydown", dismiss);
@@ -187,24 +228,32 @@ export function PendingTray() {
       document.removeEventListener("pointerdown", dismiss);
       document.removeEventListener("keydown", dismiss);
     };
-  }, [open]);
+  }, [open, reviewing]);
   async function resolve(action, decision, withNote) {
+    if (resolving.current) return false;
+    resolving.current = true;
     setBusy(action.id); setError("");
     try {
       const result = await api(`/api/pending-actions/${action.id}/${decision}`, "POST", withNote ? { note } : {});
       if (result.remembered?.length) setRemembered({ key: `${action.id}:${decision}`, memories: result.remembered });
       setRejecting(null); setNote("");
+      // api() emits PENDING_REFRESH_EVENT after successful decisions, updating
+      // this tray and the home preview from the same source of truth.
       await load();
       return true;
     }
     catch (e) { setError(e.message); }
-    finally { setBusy(""); }
+    finally { resolving.current = false; setBusy(""); }
   }
-  if (!actions.length && !remembered) return null;
+  if (!actions.length && !remembered && !open && !reviewing) return null;
   return <div className="pending-tray" ref={tray}>
     {remembered && <RememberedNotice key={remembered.key} memories={remembered.memories} />}
     {open && <section className="pending-panel" aria-label="待确认的操作">
-      <header><strong>待你确认（{actions.length}）</strong><button className="icon-button" aria-label="收起" onClick={() => setOpen(false)}><X size={16} /></button></header>
+      <header><strong>待你确认（{total ?? "—"}）</strong><button className="icon-button" aria-label="收起" onClick={() => { reviewGeneration.current++; setOpen(false); }}><X size={16} /></button></header>
+      {loadError && <p role="alert" className="care-error">提案加载失败：{loadError}<button className="text-button" disabled={loading} onClick={load}>重试</button></p>}
+      {loading && <p role="status">正在读取提案…</p>}
+      {!loading && !loadError && total === 0 && <p role="status">没有待确认提案。新的提案会在这里等待核对，查看队列不会修改档案。</p>}
+      {total > 0 && <p className="care-hint">已展示 {actions.length} / 共 {total} 条</p>}
       {error && <p role="alert" className="care-error">{error}</p>}
       <ul>{actions.map((a) => <li key={a.id} className="care-card">
         <header><span className="care-tag">{TYPES[a.type] || a.type}</span><time>{new Date(a.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</time></header>
@@ -229,6 +278,7 @@ export function PendingTray() {
           <button disabled={Boolean(busy)} onClick={() => resolve(a, "confirm")}>{busy === a.id ? "处理中…" : "确认执行"}</button>
         </footer>}
       </li>)}</ul>
+      {hasMore && <button type="button" className="secondary" disabled={loading} onClick={() => { pages.current++; load(); }}>加载更多提案</button>}
     </section>}
     {reviewing && <PendingReviewOverlay
       action={actions.find((a) => a.id === reviewing.id) || reviewing}
@@ -236,8 +286,8 @@ export function PendingTray() {
       error={error}
       onConfirm={() => resolve(reviewing, "confirm").then(ok => { if (ok) setReviewing(null); })}
       onReject={() => { resolve(reviewing, "reject").then(ok => { if (ok) setReviewing(null); }); }}
-      onClose={() => setReviewing(null)}
+      onClose={() => { reviewGeneration.current++; setReviewing(null); }}
     />}
-    {!!actions.length && <button className="pending-badge" aria-expanded={open} onClick={() => setOpen((v) => !v)}><ClipboardCheck size={18} />待确认<em>{actions.length}</em></button>}
+    {!!actions.length && <button className="pending-badge" aria-expanded={open} onClick={() => { reviewGeneration.current++; setOpen((v) => !v); }}><ClipboardCheck size={18} />待确认<em>{total ?? "—"}</em></button>}
   </div>;
 }

@@ -25,11 +25,12 @@ import {
   X,
 } from "lucide-react";
 import { requestCareSetup, setupProgress } from "./care-setup";
-import { api, medicalEnabled } from "./agent-runtime";
+import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
+import { requestPendingReview } from "./pending-tray";
 
 // 首页驾驶舱数字行：打开即回答「今天有什么在等我」。四个数字全部来自
-// /api/doctor/overview 的确定性聚合，可点击直达对应处理页；紧急项带红点。
+// 患者事项与提案各自的确定性聚合，可点击直达对应处理页；紧急项带红点。
 function CockpitCard({ value, label, hint, urgent, onClick }) {
   return <button type="button" className={`cockpit-card ${urgent ? "urgent" : ""}`} onClick={onClick}>
     <span className="cockpit-number">{value === null ? "—" : value}{urgent && value > 0 ? <i className="cockpit-dot" aria-label="有紧急项" /> : null}</span>
@@ -38,10 +39,9 @@ function CockpitCard({ value, label, hint, urgent, onClick }) {
   </button>;
 }
 // 首页驾驶舱：数字行 + 双栏主区。左栏今日名单（谁要处理、为什么、
-// 一句话要点），右栏待确认预览（最新 5 条，行内确认/拒绝）——把
-// 「AI 不直写」的复核动作从深层托盘提到医生每天第一屏。
+// 一句话要点），右栏待确认预览（最新 5 条，进入完整审核）。
 const PENDING_LABELS = { "care-message": "发送消息", "care-campaign": "随访计划", "care-bind": "关联微信", "care-group-message": "群发", "patient-grouping": "患者分组", "patient-group-suggest": "分组建议", "trial-batch": "批量初筛", "trial-enrollment": "试验入组", "ext-change": "工作台扩展" };
-function PendingRow({ action, busy, onConfirm, onReject }) {
+function PendingRow({ action }) {
   return <li className="dash-pending-row">
     <div className="dash-pending-head">
       <span className="care-tag">{PENDING_LABELS[action.type] || "提案"}</span>
@@ -49,8 +49,7 @@ function PendingRow({ action, busy, onConfirm, onReject }) {
     </div>
     <p className="dash-pending-summary">{action.summary}</p>
     <div className="dash-pending-actions">
-      <button type="button" className="text-button" disabled={busy} onClick={onReject}>拒绝</button>
-      <button type="button" disabled={busy} onClick={onConfirm}>{busy ? "处理中…" : "确认"}</button>
+      <button type="button" onClick={() => requestPendingReview(action.id)}>核对提案</button>
     </div>
   </li>;
 }
@@ -80,34 +79,38 @@ function BackupStatus() {
 }
 function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   const [overview, setOverview] = useState(null);
+  const [overviewError, setOverviewError] = useState("");
   const [pending, setPending] = useState([]);
-  const [busyId, setBusyId] = useState("");
+  const [pendingCount, setPendingCount] = useState(null);
+  const [pendingError, setPendingError] = useState("");
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
     let alive = true;
-    const load = () => Promise.allSettled([
-      api("/api/doctor/overview?limit=6"),
-      api("/api/pending-actions?status=pending&limit=5"),
-    ]).then(([a, b]) => {
-      if (!alive) return;
-      if (a.status === "fulfilled") { setOverview(a.value); onData?.(a.value); }
-      if (b.status === "fulfilled") setPending(b.value.actions || []);
-    }).catch(() => {});
+    let generation = 0;
+    const load = () => {
+      const request = ++generation;
+      return Promise.allSettled([
+        api("/api/doctor/overview?limit=6"),
+        api("/api/pending-actions?status=pending&limit=5"),
+      ]).then(([a, b]) => {
+        if (!alive || request !== generation) return;
+        if (a.status === "fulfilled") { setOverview(a.value); setOverviewError(""); onData?.(a.value); }
+        else { setOverview(null); setOverviewError(a.reason.message); }
+        if (b.status === "fulfilled") {
+          setPending(b.value.actions || []); setPendingCount(b.value.counts.pending); setPendingError("");
+        } else {
+          setPending([]); setPendingCount(null); setPendingError(b.reason.message);
+        }
+      });
+    };
     load();
     const timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
-    return () => { alive = false; clearInterval(timer); };
-  }, [reloadKey, onData]);
-  const resolvePending = async (action, decision) => {
-    setBusyId(action.id);
-    try {
-      await api(`/api/pending-actions/${action.id}/${decision}`, "POST", {});
-      setPending(prev => prev.filter(a => a.id !== action.id));
-    } catch { /* 托盘里有完整错误处理；这里静默保留行 */ }
-    finally { setBusyId(""); }
-  };
-  if (!overview) return null;
-  const counts = overview.counts || {};
-  const pendingCount = overview.work?.total ?? 0;
+    window.addEventListener(PENDING_REFRESH_EVENT, load);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener(PENDING_REFRESH_EVENT, load); };
+  }, [reloadKey, onData, retry]);
+  const counts = overview?.counts || {};
   const careTodoCount = (counts.visit || 0) + (counts.followup || 0);
+  const overviewHint = overview ? "" : overviewError ? "患者事项读取失败" : "正在读取患者事项…";
   const openItem = item => {
     const a = item.action || {};
     if (a.type === "patient" && item.patientId) onPatient?.({ id: item.patientId, tab: a.tab });
@@ -116,15 +119,17 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   };
   return <>
     <section className="home-cockpit" aria-label="今日概览">
-      <CockpitCard value={careTodoCount} label="复诊与随访待办" hint={careTodoCount ? "含提前提醒与逾期未登记事项" : "暂无复诊与随访待办"} onClick={() => onView?.("agenda")} />
-      <CockpitCard value={counts.risk || 0} label="风险提醒" hint={(counts.risk || 0) ? "有指标或随访预警" : "无活跃预警"} urgent={(counts.risk || 0) > 0} onClick={() => onView?.("agenda")} />
-      <CockpitCard value={pendingCount} label="待确认与复核" hint={pendingCount ? "AI 草稿等待你核对" : "没有待确认事项"} onClick={() => onView?.("review")} />
-      <CockpitCard value={counts.messages || 0} label="患者消息" hint={(counts.messages || 0) ? "有未处理消息" : "暂无新消息"} urgent={(counts.messages || 0) > 0} onClick={() => onView?.("care")} />
+      <CockpitCard value={overview ? careTodoCount : null} label="复诊与随访待办" hint={overviewHint || (careTodoCount ? "含提前提醒与逾期未登记事项" : "暂无复诊与随访待办")} onClick={() => onView?.("agenda")} />
+      <CockpitCard value={overview ? counts.risk || 0 : null} label="风险提醒" hint={overviewHint || ((counts.risk || 0) ? "有指标或随访预警" : "无活跃预警")} urgent={(counts.risk || 0) > 0} onClick={() => onView?.("agenda")} />
+      <CockpitCard value={pendingCount} label="待确认提案" hint={pendingError ? "暂时无法读取，打开队列可重试" : pendingCount === null ? "正在读取提案…" : pendingCount ? "核对写入内容后再确认" : "没有待确认提案"} onClick={() => requestPendingReview()} />
+      <CockpitCard value={overview ? counts.messages || 0 : null} label="患者消息" hint={overviewHint || ((counts.messages || 0) ? "有未处理消息" : "暂无新消息")} urgent={(counts.messages || 0) > 0} onClick={() => onView?.("care")} />
     </section>
-    {(overview.items?.length || pending.length) ? <section className={`home-dashboard${pending.length ? "" : " home-dashboard-single"}`} aria-label="今日名单与待确认">
+    {pendingError && <p role="alert" className="care-error">待确认提案加载失败：{pendingError}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
+    {overviewError && <p role="alert" className="care-error">患者事项加载失败：{overviewError}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
+    {(overview?.items?.length || pending.length) ? <section className={`home-dashboard${pending.length ? "" : " home-dashboard-single"}`} aria-label="今日名单与待确认">
       <div className="dash-today">
-        <header><h3>今天要处理的</h3>{overview.total > overview.items.length ? <button type="button" className="text-button" onClick={() => onView?.("agenda")}>全部 {overview.total} 项</button> : null}</header>
-        <ul>{overview.items.map(item => <li key={item.id}>
+        <header><h3>今天要处理的</h3>{overview?.total > overview?.items.length ? <button type="button" className="text-button" onClick={() => onView?.("agenda")}>全部 {overview.total} 项</button> : null}</header>
+        <ul>{overview?.items.map(item => <li key={item.id}>
           <button type="button" onClick={() => openItem(item)}>
             <b>{item.patientName}</b>
             <span className="dash-today-title">{item.title}</span>
@@ -134,9 +139,8 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
         </li>)}</ul>
       </div>
       {pending.length ? <div className="dash-pending">
-        <header><h3>待你确认</h3><button type="button" className="text-button" onClick={() => onView?.("care")}>打开完整托盘</button></header>
-        <ul>{pending.map(action => <PendingRow key={action.id} action={action} busy={busyId === action.id}
-          onConfirm={() => resolvePending(action, "confirm")} onReject={() => resolvePending(action, "reject")} />)}</ul>
+        <header><h3>待你确认</h3><button type="button" className="text-button" onClick={() => requestPendingReview()}>打开完整托盘</button></header>
+        <ul>{pending.map(action => <PendingRow key={action.id} action={action} />)}</ul>
         <p className="muted">AI 只起草，你确认后才生效。</p>
       </div> : null}
     </section> : null}
