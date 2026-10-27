@@ -34,6 +34,7 @@
 .chart-allergies { background:var(--soft); padding:14px; margin-bottom:20px; font-size:12px; }
 .chart-allergies.recorded { background:#faf0e3; }
 .chart-allergies p { margin:6px 0 0; }
+.patient-allergy-status { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .chart-med-title { display:flex; justify-content:space-between; gap:10px; }
 .chart-med-status { font-size:10px; flex-shrink:0; padding:3px 7px; background:var(--soft); height:fit-content; }
 .chart-med-status.active { color:var(--accent); background:#eaf2eb; }

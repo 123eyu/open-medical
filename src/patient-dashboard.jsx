@@ -40,8 +40,13 @@ function LabPlot({ group, compact = false }) {
     {dates.length > 1 ? <><text x="60" y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
   </svg></div>;
 }
-export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, view = "overview", focusFile = null, onChanged, onError }) {
+export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, view = "overview", focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
   const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
+  useEffect(() => {
+    if (editRequest?.patientId !== patient.id || editRequest?.tab !== view) return;
+    setEditing(true);
+    onEditRequestHandled?.();
+  }, [editRequest, patient.id, view, onEditRequestHandled]);
   const titles = {overview:'患者概览',diagnoses:'诊断与病史',medications:'治疗方案与预后',labs:'检验趋势',visits:'就诊经过',library:'资料库'};
   const [display, setDisplay] = useState(patient.labDisplay || { revision: 0 });
   const [displayBusy, setDisplayBusy] = useState(false);

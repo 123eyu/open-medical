@@ -1,6 +1,6 @@
 import { RememberedNotice } from './learning-loop';
 import { SimilarCases } from "./similar-cases";
-import { patientIdentityLabel, patientOptionLabel } from "./patient-labels";
+import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -325,7 +325,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
       <div className="ps-head">
         <span className="p-ava" title={patientIdentityLabel(p)}>{(p.name || "?").slice(0, 1)}</span>
         <div className="p-id">
-          <b>{p.name}{p.gender || p.birthYear ? ` · ${p.gender === "female" ? "女" : p.gender === "male" ? "男" : ""}${p.birthYear ? ` ${p.birthYear}年生` : ""}` : ""}</b>
+          <b>{[p.name, p.gender === "female" ? "女" : p.gender === "male" ? "男" : "", patientAgeLabel(p)].filter(Boolean).join(" · ")}</b>
           {session?.patientId && <span className="ps-patient-number">编号：{p.patientNumber || '未编号'}</span>}
           <span>
             {[...(diagnoses || []), ...(p.tags || []), ...(p.groups || [])]
@@ -335,7 +335,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
         </div>
         <div className="ps-badges">
           {allergies.length > 0 && <span className="badge no">过敏：{allergies.join("、")}</span>}
-          {!allergies.length && <span className="badge">{p.allergyStatus === "none_known" ? "无已知过敏" : "过敏史未记录"}</span>}
+          {!allergies.length && <span className="badge">{p.allergyStatus === "none_known" ? "无已知过敏" : "过敏史尚未核对"}</span>}
           <span className="pill local">◈ 本地</span>
         </div>
       </div>

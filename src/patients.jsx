@@ -4,7 +4,7 @@ import { CampaignPanel } from "./care-inbox";
 import { ChatFollowupsPanel } from "./chat-followups";
 import { WeComPanel } from "./wecom-panel";
 import { PatientDashboard } from "./patient-dashboard";
-import { patientIdentityLabel, patientOptionLabel } from "./patient-labels";
+import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { FollowupRecords } from "./followup-records";
 import { SurveyPanel } from "./followup-surveys-panel";
 import { QuestionnaireEditor, emptyQuestionnaire, buildQuestionnaire } from "./questionnaire-editor";
@@ -100,11 +100,14 @@ export function PatientsView({
   const [inbox, setInbox] = useState([]);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
+  const [clinicalEditRequest, setClinicalEditRequest] = useState(null);
+  useEffect(() => { setClinicalEditRequest(null); }, [detail?.id]);
   // 时间轴「查看原文」跨标签跳转的目标材料：状态放在父级，因为按 tab 切换
   // 会重挂载 PatientDashboard，组件内的 state 活不过那次重挂。
   const [sourceFocus, setSourceFocus] = useState(null);
   const openRecordTab = (nextTab, opts = {}) => {
     setTab(nextTab);
+    setClinicalEditRequest(opts.edit ? { patientId: detail.id, tab: nextTab } : null);
     if ("focusFile" in opts) setSourceFocus(opts.focusFile);
   };
   const [patientLoading, setPatientLoading] = useState(false);
@@ -575,7 +578,7 @@ export function PatientsView({
                 {[
                   detail.patientNumber || "未编号",
                   GENDER[detail.gender],
-                  detail.birthYear && `${detail.birthYear} 年生`,
+                  patientAgeLabel(detail),
                   detail.phone,
                   ...(detail.groups || []),
                 ]
@@ -596,14 +599,14 @@ export function PatientsView({
                 </em>
               )}
               {(detail.allergies || []).length === 0 && (
-                <em
-                  className="pill"
-                  title="过敏史记录在「诊断与病史」中，随档案更新自动同步"
-                >
+                <span className="patient-allergy-status">
+                <em className="pill">
                   {detail.allergyStatus === "none_known"
                     ? "无已知过敏"
-                    : "过敏史未记录"}
+                    : "过敏史尚未核对"}
                 </em>
+                {detail.allergyStatus !== "none_known" && <button type="button" className="text-button" disabled={detail.archived} onClick={() => openRecordTab("medications", { edit: true })}>核对过敏史</button>}
+                </span>
               )}
             </span>
             <div className="toolbar-actions">
@@ -644,7 +647,7 @@ export function PatientsView({
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} onChanged={onChanged} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace}/></div>}
+          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace}/></div>}
           {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "overview" && (
             <div className="detail-panel">
@@ -1043,7 +1046,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
           <b>找到 {matches.length} 位同名患者</b>
           <p>先核对已有档案，避免重复建档。</p>
           {matches.map((patient) => <button key={patient.id} className="secondary" type="button" onClick={() => onCreated(patient)} disabled={saving}>
-            {patient.name} · {patient.patientNumber || "未编号"} · {patient.birthYear ? `${patient.birthYear} 年生` : "出生年未填"} · {patient.phone ? `尾号 ${patient.phone.slice(-4)}` : "电话未填"} · {patient.archived ? "已归档 · 打开并恢复档案" : "打开已有档案"}
+            {patient.name} · {patient.patientNumber || "未编号"} · {patientAgeLabel(patient) || "出生年未填"} · {patient.phone ? `尾号 ${patient.phone.slice(-4)}` : "电话未填"} · {patient.archived ? "已归档 · 打开并恢复档案" : "打开已有档案"}
           </button>)}
           <label><input type="checkbox" checked={form.confirmDistinctPatient} onChange={(e) => setForm({ ...form, confirmDistinctPatient: e.target.checked })} />已核对，这是另一位同名患者</label>
         </section>}
@@ -1068,7 +1071,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
             />
           </label>
           <label>
-            或按年龄填（岁）
+            按年龄估算出生年（岁）
             <input
               type="number"
               min="0"
@@ -1085,7 +1088,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
                   birthYear: year === "" ? "" : year,
                 });
               }}
-              placeholder="填年龄自动换算出生年"
+              placeholder="填写年龄，估算出生年"
             />
           </label>
           <label>
@@ -1093,6 +1096,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
             <input value={form.phone} onChange={set("phone")} />
           </label>
         </div>
+        {form.ageText !== undefined && form.ageText !== "" && <p className="muted">按{form.ageText}岁估算为{form.birthYear}年，请核对出生年。</p>}
         <label>
           分组（逗号分隔，输入时可参考已有分组）
           <input value={form.groups} onChange={set("groups")} list="existing-group-options" />
