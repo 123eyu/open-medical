@@ -501,6 +501,7 @@ Most detailed guides are currently in Chinese.
 | Doctor reminders and Feishu knowledge bot | [Connection guide](docs/doctor-assistant-channels.md) |
 | WeChat, WeCom and message archiving | [Chat connectors](docs/chat-connectors.md) |
 | Patient, message and follow-up data | [Patient management](docs/PATIENTS.md) |
+| Clinical interface, interaction rules and task validation | [Development guide](docs/DEVELOPMENT_GUIDE.md) |
 | Architecture and extensions | [Architecture](docs/ARCHITECTURE.md) · [Generic runtime](docs/GENERIC_RUNTIME.md) · [Orchestration](docs/ORCHESTRATION.md) |
 | Runtime compatibility | [Runtime compatibility](RUNTIME_COMPATIBILITY.md) |
 | Private task queues and workers | [Remote deployment](deploy/remote/README.md) |
@@ -508,6 +509,8 @@ Most detailed guides are currently in Chinese.
 ## Contributing
 
 Report bugs or suggest improvements through [Issues](https://github.com/JuneYaooo/open-medical-workbench/issues), or contribute code and documentation through pull requests. Include reproduction steps, operating system and version information. Remove patient information and credentials before sharing.
+
+For changes to clinical interfaces or workflows, follow the [development guide](docs/DEVELOPMENT_GUIDE.md) and validate the complete task, data states and recovery from failures.
 
 Run checks locally for code changes:
 

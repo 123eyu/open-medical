@@ -499,6 +499,7 @@ Docker 为可选依赖，用于容器化终端与部分办公工具。具体支�
 | 医生提醒与飞书知识库机器人 | [连接指南](docs/doctor-assistant-channels.md) |
 | 微信、企业微信与消息归档 | [聊天连接插件](docs/chat-connectors.md) |
 | 患者、消息和随访的数据关系 | [患者管理](docs/PATIENTS.md) |
+| 医生界面、交互规则与任务验收 | [开发指南](docs/DEVELOPMENT_GUIDE.md) |
 | 系统架构与扩展开发 | [架构说明](docs/ARCHITECTURE.md) · [通用内核](docs/GENERIC_RUNTIME.md) · [编排与调度](docs/ORCHESTRATION.md) |
 | 运行时支持范围 | [运行时兼容说明](RUNTIME_COMPATIBILITY.md) |
 | 私有远程任务队列与 Worker | [远程部署](deploy/remote/README.md) |
@@ -506,6 +507,8 @@ Docker 为可选依赖，用于容器化终端与部分办公工具。具体支�
 ## 参与贡献
 
 欢迎通过 [Issues](https://github.com/JuneYaooo/open-medical-workbench/issues) 反馈问题或提出建议，通过 Pull Request 改进代码和文档。反馈时请附复现步骤、系统与版本信息，并移除患者资料和密钥。
+
+涉及医生界面或业务交互时，先阅读 [开发指南](docs/DEVELOPMENT_GUIDE.md)，按对应规则验证完整任务、数据状态和失败恢复。
 
 代码修改可在本地运行检查：
 
