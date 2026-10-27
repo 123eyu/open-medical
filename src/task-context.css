@@ -1,0 +1,5 @@
+.agent-recents button.recent-task { align-items: flex-start; }
+.agent-recents button.recent-task > .recent-task-copy { min-width: 0; white-space: normal; }
+.recent-task-copy .recent-task-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; overflow-wrap: anywhere; }
+.recent-task-copy small { display: block; margin-top: 3px; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.task-directory-row strong { overflow-wrap: anywhere; }

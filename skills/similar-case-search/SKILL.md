@@ -1,4 +1,5 @@
 ---
+title: 相似病例检索
 name: similar-case-search
 description: 相似病例检索：主轴核验门禁、结构化指纹、证据分级，只用于提出假设不用于诊断。
 ---

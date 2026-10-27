@@ -1,4 +1,5 @@
 ---
+title: 药物不良反应评估
 name: adr-assessment
 description: 药物不良反应评估：知识表筛查 + 五分法因果评价（中国标准）+ Naranjo 对照 + 严重度分级提示，按原等级展示不升级不降级。
 ---

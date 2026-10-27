@@ -75,7 +75,7 @@ export function ExtensionCenter({ onAsk, view = "workbench" }) {
     <div className="ext-block">
       <h3>内置技能 <small>{builtinSkills.length}</small></h3>
       <p className="muted">随应用内置、始终可用，对话中会按需自动调用；无需安装，也不能删除。</p>
-      <ul className="ext-builtin-skills">{builtinSkills.map((s) => <li key={s.id}><b>{s.title || s.id}</b><span className="muted">（{s.id}）</span><p className="muted">{s.description}</p></li>)}</ul>
+      <ul className="ext-builtin-skills">{builtinSkills.map((s) => <li key={s.id}><b>{s.title || s.name || s.id}</b><details><summary>技能标识</summary><code>{s.id}</code></details><p className="muted">{s.description}</p></li>)}</ul>
     </div>
     <p className="muted">安全规则不会被定制改变：红旗症状提醒、发给患者前的确认、知情同意和引用出处始终有效。</p>
   </section>;

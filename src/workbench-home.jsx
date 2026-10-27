@@ -321,7 +321,7 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
   }, []);
   const modeLabel = { off: "已关闭", draft: "草稿模式", auto: "自动回复" };
   const items = [
-    { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已配置" : "未配置", action: "去连接", open: onModelSettings },
+    { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已填写连接" : "未填写连接", action: "去连接", open: onModelSettings },
     { id: "knowledge", label: "导入医生知识库", done: facts.knowledge === true, state: facts.knowledge == null ? "未检测" : facts.knowledge ? "已有资料" : "暂无资料", action: "导入资料", open: () => onView?.("knowledge") },
     // 微信/企微接入有封号风险且非必需，不再出现在新手清单；仍可在 设置→高级 里配置。
     ...(facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestCareSetup(); onView?.("care"); } }] : []),
@@ -833,7 +833,15 @@ export function WorkbenchHome({
               )}
               {taskType !== "project" && !isFollowup && (
                 <>
-                  <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>运行选项</button>
+                  <button
+                    type="button"
+                    className="tb-item"
+                    title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
+                    onClick={onModelSettings}
+                  >
+                    模型 <b>{config?.model || "未配置"}</b>
+                  </button>
+                  <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>更多设置 · {accessMode === "auto" ? "会话自动" : "逐次确认"}</button>
                   {runtimeOptions && <><span className="tb-divider" />
                   <label
                     className="tb-item"
@@ -849,14 +857,6 @@ export function WorkbenchHome({
                       <option value="auto">会话自动</option>
                     </select>
                   </label>
-                  <button
-                    type="button"
-                    className="tb-item"
-                    title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
-                    onClick={onModelSettings}
-                  >
-                    模型 <b>{config?.model || "未配置"}</b>
-                  </button>
                   {config?.modelConfigured && (
                     <label
                       className="tb-item"

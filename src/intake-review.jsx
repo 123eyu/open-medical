@@ -1,3 +1,4 @@
+import { patientPhone, PATIENT_PHONE_HINT } from "../shared/patient-phone.mjs";
 import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import { api } from "./agent-runtime";
 import {
@@ -22,7 +23,7 @@ const fields = {
     ["patientNumber", "患者编号", "text", false, 40],
     ["gender", "性别", ["male:男", "female:女", "unknown:待补充"]],
     ["birthYear", "出生年", "number"],
-    ["phone", "电话", "text", false, 20],
+    ["phone", "电话", "tel", false, 20],
   ],
   diagnoses: [
     ["name", "诊断名称", "text", true, 120],
@@ -130,9 +131,14 @@ function ItemForm({ section, value, onSave, onCancel }) {
     else if (max && String(v || "").length > max)
       issues[key] = `最多 ${max} 字`;
   }
+  if (section === "identity" && draft.phone !== undefined) {
+    const phone = patientPhone(draft.phone);
+    if (phone.error) issues.phone = phone.error;
+  }
   const save = () => {
     if (Object.keys(issues).length) return;
     const next = { ...draft };
+    if (section === "identity" && draft.phone !== undefined) next.phone = patientPhone(draft.phone).value;
     for (const [key, , type] of definitions)
       if (type === "number")
         next[key] =
@@ -189,13 +195,16 @@ function ItemForm({ section, value, onSave, onCancel }) {
               autoFocus={i === 0}
               aria-label={label}
               type={type}
+              autoComplete={type === "tel" ? "tel" : undefined}
+              aria-invalid={!!issues[key]}
+              aria-describedby={type === "tel" ? "review-phone-help" : undefined}
               step={type === "number" ? "any" : undefined}
               value={draft[key] ?? ""}
               maxLength={max}
               onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
             />
           )}
-          {issues[key] && <small className="error-text">{issues[key]}</small>}
+          {type === "tel" ? <small id="review-phone-help" className={issues[key] ? "error-text" : "muted"}>{issues[key] || PATIENT_PHONE_HINT}</small> : issues[key] && <small className="error-text">{issues[key]}</small>}
         </label>
       ))}
       <div className="toolbar-actions">

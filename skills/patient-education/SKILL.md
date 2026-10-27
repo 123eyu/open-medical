@@ -1,4 +1,5 @@
 ---
+title: 患教大白话
 name: patient-education
 description: 患教大白话：把已有诊疗信息转成患者能懂的语言，只转述不给新建议。
 ---

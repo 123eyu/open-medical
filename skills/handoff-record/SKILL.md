@@ -1,4 +1,5 @@
 ---
+title: 值班交班记录
 name: handoff-record
 description: 值班交班记录：接班医生视角的问题清单、夜间观察项与预警信号，五段结构可追溯。
 ---

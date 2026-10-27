@@ -1,3 +1,4 @@
+import { patientPhone, PATIENT_PHONE_HINT } from "../shared/patient-phone.mjs";
 import { useRef, useState } from "react";
 import { api } from "./agent-runtime";
 import { Modal } from "./components";
@@ -7,23 +8,27 @@ const list = (value) => value.split(/[,，]/).map((v) => v.trim()).filter(Boolea
 export function PatientIdentityModal({ patient, onClose, onSaved }) {
   const [form, setForm] = useState(() => fields(patient));
   const [revision, setRevision] = useState(patient.revision);
+  const [originalPhone, setOriginalPhone] = useState(patient.phone || "");
+  const phoneChanged = form.phone !== originalPhone;
+  const phone = patientPhone(form.phone);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const locked = useRef(false);
   const set = (key) => (event) => setForm((old) => ({ ...old, [key]: event.target.value }));
   const save = async (event) => {
     event.preventDefault();
-    if (locked.current) return;
+    if (locked.current || (phoneChanged && phone.error)) return;
     locked.current = true; setBusy(true); setError("");
     try {
-      await api(`/api/patients/${patient.id}`, "PATCH", { ...form, expectedRevision: revision, birthYear: form.birthYear === "" ? null : Number(form.birthYear), groups: list(form.groups), tags: list(form.tags) });
+      const { phone: _phone, ...otherFields } = form;
+      await api(`/api/patients/${patient.id}`, "PATCH", { ...otherFields, ...(phoneChanged ? { phone: phone.value } : {}), expectedRevision: revision, birthYear: form.birthYear === "" ? null : Number(form.birthYear), groups: list(form.groups), tags: list(form.tags) });
       await onSaved();
     } catch (err) { setError(err.message); }
     finally { locked.current = false; setBusy(false); }
   };
   const reload = async () => {
     setBusy(true);
-    try { const current = await api(`/api/patients/${patient.id}`); setForm(fields(current)); setRevision(current.revision); setError(""); }
+    try { const current = await api(`/api/patients/${patient.id}`); setForm(fields(current)); setOriginalPhone(current.phone || ""); setRevision(current.revision); setError(""); }
     catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -33,7 +38,7 @@ export function PatientIdentityModal({ patient, onClose, onSaved }) {
       <label>患者编号<input maxLength={40} value={form.patientNumber} onChange={set("patientNumber")} /></label>
       <div className="form-grid"><label>性别<select value={form.gender} onChange={set("gender")}><option value="unknown">未记录</option><option value="male">男</option><option value="female">女</option></select></label>
       <label>出生年份<input type="number" min="1900" max={new Date().getFullYear()} value={form.birthYear} onChange={set("birthYear")} /></label>
-      <label>联系电话<input maxLength={20} value={form.phone} onChange={set("phone")} /></label></div>
+      <label>联系电话<input type="tel" aria-label="联系电话" autoComplete="tel" maxLength={20} aria-invalid={phoneChanged && !!phone.error} aria-describedby="identity-phone-help" value={form.phone} onChange={set("phone")} /><small id="identity-phone-help" className={phoneChanged && phone.error ? "error-text" : "muted"}>{phoneChanged && phone.error ? phone.error : PATIENT_PHONE_HINT}</small></label></div>
       <label>分组（逗号分隔）<input value={form.groups} onChange={set("groups")} /></label>
       <label>标签（逗号分隔）<input value={form.tags} onChange={set("tags")} /></label>
       <label>备注<textarea aria-label="备注" maxLength={2000} rows={3} value={form.note} onChange={set("note")} /></label>

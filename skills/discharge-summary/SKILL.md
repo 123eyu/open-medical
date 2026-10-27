@@ -1,4 +1,5 @@
 ---
+title: 出院小结草稿
 name: discharge-summary
 description: 出院小结草稿：按标准结构整理住院经过，调用确定性工具取事实，缺失标待补充，不替代医生签署。
 ---

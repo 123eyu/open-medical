@@ -1,4 +1,5 @@
 ---
+title: 循证任务
 name: evidence-planning
 description: 循证任务准备：编辑 PICO、记录检索式和证据核查计划，不虚构检索结果。
 ---

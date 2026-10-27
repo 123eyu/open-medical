@@ -1,3 +1,4 @@
+import { patientPhone, PATIENT_PHONE_HINT } from "../shared/patient-phone.mjs";
 import { useClinicalDraft } from "./clinical-drafts";
 import { parsePastedMessages } from "../shared/message-import.mjs";
 import { messageChannelLabel, messageSpeakerLabel } from "../shared/message-provenance.mjs";
@@ -21,7 +22,7 @@ import {
   Stethoscope,
   UserPlus,
 } from "lucide-react";
-import { api } from "./agent-runtime";
+import { api, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { Modal } from "./components";
 import { RiskList } from "./ui";
 import { ClinicalAssistance } from "./clinical-assistance";
@@ -990,6 +991,8 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [matches, setMatches] = useState([]);
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const phone = patientPhone(form.phone);
   useEffect(() => {
     let live = true;
     setMatches([]);
@@ -1004,6 +1007,8 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
   const submit = async (e) => {
     e.preventDefault();
     if (inFlight.current) return;
+    setPhoneTouched(true);
+    if (phone.error) return;
     inFlight.current = true;
     setSaving(true);
     setError("");
@@ -1015,7 +1020,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
         confirmDistinctPatient: form.confirmDistinctPatient,
         gender: form.gender || undefined,
         birthYear: form.birthYear ? Number(form.birthYear) : undefined,
-        phone: form.phone.trim() || undefined,
+        phone: phone.value || undefined,
         groups: form.groups
           ? form.groups
               .split(/[，,]/)
@@ -1096,7 +1101,8 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
           </label>
           <label>
             联系电话
-            <input value={form.phone} onChange={set("phone")} />
+            <input type="tel" aria-label="联系电话" autoComplete="tel" maxLength={20} aria-invalid={phoneTouched && !!phone.error} aria-describedby="create-phone-help" value={form.phone} onBlur={() => setPhoneTouched(true)} onChange={set("phone")} />
+            <small id="create-phone-help" className={phoneTouched && phone.error ? "error-text" : "muted"}>{phoneTouched && phone.error ? phone.error : PATIENT_PHONE_HINT}</small>
           </label>
         </div>
         {form.ageText !== undefined && form.ageText !== "" && <p className="muted">按{form.ageText}岁估算为{form.birthYear}年，请核对出生年。</p>}
@@ -1122,7 +1128,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
           </button>
         </div>
         <small className="muted">
-          创建后自动建立问诊工作台；在「病例材料」中导入资料即可开始整理。
+          保存后打开患者档案，可继续补充资料或进入问诊工作台。
         </small>
       </form>
     </Modal>
@@ -1320,6 +1326,7 @@ function GroupSuggestModal({ onClose, onProposed }) {
       await api("/api/patients/group-suggestions/propose", "POST", {
         assignments: selected.map((s) => ({ patientId: s.patientId, addTags: s.addTags })),
       });
+      window.dispatchEvent(new Event(PENDING_REFRESH_EVENT));
       await onProposed(`已创建分组建议提案（${selected.length} 位患者），请到「待确认」托盘核对后确认执行。`);
     } catch (e) {
       setError(e.message);
@@ -1329,9 +1336,10 @@ function GroupSuggestModal({ onClose, onProposed }) {
   };
   return (
     <Modal title="生成分组建议" onClose={onClose}>
+      <p className="muted">本机按诊断与用药规则生成，不调用模型。核对依据后可创建待确认提案。</p>
       {loading && <p role="status">正在按诊断与用药扫描全部在管患者…</p>}
       {error && <p className="error-text" role="alert">{error}</p>}
-      {!loading && !suggestions.length && <p className="muted">没有可建议的分组：全部患者都没有可推断的诊断依据，或已有对应分组。</p>}
+      {!loading && !error && !suggestions.length && <p className="muted">没有可建议的分组：全部患者都没有可推断的诊断依据，或已有对应分组。</p>}
       {!!suggestions.length && (
         <>
           <p className="muted">依据结构化诊断（ICD-10 编码或诊断名称）推断；无诊断命中的患者按常用药给出「待核对」分组。确认前不会修改任何档案。</p>

@@ -1756,7 +1756,7 @@ export function createServer(options = {}) {
             "有任务正在运行，请等待结束后切换模型",
             409,
           );
-          swapProvider(models.save(models.candidate(input)));
+          swapProvider(models.save(modelChoices.assertTaskModel(models.candidate(input))));
           return send(res, 200, models.public());
         }
       }
@@ -1765,7 +1765,7 @@ export function createServer(options = {}) {
         return send(
           res,
           200,
-          await track(probeModel(models.candidate(input), res)),
+          await track(probeModel(modelChoices.assertTaskModel(models.candidate(input)), res)),
         );
       }
       // OCR 设置：识别策略 + 本机识别服务（PaddleOCR）+ 可选专用识别模型；

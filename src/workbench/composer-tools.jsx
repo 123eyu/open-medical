@@ -190,7 +190,7 @@ export function ComposerTools({
           </option>
           {skills.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name}
+              {s.title || s.name}{skills.some(other => other.id !== s.id && (other.title || other.name) === (s.title || s.name)) ? `（${s.id}）` : ""}
             </option>
           ))}
         </select>

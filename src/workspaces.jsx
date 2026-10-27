@@ -64,6 +64,7 @@ export function WorkspacesView({
   onMenu,
   initialWorkspaceId = "",
   initialCreate = false,
+  onCancelCreate,
   initialPrompt = "",
   initialPanel = "files",
   onChanged,
@@ -733,7 +734,7 @@ export function WorkspacesView({
       {showCreate && (
         <Modal
           title="连接项目工作区"
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); if (initialCreate) onCancelCreate?.(); }}
           wide
         >
           <form

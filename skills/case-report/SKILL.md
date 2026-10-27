@@ -1,4 +1,5 @@
 ---
+title: 个案报告写作
 name: case-report
 description: 个案报告写作：CARE 框架、患者脱敏、事件取舍以"影响病程理解"为准。
 ---

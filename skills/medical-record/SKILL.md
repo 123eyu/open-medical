@@ -1,4 +1,5 @@
 ---
+title: 患者建档与资料整理
 name: medical-record
 description: 从图片、PDF、Word、Excel 和文本病历建档或补充患者档案，核对身份、提取来源事实并提交可审核提案。
 ---

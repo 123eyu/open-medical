@@ -1,3 +1,4 @@
+import { patientPhone } from "../shared/patient-phone.mjs";
 import { messageProvenance, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
 import { dashboardLabLayout } from "../shared/patient-dashboard.mjs";
 import { ReviewLog } from "./medical/review-log.mjs";
@@ -209,7 +210,7 @@ export class PatientRegistry {
           new Date().getFullYear(),
         );
       if (input.phone !== undefined)
-        patient.phone = input.phone === "" ? "" : string(input.phone, "联系电话", 20);
+        patient.phone = validatedPhone(input.phone);
       if (input.groups !== undefined)
         patient.groups = optionalStrings(input.groups, "分组", 10, 40);
       if (input.tags !== undefined)
@@ -693,6 +694,11 @@ export function validateClinicalInput(input = {}) {
       : {}),
   };
 }
+function validatedPhone(value) {
+  const result = patientPhone(value);
+  check(!result.error, "INVALID_INPUT", result.error);
+  return result.value;
+}
 // Identity fields (name 等) for the agent proposal flow — same rules as the
 // profile-page edit path in update(), so a name the doctor states in chat can
 // land on the record instead of being dumped into a note.
@@ -711,7 +717,7 @@ export function validateIdentityInput(input = {}) {
   if (input.birthYear !== undefined)
     fields.birthYear = optionalInt(input.birthYear, 1900, new Date().getFullYear());
   if (input.phone !== undefined)
-    fields.phone = input.phone === "" ? "" : string(input.phone, "联系电话", 20);
+    fields.phone = validatedPhone(input.phone);
   return fields;
 }
 function allergyState(patient, input) {
@@ -817,8 +823,7 @@ export function normalizePatientCreate(input) {
         patientNumber: input.patientNumber ? string(input.patientNumber, "患者编号", 40) : "",
         gender: optionalChoice(input.gender, ["male", "female", "unknown"]),
         birthYear: optionalInt(input.birthYear, 1900, new Date().getFullYear()),
-        phone:
-          input.phone === undefined || input.phone === "" ? "" : string(input.phone, "联系电话", 20),
+        phone: validatedPhone(input.phone),
         groups: optionalStrings(input.groups, "分组", 10, 40),
         tags: optionalStrings(input.tags, "标签", 20, 40),
         note: input.note === undefined || input.note === "" ? "" : string(input.note, "备注", 2000),

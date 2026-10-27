@@ -1,4 +1,5 @@
 ---
+title: 诊疗决策流程图
 name: clinical-decision-flow
 description: 诊疗决策流程图：先从本地知识库取事实，再输出 mermaid 决策树，每个内容节点可追溯到指南行号；禁止凭记忆画图。
 ---

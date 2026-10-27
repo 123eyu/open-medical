@@ -9,6 +9,7 @@ import { PatientConversationNav } from "./patient-conversation-nav";
 import { TaskResult, hasTaskResult } from "./task-result";
 import { SimilarCases } from "./similar-cases";
 import { ProjectDirectory, ToolDirectory, TaskDirectory } from "./work-directory";
+import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import { IntakeBackground } from "./intake-background";
 import { MaterialDetails } from "./material-details";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -79,6 +80,7 @@ import { TrialScreeningView } from "./trial-screening";
 import { DrgView } from "./drg";
 import { ClinicalRefView } from "./clinical-ref";
 import { IconButton, Badge, Modal, STATUS } from "./components";
+import { modelBoundary } from "../shared/model-boundary.mjs";
 import { ModelSettings } from "./model-settings";
 import {
   AcceptanceView,
@@ -132,15 +134,6 @@ const metersFromSession = (s) => {
     rounds += run.usage?.rounds || 0;
   }
   return { chars, tokens, rounds };
-};
-// Codex 式相对时间标签:分钟/小时/天/周,给侧栏最近对话列表用。
-const agoLabel = (value) => {
-  if (!value) return "";
-  const s = (Date.now() - new Date(value)) / 1000;
-  if (s < 3600) return Math.max(1, Math.round(s / 60)) + "分钟前";
-  if (s < 86400) return Math.round(s / 3600) + "小时前";
-  if (s < 604800) return Math.round(s / 86400) + "天前";
-  return Math.round(s / 604800) + "周前";
 };
 const eventLabel = (event) =>
   ({
@@ -621,6 +614,10 @@ function App() {
   );
   const busy = Boolean(activeRun?.busy || persistedRunning);
   const skillOptions = config?.skills || [];
+  const skillLabel = (skill) => {
+    const name = skill.title || skill.name || skill.id;
+    return skillOptions.some(other => other.id !== skill.id && (other.title || other.name || other.id) === name) ? `${name}（${skill.id}）` : name;
+  };
   const mentionMatches = mention
     ? skillOptions
         .filter(
@@ -943,6 +940,7 @@ function App() {
                           >
                             载入原任务重试
                           </button>
+                          <button className="secondary" disabled={busy || loading} onClick={() => setModal("model")}>检查模型连接</button>
                           {r.artifacts?.some(a => a.status === "draft") && (
                             <button className="secondary" disabled={busy || loading} onClick={async () => {
                               try {
@@ -1294,12 +1292,14 @@ function App() {
     openWorkspaces({ id: task.id, prompt });
   };
   const openWorkspaces = (target = {}) => {
-    if (projectTool) setWorkspaceDisplay("work");
-    setWorkspaceTarget({...target, panel: target.panel || (["browser", "terminal", "extensions"].includes(projectTool) ? projectTool : "files")});
+    const purpose = target.purpose || projectTool;
+    const panel = target.panel || (["browser", "terminal", "extensions"].includes(purpose) ? purpose : "files");
+    if (purpose) setWorkspaceDisplay("work");
+    setWorkspaceTarget({...target, purpose, panel});
     setProjectTool("");
     setActiveWsId(target.id || "");
     setSidebar(false);
-    setView("workspaces", { id: target.id, tab: target.panel });
+    setView("workspaces", { id: target.id, tab: panel });
   };
   const openPatient = (route = {}) => {
     setPatientRoute(route);
@@ -1501,7 +1501,7 @@ function App() {
           )}
           <span
             className={`connection ${config ? "" : "offline"}`}
-            title="患者资料和知识库都保存在这台电脑上；只有调用模型时，当轮内容才会按你的授权外发。"
+            title={modelBoundary(config?.provider, config?.modelConfigured)}
           >
             <i />
             {config ? "本机工作空间" : "连接未就绪"}
@@ -1554,10 +1554,15 @@ function App() {
           {medical && <div className="agent-recents">
             <p className="business-nav-label">最近对话</p>
             <nav aria-label="最近对话" className="agent-recents-list">
-              {recentConversations.map(item => <button key={item.id} aria-label={`继续对话：${item.title}`} title={`继续对话：${item.title}`} className={view === "workbench" && activeId === item.id ? "active" : ""} onClick={() => openTask(item.id)}><span>{item.title}</span><small>{item.running ? "进行中" : agoLabel(item.updatedAt)}</small></button>)}
+              {recentConversations.map(item => {
+                const context = taskPatientContext(item, patientsList);
+                const updated = taskUpdatedLabel(item.updatedAt);
+                const label = [item.title, context, updated].filter(Boolean).join(" · ");
+                return <button key={item.id} aria-label={`继续对话：${label}`} title={label} className={`recent-task${view === "workbench" && activeId === item.id ? " active" : ""}`} onClick={() => openTask(item.id)}><span className="recent-task-copy"><span className="recent-task-title">{item.title}</span>{context && <small>{context}</small>}<small>{item.running ? "进行中 · " : ""}{updated}</small></span></button>;
+              })}
               {!recentConversations.length && <p className="sidebar-empty">发送第一条消息后，对话会保存在这里。</p>}
               <div className="agent-recents-tail">
-                <button onClick={() => navigate("tasks")}>查看全部任务记录</button>
+                <button onClick={() => navigate("tasks")}>查看全部任务记录（可搜索）</button>
                 <button onClick={() => navigate("projects")}>查看全部项目文件</button>
               </div>
             </nav>
@@ -1594,6 +1599,7 @@ function App() {
               onDisplayModeChange={setWorkspaceDisplay}
               initialWorkspaceId={workspaceTarget?.id || ""}
               initialCreate={Boolean(workspaceTarget?.create)}
+              onCancelCreate={workspaceTarget?.returnTo === "projects" ? () => { setProjectTool(workspaceTarget.purpose || ""); navigate("projects"); } : undefined}
               initialPrompt={workspaceTarget?.prompt || ""}
               onOpenSettings={() => navigate("settings")}
               onMenu={() => setSidebar(!sidebar)}
@@ -1684,17 +1690,17 @@ function App() {
                     <Menu size={18} />
                   </IconButton>
                   <div className="heading-copy">
-                    {!session?.patientId && <small>任务对话</small>}
+                    <small>{session?.patientId ? taskPatientContext(session, patientsList) : "任务对话"}</small>
                     <h1>{session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session && (
                     <div className="head-actions">
-                      <IconButton
+                      <button type="button" className="text-button"
                         title="重命名会话"
                         onClick={() => setModal("rename")}
                       >
-                        <PencilLine size={16} />
-                      </IconButton>
+                        <PencilLine size={16} />重命名
+                      </button>
                       <IconButton
                         title="复制选中材料到新会话"
                         disabled={busy || loading || !selectedFileIds.length}
@@ -2061,7 +2067,7 @@ function App() {
                           >
                             <AtSign size={12} />
                             <span>
-                              <b>{skill.title || skill.name}</b>
+                              <b>{skillLabel(skill)}</b>
                               <small>{skill.description}</small>
                             </span>
                           </button>
@@ -2112,10 +2118,10 @@ function App() {
                         return (
                           <span className="skill-chip" key={id}>
                             <AtSign size={11} />
-                            {skill?.title || skill?.name || id}
+                            {skill ? skillLabel(skill) : id}
                             <button
                               type="button"
-                              aria-label={`移除技能 ${skill?.title || skill?.name || id}`}
+                              aria-label={`移除技能 ${skill ? skillLabel(skill) : id}`}
                               onClick={() =>
                                 setPickedSkills((prev) =>
                                   prev.filter((x) => x !== id),
@@ -2242,6 +2248,16 @@ function App() {
                         </span>
                       )}
                       <span className="tb-divider" />
+                      <button
+                        type="button"
+                        className="tb-item"
+                        title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
+                        onClick={() => setModal("model")}
+                      >
+                        模型 <b>{config?.model || "未配置"}</b>
+                      </button>
+                      <details className="composer-advanced"><summary>更多设置 · {accessMode === "auto" ? "会话自动" : "逐次确认"}</summary>
+                        <div className="composer-advanced-fields">
                       <label
                         className="tb-item"
                         title="访问权限：逐次确认=每轮发送前勾选外发；会话自动=本会话内外发免勾选"
@@ -2260,14 +2276,6 @@ function App() {
                           <option value="auto">会话自动</option>
                         </select>
                       </label>
-                      <button
-                        type="button"
-                        className="tb-item"
-                        title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
-                        onClick={() => setModal("model")}
-                      >
-                        模型 <b>{config?.model || "未配置"}</b>
-                      </button>
                       {config?.modelConfigured && (
                         <label
                           className="tb-item"
@@ -2284,6 +2292,8 @@ function App() {
                           </select>
                         </label>
                       )}
+                        </div>
+                      </details>
                       <div className="composer-submit">
                       {accessMode === "each" && config?.modelConfigured && !busy && (
                         <label className="tb-check">
@@ -2585,7 +2595,7 @@ function App() {
                             <ShieldCheck size={16} />
                             <p>
                               <b>发送前请确认材料范围</b>
-                              材料以原文保存和处理；开启模型辅助时将原文外发，请自行确认不包含不应离开本机的信息。
+                              {modelBoundary(config?.provider, config?.modelConfigured)}
                             </p>
                           </div>
                         </>

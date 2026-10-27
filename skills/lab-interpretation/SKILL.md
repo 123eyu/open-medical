@@ -1,4 +1,5 @@
 ---
+title: 检验报告解读
 name: lab-interpretation
 description: 检验报告解读：以报告单参考范围为准，引用内置指标条目，缺系数不凭记忆重构。
 ---

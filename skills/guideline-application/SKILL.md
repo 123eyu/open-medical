@@ -1,4 +1,5 @@
 ---
+title: 指南应用
 name: guideline-application
 description: 指南应用：从本地知识库检索推荐意见，带行号出处，区分推荐等级与证据质量。
 ---

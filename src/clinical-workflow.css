@@ -725,3 +725,7 @@
 .composer-materials summary { cursor:pointer; }
 .composer-materials ul { padding-left:18px; margin:6px 0; max-height:160px; overflow:auto; overflow-wrap:anywhere; }
 .composer-materials > button { flex-shrink:0; }
+
+.composer-advanced { position: relative; font-size: 12px; color: var(--muted); }
+.composer-advanced > summary { cursor: pointer; padding: 6px; }
+.composer-advanced-fields { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }

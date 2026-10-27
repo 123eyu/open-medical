@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { resolveModelContext } from '../../shared/model-context.mjs';
 import { CredentialVault } from './oauth.mjs';
 import { createProvider } from './providers.mjs';
@@ -12,16 +13,30 @@ function validateBudget(config) {
 
 const kinds = ['deepseek', 'openai', 'openai-compatible', 'openai-responses', 'anthropic', 'local'];
 const key = 'platform:model-settings:v1';
+const fingerprint = c => createHash('sha256').update(JSON.stringify({
+  provider: c.provider, baseUrl: c.baseUrl?.replace(/\/$/, ''), model: c.model, apiKey: c.apiKey || '',
+  vision: c.vision === true, timeoutMs: c.timeoutMs || 90000, maxTokens: c.maxTokens || 8192, contextWindow: c.contextWindow ?? null,
+})).digest('hex');
 export class ModelSettings {
   constructor(db, directory, initial) {
     this.vault = new CredentialVault(db, directory);
     this.initial = initial;
     this.saved = this.vault.get(key);
+    this.tests = new Map();
+    this.testGenerations = new Map();
   }
   provider() { return this.saved.provider ? createProvider(this.saved) : this.initial; }
+  configuration() {
+    const p = this.provider();
+    return this.saved.provider ? this.saved : { provider: p.local ? 'local' : p.provider, baseUrl: p.baseUrl, model: p.model,
+      apiKey: p.apiKey || '', vision: p.vision === true, timeoutMs: p.timeoutMs || 90000, maxTokens: p.maxTokens || 8192, contextWindow: p.contextWindow };
+  }
+  testRecord(config = this.configuration()) {
+    return this.tests?.get(fingerprint(config)) || { status: 'untested', checkedAt: null, checks: [], message: '本次启动尚未测试此连接。' };
+  }
   public() {
     const p = this.provider();
-    return { provider: this.saved.provider || (p.local ? 'local' : p.provider), baseUrl: p.baseUrl || '', model: p.model || '', hasKey: Boolean(p.apiKey), vision: p.vision === true, source: this.saved.provider ? 'saved' : 'environment', timeoutMs: p.timeoutMs || 90000, contextWindow: p.contextWindow ?? null, contextDefaults: resolveModelContext(p), maxTokens: p.maxTokens || 8192 };
+    return { provider: this.saved.provider || (p.local ? 'local' : p.provider), baseUrl: p.baseUrl || '', model: p.model || '', hasKey: Boolean(p.apiKey), vision: p.vision === true, source: this.saved.provider ? 'saved' : 'environment', timeoutMs: p.timeoutMs || 90000, contextWindow: p.contextWindow ?? null, contextDefaults: resolveModelContext(p), maxTokens: p.maxTokens || 8192, test: this.testRecord() };
   }
   candidate(body) {
     check(kinds.includes(body.provider), 'MODEL_SETTINGS', '请选择支持的模型协议');
@@ -47,21 +62,35 @@ export class ModelSettings {
   save(config) { this.vault.set(key, config); this.saved = config; return this.provider(); }
   async test(config, { signal } = {}) {
     validateBudget(config);
-    const start = Date.now();
+    const start = Date.now(), id = fingerprint(config), token = Symbol();
+    this.testGenerations.set(id, token);
+    const finish = (status, checks, message) => {
+      const record = { status, checkedAt: new Date().toISOString(), checks, message };
+      if (this.testGenerations.get(id) === token) {
+        this.tests.set(id, record);
+        this.testGenerations.delete(id);
+        if (this.tests.size > 100) this.tests.delete(this.tests.keys().next().value);
+      }
+      return record;
+    };
     const deadline = AbortSignal.timeout(30000);
     const probeSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     const p = createProvider({ ...config, timeoutMs: Math.min(config.timeoutMs, 30000), maxTokens: 256 });
     const run = async (id, fn) => {
       const began = Date.now();
-      try { probeSignal.throwIfAborted(); return { id, ok: true, message: await fn(), durationMs: Date.now() - began }; }
-      catch (error) { return { id, ok: false, message: error instanceof AppError ? error.message : '请求失败或超时', durationMs: Date.now() - began }; }
+      try { probeSignal.throwIfAborted(); const message = await fn(); probeSignal.throwIfAborted(); return { id, ok: true, message, durationMs: Date.now() - began }; }
+      catch (error) { return { id, ok: false, message: error instanceof AppError && error.code === 'MODEL_TEST' ? error.message : '请求失败或超时', durationMs: Date.now() - began }; }
     };
     const text = await run('text', async () => {
       const result = await p.complete([{ role: 'user', content: 'Reply with OK.' }], [], { signal: probeSignal });
       check(Boolean(result?.message?.content), 'MODEL_TEST', '模型未返回文本');
       return '文本生成正常';
     });
-    if (!text.ok) throw new AppError('MODEL_TEST', '连接测试失败。请检查接口地址、模型名称、密钥权限和网络；测试最长等待 30 秒。', 400);
+    if (!text.ok) {
+      const message = signal?.aborted ? '连接测试已取消，未确认可用。' : '连接测试失败。请检查接口地址、模型名称、密钥权限和网络；测试最长等待 30 秒。';
+      finish(signal?.aborted ? 'cancelled' : 'failed', [text], message);
+      throw new AppError('MODEL_TEST', message, 400);
+    }
     // Tool calling and JSON output decide whether the model can drive the agent;
     // failures are reported, not fatal, so text-only models remain usable.
     const tools = await run('tools', async () => {
@@ -80,7 +109,10 @@ export class ModelSettings {
     });
     const checks = [text, tools, json];
     const failed = checks.filter((item) => !item.ok);
-    return { ok: true, durationMs: Date.now() - start, checks,
-      message: failed.length ? `已连接，但 ${failed.map((item) => item.message).join('；')}。` : '已连接：文本、工具调用、JSON 输出均正常，可用于 Agent 与自动分诊。' };
+    const status = signal?.aborted ? 'cancelled' : deadline.aborted ? 'failed' : failed.length ? 'partial' : 'passed';
+    const message = status === 'cancelled' ? '连接测试已取消，未确认全部能力。' : status === 'failed' ? '连接测试超时，未确认全部能力。'
+      : failed.length ? `文本通过，部分能力受限：${failed.map(item => item.message).join('；')}。` : '本次测试通过：文本、工具调用和 JSON 输出均正常。';
+    const record = finish(status, checks, message);
+    return { ok: !['failed', 'cancelled'].includes(status), durationMs: Date.now() - start, checks, message, test: record };
   }
 }

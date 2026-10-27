@@ -11,18 +11,14 @@ import {
   Search,
   Stethoscope,
   Sigma,
+  Globe,
+  Terminal,
 } from "lucide-react";
 import { api, medicalEnabled } from "./agent-runtime";
+import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
+import "./task-context.css";
 
-const date = (value) =>
-  value
-    ? new Date(value).toLocaleString("zh-CN", {
-        month: "numeric",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "尚未开始";
+const date = taskUpdatedLabel;
 export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
   const [query, setQuery] = useState(""),
     [archived, setArchived] = useState(false),
@@ -60,8 +56,9 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
         <div>
           <h1>项目</h1>
           {purpose && <p>选择项目，{{ documents: "在任务中处理文档与表格", browser: "预览网页", terminal: "配置隔离终端", extensions: "管理技能与连接" }[purpose]}。</p>}
+          <p>项目用于授权本地文件夹，以及浏览器、终端等工具任务。患者记录与问诊可直接使用。</p>
         </div>
-        <button className="primary" onClick={() => onOpen({ create: true })}>
+        <button className="primary" onClick={() => onOpen({ create: true, purpose, returnTo: "projects" })}>
           <Plus size={17} />
           连接项目
         </button>
@@ -96,7 +93,7 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
             <FolderOpen size={25} />
             <button
               className="directory-open"
-              onClick={() => onOpen({ id: item.id })}
+              onClick={() => onOpen({ id: item.id, purpose })}
             >
               <strong>{item.title}</strong>
               <small>{item.root}</small>
@@ -151,6 +148,8 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
 }
 
 const catalog = [
+  ["browser", "项目浏览器", "在已授权项目中预览网页，保留项目工具上下文。", "项目工具", Globe, "选择项目后使用"],
+  ["terminal", "项目终端", "进入项目终端，按该项目授权范围运行命令。", "项目工具", Terminal, "选择项目后使用"],
   [
     "documents",
     "文档与表格",
@@ -199,6 +198,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       "全部",
       "内容处理",
       "信息查找",
+      "项目工具",
       ...(medical ? ["医疗工具", "科研工具"] : []),
     ];
   const rows = catalog.filter(
@@ -246,10 +246,10 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
           const state = availability(id);
           return (
           <article key={id}>
-            <a className="tool-card-link" href={`?view=${id === "documents" ? "projects" : id}`} onClick={event => {
+            <a className="tool-card-link" href={`?view=${["documents", "browser", "terminal"].includes(id) ? "projects" : id}`} onClick={event => {
               event.preventDefault();
                       if (state.model) onModelSettings();
-              else if (id === "documents") onProjects(id);
+              else if (["documents", "browser", "terminal"].includes(id)) onProjects(id);
               else onNavigate(id);
             }}>
             <Icon size={24} />
@@ -301,9 +301,9 @@ export function TaskDirectory({
         (filter === "全部" || x.type === filter) &&
         `${x.title} ${patients.find((p) => p.id === x.patientId)?.name || ""} ${patients.find((p) => p.id === x.patientId)?.patientNumber || ""}`
           .toLowerCase()
-          .includes(query.toLowerCase()),
+          .includes(query.trim().toLowerCase()),
     )
-    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
   return (
     <main id="main" className="work-directory" aria-label="任务记录">
       <header className="directory-heading">
@@ -328,10 +328,11 @@ export function TaskDirectory({
           <Search size={17} />
           <input
             aria-label="搜索任务记录"
-            placeholder="搜索任务或患者"
+            placeholder="搜索完整标题、患者或病历号"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {query && <button type="button" className="text-button" aria-label="清空任务搜索" onClick={() => setQuery("")}>清空</button>}
         </label>
       </div>
       <div className="directory-rows">
@@ -339,6 +340,7 @@ export function TaskDirectory({
           <button
             className="task-directory-row"
             key={x.ref}
+            title={[x.title, taskPatientContext(x, patients), date(x.updatedAt)].filter(Boolean).join(" · ")}
             onClick={() =>
               x.backend === "session" ? onTask(x.id) : onProject({ id: x.id })
             }
@@ -348,9 +350,7 @@ export function TaskDirectory({
               <strong>{x.title}</strong>
               <small>
                 {x.type}
-                {x.patientId
-                  ? ` · ${[patients.find((p) => p.id === x.patientId)?.name || "关联患者", patients.find((p) => p.id === x.patientId)?.patientNumber || x.patientId].join(" · ")}`
-                  : ""}{" "}
+                {x.patientId ? ` · ${taskPatientContext(x, patients)}` : ""}{" "}
                 · {date(x.updatedAt)}
               </small>
             </span>
