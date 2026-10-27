@@ -1,6 +1,83 @@
-.patient-attention { margin-bottom: 20px; }
-.patient-attention .agenda-item { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 12px 0; }
-.patient-attention .agenda-content, .patient-attention .agenda-action { grid-column: auto; }
-.patient-attention .agenda-content b, .patient-attention .agenda-content small { white-space: normal; overflow-wrap: anywhere; }
-.patient-attention .agenda-action { max-width: 140px; }
-.patient-attention > p { padding: 0 4px; }
+.patient-overview .patient-attention {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: #fff;
+}
+.patient-overview .patient-attention .overview-card-heading {
+  margin-bottom: 0;
+}
+.patient-attention .agenda-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 12px 0;
+}
+.patient-attention .agenda-content,
+.patient-attention .agenda-action {
+  grid-column: auto;
+}
+.patient-attention .agenda-content b,
+.patient-attention .agenda-content small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.patient-attention .agenda-action {
+  max-width: 140px;
+}
+.patient-attention .attention-action-group {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.patient-attention .attention-action-group time {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.patient-overview .patient-attention .agenda-content b {
+  font-size: var(--body-size, 16px);
+  font-weight: 600;
+}
+.patient-overview .patient-attention .agenda-content small {
+  font-size: var(--meta-size, 14px);
+}
+.patient-overview .patient-attention > p {
+  padding: 0;
+  margin: 8px 0 0;
+}
+.patient-attention .agenda-item:last-child {
+  border-bottom: 0;
+}
+.patient-attention .attention-priority {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #97362e;
+  background: #fbeeec;
+  font-size: var(--meta-size, 14px);
+  font-weight: 600;
+}
+.patient-attention .attention-priority.warning {
+  color: #80551e;
+  background: #faf1df;
+}
+.patient-attention .attention-critical {
+  border-left: 2px solid var(--danger);
+  padding-left: 10px;
+}
+@media (max-width: 600px) {
+  .patient-attention .agenda-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .patient-attention .agenda-action {
+    max-width: none;
+  }
+  .patient-attention .attention-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+}

@@ -395,11 +395,13 @@ export function KnowledgeLibraries({ onOpenTask }) {
               )
               .map((item) => (
                 <article className="module-card library-card" key={item.name}>
+                  <div className="library-card-content">
                   <h2>{item.name}</h2>
                   <p>
                     {item.description || "待补充：这个知识库收录什么资料？"}
                   </p>
                   <small>{item.documentCount} 份资料</small>
+                  </div>
                   <div className="toolbar-actions">
                     <button
                       className="secondary"

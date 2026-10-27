@@ -3,7 +3,7 @@
     -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC",
     sans-serif;
   color: var(--ink);
-  background: #f7f8f5;
+  background: #f6f8f7;
   font-synthesis: none;
   /* 设计令牌唯一出处；v6-shell 及一切组件继承于此。 */
   --accent: #28654c;
@@ -11,13 +11,13 @@
   --accent-deep: #204c3b;
   --accent-soft: #edf3eb;
   --accent-line: #c8d8ce;
-  --ink: #263831;
-  /* 弱化文字：在 #f7f8f5 与浅色底上 ≥4.5:1（无障碍底线）。 */
-  --muted: #64766c;
-  --border: #dfe6df;
-  --line: #e8ede6;
-  --soft: #f1f5f0;
-  --surface: #f5f7f5;
+  --ink: #24322d;
+  --muted: #53645c;
+  --border: #dce3df;
+  --line: #e8edea;
+  --soft: #f0f4f2;
+  --surface: #f6f8f7;
+  --paper: #f9fbfa;
   --warning: #92632a;
   --amber: #92632a;
   --danger: #b2453d;
@@ -1121,7 +1121,7 @@ small {
 .secondary {
   border: 1px solid #d6e0cc;
   background: #fff;
-  color: #789360;
+  color: var(--accent-deep);
 }
 .secondary:hover {
   background: #eff4e8;
@@ -1315,7 +1315,7 @@ details summary {
   border: 0;
   padding: 0;
   font-size: 11px;
-  color: #8baa66;
+  color: var(--accent-deep);
 }
 .modal-backdrop {
   position: fixed;
@@ -2376,11 +2376,6 @@ blockquote p {
 }
 
 /* Task-first medical workspace. */
-:root {
-  --accent: #266c59;
-  --ink: #293e36;
-  --muted: #7a8881;
-}
 .product-body {
   display: flex;
   flex: 1;
@@ -2392,12 +2387,12 @@ blockquote p {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: #fcfdfb;
+  background: var(--paper);
 }
 .topbar {
   height: 58px;
   padding: 0 22px;
-  background: #fcfdfb;
+  background: #fff;
 }
 .brand-mark {
   border-radius: 9px;

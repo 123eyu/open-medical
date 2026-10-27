@@ -50,13 +50,14 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 2px 14px;
+  gap: 4px 12px;
   min-width: 0;
 }
 .medical-shell .patients-view.has-patient .detail-head .patient-back {
-  grid-column: 1;
+  grid-column: 1/-1;
   margin: 0;
-  min-height: 36px;
+  min-height: 28px;
+  justify-self: start;
   padding: 0;
   font-size: 13px;
 }
@@ -66,13 +67,22 @@
   margin: 0;
 }
 .medical-shell .patients-view.has-patient .detail-head .patient-line > small {
-  grid-column: 1/-1;
-  font-size: 13px;
+  grid-column: 2;
+  font-size: var(--meta-size);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 .medical-shell .patients-view.has-patient .detail-head .patient-line > em {
   grid-column: 1/-1;
+  justify-self: start;
+  font-style: normal;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.medical-shell .patients-view.has-patient .detail-head .patient-allergy-status { grid-column: 1/-1; }
+@media (max-width: 1100px) {
+  .medical-shell .patients-view.has-patient .detail-head .patient-line { grid-template-columns: minmax(0, 1fr); }
+  .medical-shell .patients-view.has-patient .detail-head .patient-line > small { grid-column: 1; }
 }
 .medical-shell .patients-view.has-patient .detail-head .toolbar-actions {
   flex-wrap: nowrap;
@@ -116,7 +126,7 @@
 }
 .medical-shell .patient-section-tabs {
   gap: 4px;
-  margin: 8px 0 16px;
+  margin: 6px 0 12px;
   flex-wrap: wrap;
 }
 .medical-shell .patient-section-tabs button {
