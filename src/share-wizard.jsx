@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./agent-runtime";
-import { Download, FileText, Loader2, Share2, X } from "lucide-react";
+import { Modal } from "./components";
+import { Download, FileText, Loader2 } from "lucide-react";
 import { SHARE_SECTIONS, FINDING_LABELS, REDACT_MARK, buildShareSections } from "../shared/share-report.mjs";
 import "./share-wizard.css";
 
-// 脱敏分享向导：选内容 → 看打码预览 → 存 JSON / 导出 PDF。
-// 预览返回的就是最终导出的内容，医生确认过什么就发出去什么；
-// 主进程生成 PDF，并用系统保存对话框选择位置。
-export function ShareWizard({ patientId, patientName, onClose, onError }) {
+// The preview record is the only input to either local export format.
+export function ShareWizard(props) {
+  return <PatientShareWizard key={props.patientId} {...props}/>;
+}
+function PatientShareWizard({ patientId, patientName, onClose }) {
+  const active = useRef(false), inFlight = useRef(false), nativeSave = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const [error, setError] = useState("");
+  const close = () => { if (!nativeSave.current) { active.current = false; onClose(); } };
   const [step, setStep] = useState(1);
   const [sections, setSections] = useState(() => new Set(SHARE_SECTIONS.map(([key]) => key)));
   const [preview, setPreview] = useState(null);
@@ -23,15 +29,18 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
     });
   };
   const runPreview = async () => {
-    setBusy(true);
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError("");
     try {
       const result = await api(`/api/patients/${patientId}/share`, "POST", { sections: [...sections] });
+      if (!active.current) return;
       setPreview(result);
       setStep(2);
     } catch (err) {
-      onError?.(err.message);
+      if (active.current) setError(err.message);
     } finally {
-      setBusy(false);
+      inFlight.current = false;
+      if (active.current) setBusy(false);
     }
   };
   const downloadJson = () => {
@@ -42,7 +51,7 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
     anchor.download = `${preview.record.pseudoId}-脱敏.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setNotice("JSON 已保存到下载文件夹（内容与上方预览完全一致）。");
+    setNotice("已发起 JSON 下载，内容与当前预览一致；保存位置以浏览器设置为准。");
   };
   const shareReport = () => ({
     title: "脱敏病历摘要",
@@ -53,21 +62,25 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
     fileName: `${preview.record.pseudoId}-脱敏病历`,
   });
   const exportPdf = async () => {
-    setBusy(true);
+    if (inFlight.current) return;
+    inFlight.current = true; nativeSave.current = true;
+    setBusy(true); setError(""); setNotice("");
     try {
       const report = shareReport();
       if (window.omwDesktop?.shareReport) {
         const result = await window.omwDesktop.shareReport(report);
-        if (result?.ok) setNotice(`PDF 已保存：${result.path}`);
-        else if (result?.canceled) setNotice("");
+        if (!active.current) return;
+        if (result?.ok && result.path) setNotice(`PDF 已保存：${result.path}`);
+        else if (result?.canceled) setNotice("已取消 PDF 保存，未保存文件。");
         else throw new Error(result?.error || "导出失败");
       } else {
         throw new Error("PDF 导出需要桌面应用，请在 Open Medical 中打开此病历。");
       }
     } catch (err) {
-      onError?.(err.message);
+      if (active.current) setError(err.message);
     } finally {
-      setBusy(false);
+      inFlight.current = false; nativeSave.current = false;
+      if (active.current) setBusy(false);
     }
   };
   const highlighted = (text) => {
@@ -79,34 +92,30 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
       </span>
     ));
   };
-  return <div className="acceptance share-wizard" role="dialog" aria-label="脱敏分享">
-    <header className="share-head">
-      <div>
-        <h2><Share2 size={17} /> 脱敏分享{patientName ? ` · ${patientName}` : ""}</h2>
-        <p>先抹掉身份，再分享。三步：选内容 → 看预览 → 导出文件。</p>
-      </div>
-      <button className="icon-button" aria-label="关闭" onClick={onClose}><X size={17} /></button>
-    </header>
+  return <Modal title="脱敏分享" onClose={close} wide>
+    <div className="share-wizard">
+      <p className="share-hint">{patientName ? `${patientName} · ` : ""}选择内容，核对脱敏预览，再导出本机文件。导出后可自行分享。</p>
+      {error && <p className="form-error" role="alert">{error}</p>}
     {step === 1 && <div className="share-step">
       <h3>这份分享要包含哪些内容？</h3>
       <div className="share-sections">
         {SHARE_SECTIONS.map(([key, label]) => (
           <label key={key}>
-            <input type="checkbox" checked={sections.has(key)} onChange={() => toggleSection(key)} />
+            <input type="checkbox" disabled={busy} checked={sections.has(key)} onChange={() => toggleSection(key)} />
             {label}
           </label>
         ))}
       </div>
       <p className="share-hint">无论怎么选，姓名、电话、病历号都不会出现；出生年只会以年龄段呈现。自由文本里的证件号、手机号、住院号会自动打码。</p>
       <div className="toolbar-actions">
-        <button className="secondary" onClick={onClose}>取消</button>
+        <button className="secondary" onClick={close}>取消</button>
         <button onClick={runPreview} disabled={busy || !sections.size}>
           {busy ? <Loader2 className="spin" size={14} /> : <FileText size={14} />} 生成脱敏预览
         </button>
       </div>
     </div>}
     {step === 2 && preview && <div className="share-step">
-      <h3>预览：这就是会发出去的全部内容</h3>
+      <h3>预览将导出的内容</h3>
       {preview.findings.length > 0 ? <p className="share-findings" role="status">
         已自动抹掉：{preview.findings.map((finding) => `${FINDING_LABELS.find(([key]) => key === finding.category)?.[1] || finding.category} ${finding.count} 处`).join("、")}（预览中标黄部分）。
       </p> : <p className="share-findings" role="status">这次内容里没有扫到需要打码的号码，身份字段也已移除。</p>}
@@ -122,10 +131,10 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
           </section>
         ))}
       </div>
-      <p className="share-hint">机器只负责常见格式，昵称、住址这类间接信息请顺眼一扫。看过了再导出，发出去的就是这份内容。</p>
+      <p className="share-hint">已处理常见身份字段和号码。请核对昵称、住址等间接身份信息；导出的文件与这份预览一致。</p>
       {notice && <p className="form-notice" role="status">{notice}</p>}
       <div className="toolbar-actions">
-        <button className="secondary" onClick={() => { setStep(1); setNotice(""); }}>上一步</button>
+        <button className="secondary" disabled={busy} onClick={() => { setStep(1); setPreview(null); setNotice(""); setError(""); }}>上一步</button>
         <button className="secondary" onClick={downloadJson} disabled={busy}><Download size={14} /> 保存 JSON</button>
         <button onClick={exportPdf} disabled={busy}>
           {busy ? <Loader2 className="spin" size={14} /> : <FileText size={14} />}
@@ -133,5 +142,6 @@ export function ShareWizard({ patientId, patientName, onClose, onError }) {
         </button>
       </div>
     </div>}
-  </div>;
+    </div>
+  </Modal>;
 }

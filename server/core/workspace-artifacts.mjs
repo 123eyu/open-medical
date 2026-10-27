@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { check } from "../errors.mjs";
+import { AppError, check } from "../errors.mjs";
 import { hashText } from "./workspace-files.mjs";
 
 const MIME = {
@@ -80,7 +80,12 @@ export class WorkspaceArtifacts {
   read(owner, id) {
     const item = this.store.get(owner).artifacts?.find((a) => a.id === id);
     check(item, "NOT_FOUND", "成果不存在或不属于此工作区", 404);
-    const data = readFileSync(join(this.directory, owner, item.id));
+    let data;
+    try { data = readFileSync(join(this.directory, owner, item.id)); }
+    catch (error) {
+      if (error.code === 'ENOENT') throw new AppError('ARTIFACT_FILE_MISSING', '本机原文件缺失，资料记录仍保留。数据库备份不包含原文件；请从另行保留的原文件恢复后重试。', 404);
+      throw error;
+    }
     check(
       hashText(data) === item.hash,
       "ARTIFACT_CHANGED",

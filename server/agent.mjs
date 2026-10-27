@@ -684,7 +684,15 @@ export function createServer(options = {}) {
   const trialCandidates = new TrialCandidates({ store, patients, trials: trialScreening, jobs: trialJobs });
   const trialRegistry = new TrialRegistry(options.trialRegistryOptions);
   const patientBrief = new PatientBrief(store, patients);
-  const careTasks = new CareTasks(store, patients, followups);
+  const careTasks = new CareTasks(store, patients, followups, {
+    resolvePatientFile: (patientId, fileId) => {
+      const { sessionId } = patients.row(patientId);
+      const session = sessionBridge.isSessionWorkspace(sessionId) ? sessionBridge.get(sessionId) : store.get(sessionId);
+      const file = session.files.find(file => file.id === fileId);
+      check(file, "NOT_FOUND", "结果资料不存在或不属于当前患者，请重新选择", 404);
+      return { sessionId, fileId: file.id, name: file.name };
+    },
+  });
   const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, { getProvider: () => providerConfigured(provider) ? provider : null, ...options.knowledgeBotOptions });
   const doctorNotifications = new DoctorNotifications(store, models.vault, options.doctorNotificationOptions);
   const messageGateway = new MessageGateway({ store, vault: models.vault, bridge: sessionBridge, getProvider: () => provider, knowledgeBot, ...options.messageGatewayOptions });
@@ -1927,6 +1935,7 @@ export function createServer(options = {}) {
       // 备份：状态可查、手动触发；一致性快照写入数据库旁的 backups/。
       if (path === "/api/backup/status" && req.method === "GET") return send(res, 200, backups.status());
       if (path === "/api/backup/run" && req.method === "POST") return send(res, 201, backups.run());
+      if (path === "/api/backup/check" && req.method === "POST") return send(res, 200, backups.verify((await body(req)).name));
       // 示例患者包：一键装载/删除，全部虚构、独立标签，永不触碰真实档案。
       if (path === "/api/demo-entry" && req.method === "PUT") {
         const { hidden } = await body(req);
@@ -1957,6 +1966,7 @@ export function createServer(options = {}) {
         const b = await body(req);
         const action = pending.propose({
           type: "patient-group-suggest",
+          provenance: { kind: "local-rule", entry: "patient-group-suggestions" },
           payload: b,
           summary: `分组建议：为 ${b.assignments?.length || 0} 位患者追加疾病分组（依据诊断 ICD-10/名称）`,
         });

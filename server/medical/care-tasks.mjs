@@ -11,7 +11,7 @@ const required = (value, label, length = 2000) => {
 
 // A doctor's local tracking record, not a hospital order or an outbound message.
 export class CareTasks {
-  constructor(store, patients, followups) { Object.assign(this, { store, patients, followups }); }
+  constructor(store, patients, followups, { resolvePatientFile } = {}) { Object.assign(this, { store, patients, followups, resolvePatientFile }); }
   patient(id) {
     const p = this.patients.row(id);
     check(!p.archived, "PATIENT_ARCHIVED", "请先恢复患者档案再更新待跟进事项", 409);
@@ -70,7 +70,15 @@ export class CareTasks {
       let nextJob = null;
       if (next) {
         check(before === next[0], "CONFLICT", "请按结果接收、医生核对、告知患者的顺序登记", 409);
-        if (input.action === "receive") task.resultSource = required(input.source, "结果来源", 500);
+        if (input.action === "receive") {
+          task.resultSource = required(input.source, "结果来源", 500);
+          if (input.sourceFile !== undefined && input.sourceFile !== null) {
+            check(input.sourceFile && typeof input.sourceFile === "object" && !Array.isArray(input.sourceFile), "INVALID_INPUT", "结果资料无效");
+            const fileId = identifier(input.sourceFile.fileId);
+            check(this.resolvePatientFile, "FILE_UNAVAILABLE", "暂时无法核对患者资料", 503);
+            task.sourceFile = this.resolvePatientFile(patientId, fileId);
+          }
+        }
         if (input.action === "review") task.reviewNote = note;
         if (input.action === "complete") {
           check(["communicated", "not_required"].includes(input.communication), "INVALID_INPUT", "请选择告知情况");
@@ -86,7 +94,7 @@ export class CareTasks {
       } else if (input.action === "reopen") {
         check(!active, "CONFLICT", "事项尚未结束", 409); task.status = "waiting_result";
         // A new cycle retains its history but does not present old review as current.
-        delete task.resultSource; delete task.reviewNote; delete task.communication;
+        delete task.resultSource; delete task.sourceFile; delete task.reviewNote; delete task.communication;
         delete task.nextFollowUpId; delete task.nextDueAt;
       } else if (input.action === "reschedule") {
         check(active, "CONFLICT", "事项已结束", 409);
@@ -98,7 +106,7 @@ export class CareTasks {
       }
       task.revision++; task.updatedAt = Date.now();
       task.history.push({ action: input.action, from: before, to: task.status, at: task.updatedAt, note,
-        ...(input.action === "receive" ? { source: task.resultSource } : {}),
+        ...(input.action === "receive" ? { source: task.resultSource, ...(task.sourceFile ? { sourceFile: { ...task.sourceFile } } : {}) } : {}),
         ...(input.action === "complete" ? { communication: task.communication, nextFollowUpId: task.nextFollowUpId } : {}),
         ...(["reschedule", "reopen"].includes(input.action) ? { dueAt: task.dueAt } : {}) });
       this.store.db.prepare("UPDATE care_tasks SET status=?,due_at=?,updated_at=?,data=? WHERE id=?")

@@ -42,8 +42,8 @@ const smokeTest =
 // 但保持交互窗口不自动退出，供 Playwright 驱动跑场景。
 const e2eMode =
   !smokeTest && process.argv.includes("--e2e") && Boolean(testDirectory);
-// 数据目录隔离：设置 MEDICAL_DESKTOP_TEST_DIR 即生效（自动化测试用），
-// --smoke-test 额外启用内建冒烟流程。
+// 测试 userData 目录在设置环境变量后隔离；数据库隔离还必须
+// 同时指定 --e2e 或 --smoke-test，后者额外运行内建冒烟流程。
 if (testDirectory) app.setPath("userData", resolve(testDirectory));
 // 右键菜单：Electron 默认没有，没有它页面文字只能用 Cmd+C 复制。
 app.on("web-contents-created", (_event, contents) => {
@@ -446,6 +446,7 @@ async function start() {
     }
   });
   // 菜单栏迁入「设置 → 桌面应用」后的窄接口：只暴露固定动作，不传任意路径。
+  require('./backup-directory.cjs').registerBackupDirectory({ipcMain,shell,getWindow:()=>window,getOrigin:()=>origin,databasePath:sharedDatabase});
   ipcMain.handle("omw:open-data-directory", () => shell.openPath(dirname(sharedDatabase)));
   ipcMain.handle("omw:open-config-directory", () => shell.openPath(dataDirectory));
   ipcMain.handle("omw:login-item", () => app.getLoginItemSettings().openAtLogin);

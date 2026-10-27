@@ -4,20 +4,25 @@ import { assessOcrQuality, OCR_QUALITY_LABELS } from '../shared/ocr-quality.mjs'
 import { splitOcrPages, cleanText } from '../shared/ocr-pages.mjs';
 
 function MaterialImage({ sessionId, artifactId, name, onZoom }) {
-  const [url, setUrl] = useState(''), [error, setError] = useState('');
+  const identity = `${sessionId}:${artifactId}`;
+  const [image, setImage] = useState(null), [attempt, setAttempt] = useState(0);
+  const current = image?.identity === identity ? image : null;
   useEffect(() => {
     let alive = true, objectUrl;
-    api(`/api/workspaces/${sessionId}/artifacts/${artifactId}`, { raw: true })
+    const controller = new AbortController();
+    setImage({identity, url:'', error:''});
+    api(`/api/workspaces/${sessionId}/artifacts/${artifactId}`, { raw: true, signal: controller.signal })
       .then((r) => r.blob()).then((blob) => {
         objectUrl = URL.createObjectURL(blob);
-        if (alive) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
-      }).catch((e) => { if (alive) setError(e.message); });
-    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [sessionId, artifactId]);
-  return <figure style={{ margin: '8px 0' }}>{url ? <>
-    <img src={url} alt={name} loading="lazy" className="ocr-image" title="点击放大" onClick={() => onZoom?.({ url, name })} />
-    <small className="ocr-image-tools"><a href={url} download={name}>下载原图</a></small>
-  </> : <small>{error || '读取图片…'}</small>}</figure>;
+        if (alive) setImage({identity, url:objectUrl, error:''}); else URL.revokeObjectURL(objectUrl);
+      }).catch((e) => { if (alive) setImage({identity, url:'', error:e.message}); });
+    return () => { alive = false; controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [sessionId, artifactId, identity, attempt]);
+  return <figure style={{ margin: '8px 0' }}>{current?.url ? <>
+    <img src={current.url} alt={name} loading="lazy" className="ocr-image" title="点击放大" onClick={() => onZoom?.({ url:current.url, name })}
+      onError={() => setImage(value => value?.url === current.url ? {identity, url:'', error:'原图文件无法显示，请核对文件格式后重试。'} : value)} />
+    <small className="ocr-image-tools"><a href={current.url} download={name}>下载原图</a></small>
+  </> : current?.error ? <div role="alert"><p>{current.error}</p><button className="secondary" onClick={()=>{setImage({identity,url:'',error:''});setAttempt(value=>value+1);}}>重新读取原图</button></div> : <small role="status">读取图片…</small>}</figure>;
 }
 
 const METHOD_LABELS = { 'local-ocr': '本地识别', vision: '视觉模型', 'pdf-text': 'PDF 文字层' };
@@ -55,11 +60,11 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
   // 纯文本材料（txt/md/csv/json）没有 extraction：保留原来的「查看文字内容」折叠块。
   if (!e) return <><details open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary>查看文字内容</summary><pre>{file.text || '暂无可读取文字'}</pre></details>{!open && preview && <p className="file-preview">{preview}</p>}</>;
   const images = e.type === 'image' ? [{ artifactId: e.artifactId }] : e.pageImages || [];
-  const label = e.type === 'image' ? '图片 · 已保存原图 · 可本地 OCR / 视觉读取'
+  const label = e.type === 'image' ? '图片 · 可核对原图与识别文字'
     : e.type === 'text' ? '文本材料 · 已由医生修正'
     : e.type === 'docx_text' ? 'Word 抽取文本 · 未保存原件'
     : e.type === 'xlsx_text' ? 'Excel 抽取文本 · 保留工作表与单元格 · 未保存原件'
-    : `PDF · ${e.pageCount} 页 · ${images.length ? `${images.length} 页扫描图可读取` : '抽取文本'} · 未保存 PDF 原件`;
+    : `PDF · ${e.pageCount} 页 · ${images.length ? `${images.length} 页扫描图记录` : '抽取文本'} · 未保存 PDF 原件`;
   const level = materialQualityLevel(file);
   const method = METHOD_LABELS[e.ocr?.method] || '';
   const previous = e.ocrPrevious?.method ? `上次：${METHOD_LABELS[e.ocrPrevious.method] || e.ocrPrevious.method}` : '';

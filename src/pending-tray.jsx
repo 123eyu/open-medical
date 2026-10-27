@@ -150,7 +150,9 @@ function PendingReviewOverlay({ action, busy, error, onConfirm, onReject, onClos
         <p>确认执行：{clinical
           ? "上述内容立即写入患者档案，之后你可以在档案中继续修改。"
           : "按提案内容执行。"}</p>
-        <p>拒绝：本次提案作废，不写入任何内容；你可以在对话中说明原因让 AI 重新整理。</p>
+        <p>拒绝：{p._provenance?.kind === "local-rule" && p._provenance.entry === "patient-group-suggestions"
+          ? "本次建议不会应用；可调整患者记录后重新生成分组建议。"
+          : "本次提案作废，不应用提案变更；如需调整，请回到原操作重新提出。"}</p>
       </section>
     </div>
     <footer>

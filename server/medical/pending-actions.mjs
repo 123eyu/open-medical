@@ -120,7 +120,7 @@ export class PendingActions {
   propose(input = {}) {
     return sqliteTransaction(this.store.db, () => this.proposeTransaction(input));
   }
-  proposeTransaction({ type, patientId, payload = {}, summary, prepare } = {}) {
+  proposeTransaction({ type, patientId, payload = {}, summary, prepare, provenance } = {}) {
     check(
       TYPES.includes(type),
       "INVALID_INPUT",
@@ -235,6 +235,12 @@ export class PendingActions {
           "INVALID_INPUT",
           "非患者关联的病例提案需要 diagnosis",
         );
+    }
+    // Only server entry points can supply provenance; model/request payloads cannot.
+    normalized = { ...normalized };
+    delete normalized._provenance;
+    if (type === "patient-group-suggest" && provenance?.kind === "local-rule" && provenance.entry === "patient-group-suggestions") {
+      normalized._provenance = { kind: "local-rule", entry: "patient-group-suggestions" };
     }
     if (resolvedPatientId) check(!this.patients.row(resolvedPatientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案再创建提案。", 409);
     const time = new Date().toISOString();

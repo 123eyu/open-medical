@@ -1,3 +1,4 @@
+import { BackupPanel } from "./backup-panel";
 import { LearningSettings } from "./learning-loop";
 import { ChatConnectionSettings } from "./chat-followups";
 import { useEffect, useRef, useState } from "react";
@@ -88,7 +89,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
     const group = settingsGroup(requested);
     if (["channels", "personal"].includes(group) && !medicalEnabled(config)) return "general";
     if (requested === "desktop" && !window.omwDesktop) return "general";
-    return ["general", "desktop", "connections", "channels", "personal"].includes(group) ? requested : "general";
+    return ["general", "desktop", "connections", "channels", "personal", "backup"].includes(group) ? requested : "general";
   });
   const group = settingsGroup(section);
   function setSection(next) {
@@ -127,10 +128,12 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         <button aria-pressed={group === "general"} onClick={() => setSection("general")}>模型与运行</button>
         {medicalEnabled(config) && <button aria-pressed={group === "channels"} onClick={() => setSection("channels")}>消息渠道</button>}
         {medicalEnabled(config) && <button aria-pressed={group === "personal"} onClick={() => setSection("skills")}>技能与规则</button>}
+        <button aria-pressed={group === "backup"} onClick={() => setSection("backup")}>备份与恢复</button>
         <button aria-pressed={group === "connections"} onClick={() => setSection("connections")}>工具与服务</button>
         {window.omwDesktop && <button aria-pressed={group === "desktop"} onClick={() => setSection("desktop")}>桌面应用</button>}
       </nav>
       <div className="app-settings-content">
+        {section === "backup" && <BackupPanel />}
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={CHANNEL_SECTIONS} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
           {section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>

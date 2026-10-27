@@ -45,7 +45,8 @@ export function PatientMaterialLibrary({
         group.files.length && (!category || group.category === category),
     );
   const visible = shown.flatMap((group) => group.files);
-  const selected = visible.find((file) => file.id === selectedId) || visible[0];
+  const missingFocus = !!focusFile && selectedId === focusFile && !files.some(file => file.id === focusFile);
+  const selected = visible.find((file) => file.id === selectedId) || (missingFocus ? null : visible[0]);
   const locked = editing || saving || !!pendingMeta;
   useEffect(() => {
     if (focusFile) {
@@ -133,6 +134,7 @@ export function PatientMaterialLibrary({
           {editing ? "请保存或取消文字修正后再切换资料。" : "正在保存资料信息…"}
         </p>
       )}
+      {missingFocus && <p role="status" className="notice">指定的原文件已不可用。请从资料列表选择其他文件核对。</p>}
       {!files.length ? (
         <div className="care-empty">
           <p>尚未关联资料文件。</p>

@@ -40,7 +40,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
     item: "",
     value: "",
     unit: "",
-    date: "", source: "", note: "",
+    date: "", source: "", note: "", referenceRange: "",
   });
   const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "", note: "", source: "" });
   const [visitEdit, setVisitEdit] = useClinicalDraft(detail.id, "visitEdit", null);
@@ -147,12 +147,12 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           value,
           ...(newLab.unit ? { unit: newLab.unit } : {}),
           date: newLab.date,
-          source: newLab.source, note: newLab.note,
+          source: newLab.source, note: newLab.note, referenceRange: newLab.referenceRange || "",
         },
       ], { lab: newLab }))
     )
       return;
-    setNewLab({ item: "", value: "", unit: "", date: "", source: "", note: "" });
+    setNewLab({ item: "", value: "", unit: "", date: "", source: "", note: "", referenceRange: "" });
   };
   const addVisit = async () => {
     if (!newVisit.date || !newVisit.reason.trim()) return;
@@ -430,11 +430,13 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <label>更正检验数值<input required inputMode="decimal" value={labEdit.value.value} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, value: e.target.value } })}/></label>
           <label>更正检验单位<input maxLength={40} value={labEdit.value.unit || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, unit: e.target.value } })}/></label>
           <label>更正采样日期<input required type="date" value={labEdit.value.date || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, date: e.target.value } })}/></label>
+          <label>更正报告参考范围<input maxLength={200} value={labEdit.value.referenceRange || ""} onChange={e=>setLabEdit({...labEdit,value:{...labEdit.value,referenceRange:e.target.value}})}/></label>
           <label>更正检验备注<input maxLength={500} value={labEdit.value.note || ""} onChange={e => setLabEdit({ ...labEdit, value: { ...labEdit.value, note: e.target.value } })}/></label>
           <button type="button" onClick={() => { setLabEdit(null); setPendingMutation(null); setLabError(""); }}>取消更正</button><button type="submit">保存检验更正</button>
         </form>}
         <div className="clinical-add clinical-add-med">
           <input
+            autoFocus={section === "labs"}
             value={newLab.item}
             placeholder="项目"
             onChange={(e) => setNewLab({ ...newLab, item: e.target.value })}
@@ -459,6 +461,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             onChange={(e) => setNewLab({ ...newLab, date: e.target.value })}
           /></label>
           <label>检验来源<input maxLength={200} value={newLab.source} onChange={e=>setNewLab({...newLab,source:e.target.value})}/></label>
+          <label>报告参考范围（按报告原文，可选）<input maxLength={200} value={newLab.referenceRange || ""} onChange={e=>setNewLab({...newLab,referenceRange:e.target.value})}/></label>
           <label>检验备注<input maxLength={500} value={newLab.note} onChange={e=>setNewLab({...newLab,note:e.target.value})}/></label>
           <button
             className="secondary"

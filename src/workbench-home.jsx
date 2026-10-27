@@ -1,3 +1,4 @@
+import { BackupStatus } from "./backup-panel";
 import { patientOptionLabel } from "./patient-labels";
 import { EXAMPLES as CUSTOMIZE_EXAMPLES, requestSettingsTab } from "./extension-center";
 import { useEffect, useRef, useState } from "react";
@@ -52,30 +53,6 @@ function PendingRow({ action }) {
       <button type="button" onClick={() => requestPendingReview(action.id)}>核对提案</button>
     </div>
   </li>;
-}
-function BackupStatus() {
-  const [status, setStatus] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    api("/api/backup/status").then(setStatus).catch(() => {});
-  }, []);
-  if (!status || status.supported === false) return null;
-  const when = status.lastBackupAt
-    ? new Date(status.lastBackupAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : "从未备份";
-  const run = async () => {
-    setBusy(true); setError("");
-    try { setStatus(await api("/api/backup/run", "POST", {})); } catch (e) { setError(e.message); }
-    finally { setBusy(false); }
-  };
-  return <p className={`backup-status ${status.warning ? "warn" : "ok"}`} role="status">
-    <i aria-hidden="true" />
-    上次数据库备份：{when}{status.fresh ? " ✓" : status.lastBackupAt ? " · 超过一天" : " · 建议备份数据库"}
-    <button type="button" className="text-button" disabled={busy} onClick={run}>{busy ? "正在备份数据库…" : "立即备份数据库"}</button>
-    <small>数据库备份保存在本机 {status.directory}。会话附件原文件、项目文件、知识库原件与模型配置需另行备份。</small>
-    {error && <span role="alert">{error}</span>}
-  </p>;
 }
 function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
   const [overview, setOverview] = useState(null);
@@ -607,7 +584,7 @@ export function WorkbenchHome({
       {isHome ? (
         <>
       <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
-          <BackupStatus />
+          <BackupStatus onManage={() => {requestSettingsTab("backup");onView?.("settings");}} />
           <form className="hub-composer" onSubmit={submit}>
             <div className="hub-composer-caption">
               <h1>{selectedFlow ? selectedFlow.title : "新任务"}</h1>

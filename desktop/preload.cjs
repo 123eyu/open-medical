@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("omwDesktop", {
   showInstalledApp: () => ipcRenderer.invoke('omw:show-installed-app'),
   chooseDirectory: () => ipcRenderer.invoke("omw:choose-directory"),
   openConfigDirectory: () => ipcRenderer.invoke("omw:open-config-directory"),
+  openBackupDirectory: () => ipcRenderer.invoke("omw:open-backup-directory"),
   openDataDirectory: () => ipcRenderer.invoke("omw:open-data-directory"),
   loginItemAtLogin: () => ipcRenderer.invoke("omw:login-item"),
   setLoginItemAtLogin: (open) => ipcRenderer.invoke("omw:set-login-item", open),

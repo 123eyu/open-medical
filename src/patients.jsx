@@ -656,7 +656,7 @@ export function PatientsView({
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
             {(isRecordTab(tab) ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
           </nav>}
-          {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} onChanged={onChanged} />}
+          {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
           {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}

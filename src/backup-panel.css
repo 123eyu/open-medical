@@ -1,0 +1,8 @@
+.backup-panel { max-width: 900px; }
+.backup-panel code,.backup-recovery pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+.backup-list { list-style: none; padding: 0; margin: 18px 0; }
+.backup-list li { padding: 16px 0; border-top: 1px solid var(--border); }
+.backup-list small { display: block; color: var(--muted); overflow-wrap: anywhere; margin: 5px 0 9px; }
+.backup-list .backup-new { border-left: 3px solid var(--accent); padding-left: 12px; }
+.backup-recovery { border-top: 1px solid var(--border); padding-top: 16px; }
+.backup-recovery pre { font: inherit; line-height: 1.7; }

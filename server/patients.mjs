@@ -791,6 +791,7 @@ function optionalLabs(value) {
       value: value_,
       ...(item.unit ? { unit: string(item.unit, "单位", 30) } : {}),
       date: clinicalDate(item.date, "检验日期"),
+      ...(item.referenceRange ? { referenceRange: string(item.referenceRange, "报告参考范围", 200) } : {}),
       ...(item.note ? { note: string(item.note, "备注", 500) } : {}),
       ...(item.source ? { source: string(item.source, "来源", 200) } : {}),
       ...(item.sources !== undefined ? { sources: diagnosisSourceList(item.sources) } : {}),
