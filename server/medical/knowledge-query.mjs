@@ -38,7 +38,11 @@ export function fuseKnowledgeQueries(original, alternatives, limit) {
   for (const [i,result] of [original,...alternatives].entries()) {
     for (const [rank,hit] of result.hits.entries()) {
       const key = `${hit.docId}:${hit.ord}`;
-      const previous = hits.get(key) || {...hit,queryFusionScore:0};
+      const previous = hits.get(key) || {...hit,queryFusionScore:0,retrievalMatches:[]};
+      const retrieval = { query: hit.queryUsed || result.query || '', original: i === 0, matchedVia: hit.matchedVia,
+        lexicalMatchType: hit.lexicalMatchType, matchedTerms: hit.matchedTerms || [] };
+      if (!previous.retrievalMatches.some(item => item.query === retrieval.query && item.matchedVia === retrieval.matchedVia && item.lexicalMatchType === retrieval.lexicalMatchType))
+        previous.retrievalMatches.push(retrieval);
       previous.queryFusionScore += (i===0?1:0.8)/(60+rank+1);
       hits.set(key,previous);
     }

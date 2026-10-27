@@ -541,6 +541,8 @@ export class GuidelineLibrary {
           coverage: doc.coverage || {status:"unknown"},
           sourceKind: doc.sourceKind || knowledgeProfile(null, doc.kind).name,
           location: JSON.parse(chunk.metadata || "{}"),
+          queryUsed: text,
+          matchedTerms: [...matchedNeedles].slice(0, 40),
           lexicalMatchType: lexicalMatch ? (partialMatch ? "partial" : "exact") : null,
           vectorScore: vectorScore === undefined ? null : Math.round(vectorScore * 1000) / 1000,
           matchedVia:

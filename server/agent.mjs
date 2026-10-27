@@ -2106,7 +2106,7 @@ export function createServer(options = {}) {
             return send(res, 200, await digestMessages(pid, await body(req)));
         }
         if (parts[3] === "followup-surveys") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, { surveys: surveys.list(pid) });
+          if (parts.length === 4 && req.method === "GET") return send(res, 200, { surveys: surveys.list(pid, { reminderId: url.searchParams.get("reminderId"), surveyId: url.searchParams.get("surveyId") }) });
           if (parts.length === 6 && req.method === "POST") {
             const surveyId = identifier(parts[4]);
             if (parts[5] === "send") return send(res, 200, await surveys.send(pid, surveyId, await body(req)));

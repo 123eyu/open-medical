@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "./agent-runtime";
 import {
   tableCitationRows,
@@ -24,6 +26,10 @@ export function KnowledgeReader({
     [textNotice, setTextNotice] = useState("");
   const [tableResult, setTableResult] = useState(null);
   const [rawOpen, setRawOpen] = useState(false);
+  const [readMode, setReadMode] = useState(() => reader.highlight || reader.stale ? "lines" : "reading");
+  useEffect(() => {
+    setReadMode(reader.highlight || reader.stale ? "lines" : "reading");
+  }, [reader.doc.id, reader.highlight?.startLine, reader.highlight?.endLine, reader.stale]);
   const [addresses, setAddresses] = useState(false);
   const [tableRetry, setTableRetry] = useState(0);
   const ready = tableResult?.docId === reader.doc.id;
@@ -67,7 +73,7 @@ export function KnowledgeReader({
       });
       return;
     }
-    if (!ready || (table && !rawOpen)) return;
+    if (!ready || (table ? !rawOpen : readMode !== "lines")) return;
     const target = selectedLineRef.current;
     if (!target) return;
     let active = true,
@@ -118,6 +124,7 @@ export function KnowledgeReader({
     ready,
     Boolean(table),
     rawOpen,
+    readMode,
   ]);
   {
     const lines = reader.doc.text.split("\n");
@@ -165,7 +172,7 @@ export function KnowledgeReader({
           )}
           {reader.doc.coverage?.status &&
             reader.doc.coverage.status !== "complete" && (
-              <p role="status" className="form-error">
+              <p role={reader.doc.coverage.status === "needs_review" ? "alert" : "status"} className={reader.doc.coverage.status === "needs_review" ? "form-error" : "knowledge-coverage-note"}>
                 {coverageLabel(reader.doc.coverage)}
               </p>
             )}
@@ -277,7 +284,18 @@ export function KnowledgeReader({
               }}
             />
           )}
-          {ready && (!table || rawOpen) && (
+          {ready && !table && <div className="kw-reading-modes" aria-label="正文显示方式">
+            <button className="secondary" aria-pressed={readMode === "reading"} onClick={() => setReadMode("reading")}>阅读正文</button>
+            <button className="secondary" aria-pressed={readMode === "lines"} onClick={() => setReadMode("lines")}>行号原文</button>
+          </div>}
+          {ready && !table && readMode === "reading" && <div className="wb-markdown kw-readable-text">
+            <Markdown remarkPlugins={[remarkGfm]} urlTransform={url => /^(https?:\/\/|#)/i.test(url) ? url : ""}
+              components={{
+                img: ({ src, alt }) => <span className="knowledge-image-reference">[图片：{alt || "未提供说明"}]{/^https?:\/\//i.test(src || "") && <a href={src} target="_blank" rel="noreferrer">打开图片链接</a>}</span>,
+                a: ({ href, children }) => href ? <a href={href} target="_blank" rel="noreferrer">{children}</a> : <span>{children}</span>,
+              }}>{reader.doc.text}</Markdown>
+          </div>}
+          {ready && (table ? rawOpen : readMode === "lines") && (
             <div className="guidelines-text">
               {lines.map((line, index) => {
                 const lineNo = index + 1;

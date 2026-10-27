@@ -40,7 +40,7 @@ function LabPlot({ group, compact = false }) {
     {dates.length > 1 ? <><text x="60" y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
   </svg></div>;
 }
-export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
+export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", followups = [], focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
   const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
   useEffect(() => {
     if (editRequest?.patientId !== patient.id || editRequest?.tab !== view) return;
@@ -120,7 +120,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
     {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView}/><HabitSuggestion key={patient.id} patientId={patient.id}/><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></>}
     {view === 'diagnoses' && <PatientHistory patient={patient} files={files} onEdit={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged} citedFileName={citedFileName} onSummarize={()=>onOpenWorkspace(session.id, {draft: `请根据当前患者（ID：${patient.id}）已有档案及原始资料，重新整理并保存精简病史摘要，保留其他临床记录。${CLINICAL_SUMMARY_INSTRUCTION}`})}/>}
     <div>
-      {view === 'medications' && <TreatmentPanel patient={patient} files={files} citedFileName={citedFileName} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}
+      {view === 'medications' && <TreatmentPanel patient={patient} followups={followups} files={files} citedFileName={citedFileName} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}
     </div>
     {view === 'labs' && <section className="chart-section chart-labs" aria-label="检验资料与趋势"><div className="lab-reading-toolbar">
         <span className="muted">{groups.length} 项指标 · {patient.labs?.length || 0} 条记录</span>

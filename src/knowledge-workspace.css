@@ -716,3 +716,12 @@
     gap: 14px;
   }
 }
+
+.kw-reading-modes { display: flex; gap: 8px; margin: 16px 0; }
+.kw-reading-modes [aria-pressed="true"] { border-color: var(--accent); color: var(--ink); }
+.knowledge-coverage-note, .kw-retrieval-details { color: var(--muted); font-size: 12px; }
+.kw-retrieval-details { margin: 10px 0; }
+.kw-retrieval-details summary { cursor: pointer; }
+.kw-results mark { background: #f5ebae; color: inherit; }
+.kw-results mark.match-expanded { background: #e2edf3; }
+.kw-readable-text { overflow-wrap: anywhere; }

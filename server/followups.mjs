@@ -1,3 +1,4 @@
+import { isCalendarDate } from "../shared/calendar-date.mjs";
 import { messageProvenance } from "../shared/message-provenance.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
 import { randomUUID, createHash } from "node:crypto";
@@ -74,13 +75,20 @@ export class FollowUpManager {
   }
   create(patientId, input) {
     return sqliteTransaction(this.store.db, () => {
-      this.patientRow(patientId);
+      const patient = this.patientRow(patientId);
       check(input && typeof input === "object" && !Array.isArray(input), "INVALID_INPUT", "随访计划参数无效");
       const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      let source;
+      if (input.source !== undefined) {
+        check(input.source && input.source.kind === "treatment-review" && isCalendarDate(input.source.reviewDate), "INVALID_INPUT", "复评来源须包含有效的复评日期");
+        source = { kind: "treatment-review", reviewDate: input.source.reviewDate };
+        check(input.once === true, "INVALID_INPUT", "按复评日期安排的随访须为单次提醒");
+      }
       const fingerprint = createHash("sha256").update(JSON.stringify({
         name: input.name, once: input.once === true, intervalDays: input.once === true ? null : input.intervalDays,
         firstDueAt: input.firstDueAt, checklist: input.checklist || [], questionnaire: input.questionnaire || null,
         externalConsent: input.externalConsent === true,
+        ...(source ? { source } : {}),
       })).digest("hex");
       if (requestId) {
         const previous = this.store.db.prepare("SELECT * FROM followup_creation_requests WHERE request_id=?").get(requestId);
@@ -91,7 +99,13 @@ export class FollowUpManager {
           return { ...JSON.parse(row.data), replayed: true };
         }
       }
-      const job = this.createNew(patientId, input);
+      let existing;
+      if (source) {
+        check(!patient.archived, "PATIENT_ARCHIVED", "已归档患者不能新建随访计划", 409);
+        check(patient.treatmentPlan?.reviewDate === source.reviewDate, "REVIEW_DATE_CHANGED", "患者复评日期已变化，请关闭表单并核对已保存的治疗方案", 409);
+        existing = this.store.db.prepare("SELECT data FROM follow_ups WHERE patient_id=? AND json_extract(data,'$.source.kind')='treatment-review' AND json_extract(data,'$.source.reviewDate')=? ORDER BY rowid LIMIT 1").get(patientId, source.reviewDate);
+      }
+      const job = existing ? { ...JSON.parse(existing.data), reused: true } : this.createNew(patientId, { ...input, ...(source ? { source } : {}) });
       if (requestId) this.store.db.prepare("INSERT INTO followup_creation_requests VALUES (?,?,?,?)").run(requestId, patientId, fingerprint, job.id);
       return job;
     });
@@ -153,6 +167,7 @@ export class FollowUpManager {
       name: string(input.name, "随访名称", 100),
       intervalDays,
       once,
+      ...(input.source ? { source: input.source } : {}),
       checklist,
       questionnaire,
       externalConsent: input.externalConsent === true,
@@ -353,6 +368,7 @@ export class FollowUpManager {
           status: job.status,
           nextDue: job.nextDue,
           revision: job.revision,
+          ...(job.source ? { source: job.source } : {}),
         };
       });
   }

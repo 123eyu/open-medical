@@ -1,3 +1,4 @@
+import { followupDate } from "../shared/followup-display.mjs";
 import { patientPhone, PATIENT_PHONE_HINT } from "../shared/patient-phone.mjs";
 import { useClinicalDraft } from "./clinical-drafts";
 import { parsePastedMessages } from "../shared/message-import.mjs";
@@ -38,13 +39,7 @@ const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], [
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
 
 const GENDER = { male: "男", female: "女", unknown: "" };
-const fmtDate = (value) =>
-  new Date(value).toLocaleString("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const fmtDate = followupDate;
 // 提案卡明细：渲染结构化字段而非原始 JSON
 const proposalDetail = (type, payload = {}) => {
   const parts = [];
@@ -112,6 +107,11 @@ export function PatientsView({
     setTab(nextTab);
     setClinicalEditRequest(opts.edit ? { patientId: detail.id, tab: nextTab } : null);
     if ("focusFile" in opts) setSourceFocus(opts.focusFile);
+    if (nextTab === "followups" && opts.patientId === detail?.id && opts.reviewDate) {
+      setFollowupSource({ patientId: detail.id, reviewDate: opts.reviewDate, title: opts.title });
+      setEditingFollowup(null); setModal("followup");
+    }
+    if (nextTab === "followups" && opts.focusFollowupId) setFollowupFocus({ id: opts.focusFollowupId, token: Date.now() });
   };
   const [patientLoading, setPatientLoading] = useState(false);
   useEffect(() => { if (detail) onLocationChange?.(detail.id, tab); }, [detail?.id, tab]);
@@ -137,6 +137,15 @@ export function PatientsView({
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("updated");
   const [editingFollowup, setEditingFollowup] = useState(null);
+  const [followupSource, setFollowupSource] = useState(null);
+  const [followupFocus, setFollowupFocus] = useState(null);
+  const [surveyFocus, setSurveyFocus] = useState(null);
+  useEffect(() => { setFollowupSource(null); setFollowupFocus(null); setSurveyFocus(null); }, [detail?.id]);
+  useEffect(() => {
+    if (tab !== "followups" || !followupFocus) return;
+    const element = document.getElementById(`followup-${followupFocus.id}`);
+    element?.scrollIntoView({ block: "center" }); element?.focus({ preventScroll: true });
+  }, [tab, followupFocus, followups]);
   const [patientPage, setPatientPage] = useState(0);
   const [showAllReminders, setShowAllReminders] = useState(false);
   const [group, setGroup] = useState("");
@@ -650,7 +659,7 @@ export function PatientsView({
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} onChanged={onChanged} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
+          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
           {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "overview" && (
             <div className="detail-panel">
@@ -828,7 +837,7 @@ export function PatientsView({
               <div className="digest-row"><div><h2>随访计划</h2><p className="muted">先处理到期事项，再安排下一次联系。</p></div>
                 <button
                   className="primary"
-                  onClick={() => { setEditingFollowup(null); setModal("followup"); }}
+                  onClick={() => { setFollowupSource(null); setEditingFollowup(null); setModal("followup"); }}
                   disabled={detail.archived}
                 >
                   <CalendarClock size={14} /> 新建随访计划
@@ -843,11 +852,14 @@ export function PatientsView({
                 onRefresh={refreshFollowupPanels}
                 onChanged={refreshPatient}
                 onOpenTask={onOpenWorkspace}
+                onViewSurvey={target => setSurveyFocus({ ...target, token: Date.now() })}
               />
               </div>
               <div>
               <SurveyPanel
                 key={`surveys-${detail.id}`}
+                focus={surveyFocus}
+                onClearFocus={() => setSurveyFocus(null)}
                 patientId={detail.id}
                 refreshKey={followupRefresh}
                 onRefresh={refreshFollowupPanels}
@@ -857,7 +869,7 @@ export function PatientsView({
               <h3 className="followup-merged-title">提醒计划（{followups.length}）</h3>
               <div><p className="muted">到期后在本机生成提醒；实际联系结果请在「随访待办与记录」登记。</p>
               {followups.map((job) => (
-                <div className="followup-card" key={job.id}>
+                <div className="followup-card" role="article" aria-label={`提醒计划：${job.name}`} id={`followup-${job.id}`} tabIndex={-1} key={job.id}>
                   <div className="followup-head">
                     <b>{job.name}</b>
                     <span className="badge">{{ active: "计划中", running: "提醒生成中", paused: "已暂停", completed: "提醒已生成" }[job.status] || job.status}</span>
@@ -872,6 +884,7 @@ export function PatientsView({
                       : " · 仅本机提醒，不会发送给患者"}
                     {job.lastError ? ` · 上次错误：${job.lastError}` : ""}
                   </small>
+                  {job.source?.kind === "treatment-review" && <p className="muted">来自复评日期 {job.source.reviewDate}{job.source.reviewDate !== detail.treatmentPlan?.reviewDate ? " · 治疗方案复评日期已变更，此提醒仍按原计划执行" : ""}</p>}
                   {job.checklist.length > 0 && (
                     <ul>
                       {job.checklist.map((c) => (
@@ -883,7 +896,7 @@ export function PatientsView({
                     {job.status !== "running" && job.status !== "completed" && (
                       <button
                         className="secondary"
-                        onClick={() => { setEditingFollowup(job); setModal("followup"); }}
+                        onClick={() => { setFollowupSource(null); setEditingFollowup(job); setModal("followup"); }}
                       >
                         编辑
                       </button>
@@ -953,13 +966,17 @@ export function PatientsView({
       {modal === "edit-patient" && detail && <PatientIdentityModal patient={detail} onClose={() => setModal(null)} onSaved={async () => { await refreshPatient(); setModal(null); setNotice("基本信息已保存"); }} />}
       {modal === "followup" && detail && (
         <FollowupModal
+          key={`${detail.id}:${editingFollowup?.id || followupSource?.reviewDate || "new"}`}
+          source={followupSource?.patientId === detail.id ? followupSource : null}
+          existingSourceJob={followupSource && followups.find(job => job.source?.kind === "treatment-review" && job.source.reviewDate === followupSource.reviewDate)}
+          onViewExisting={job => { setModal(null); setFollowupFocus({ id: job.id, token: Date.now() }); }}
           patientId={detail.id}
           job={editingFollowup}
           onClose={() => { setModal(null); setEditingFollowup(null); }}
-          onCreated={async () => {
-            setModal(null);
-            setEditingFollowup(null);
+          onCreated={async job => {
+            setModal(null); setEditingFollowup(null); setFollowupSource(null);
             await refreshPatient();
+            if (job) { setFollowupFocus({ id: job.id, token: Date.now() }); setNotice(job.reused ? "该复评日期已有提醒，已定位现有计划。" : "随访计划已保存。"); }
           }}
         />
       )}
@@ -1134,7 +1151,7 @@ function NewPatientModal({ existingGroups = [], existingTags = [], onClose, onCr
     </Modal>
   );
 }
-function FollowupModal({ patientId, job, onClose, onCreated }) {
+function FollowupModal({ patientId, job, source, existingSourceJob, onViewExisting, onClose, onCreated }) {
   const editing = Boolean(job);
   const toLocal = (iso) => {
     const d = new Date(iso);
@@ -1150,21 +1167,23 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
       .toISOString()
       .slice(0, 16);
   };
-  const [storedDraft, setStoredDraft] = useClinicalDraft(patientId, `followupPlan:${job?.id || "new"}`, null);
+  const [storedDraft, setStoredDraft] = useClinicalDraft(patientId, `followupPlan:${job?.id || (source ? `review:${source.reviewDate}` : "new")}`, null);
   const [initialDraft] = useState(() => ({
     form: (
     editing
       ? {
           name: job.name,
+          once: job.once === true,
           intervalDays: job.intervalDays || 14,
           firstDueAt: toLocal(job.nextDue),
           checklist: (job.checklist || []).join("\n"),
           externalConsent: Boolean(job.externalConsent),
         }
       : {
-          name: "常规随访",
+          name: source ? `复评：${source.title || "治疗方案"}`.slice(0, 100) : "常规随访",
+          once: Boolean(source),
           intervalDays: 14,
-          firstDueAt: defaultDue(),
+          firstDueAt: source ? `${source.reviewDate}T09:00` : defaultDue(),
           checklist: "",
           externalConsent: false,
         }
@@ -1181,6 +1200,7 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
   const setQuestionnaire = value => setStoredDraft({ ...currentDraft, questionnaire: value });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const set = (key) => (e) =>
     setForm({
       ...form,
@@ -1188,29 +1208,33 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
     });
   const submit = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (savingRef.current) return;
+    savingRef.current = true;
     setStoredDraft(currentDraft);
     setSaving(true);
     setError("");
     try {
-    if (!form.firstDueAt || !Number.isFinite(Date.parse(form.firstDueAt))) throw new Error("请填写有效的首次随访时间");
+    if (dueError) throw new Error(dueError);
     const payload = {
       name: form.name,
-      intervalDays: Number(form.intervalDays),
+      ...(form.once ? {} : { intervalDays: Number(form.intervalDays) }),
       firstDueAt: new Date(form.firstDueAt).toISOString(),
       checklist: form.checklist
         .split(/\n+/)
         .map((s) => s.trim())
         .filter(Boolean),
     };
+      let saved;
       if (editing) {
-        await api(
+        saved = await api(
           `/api/patients/${patientId}/followups/${job.id}`,
           "PATCH",
           { ...payload, revision: currentDraft.revision },
         );
       } else {
-        await api(`/api/patients/${patientId}/followups`, "POST", {
+        saved = await api(`/api/patients/${patientId}/followups`, "POST", {
+          once: form.once === true,
+          ...(source ? { source: { kind: "treatment-review", reviewDate: source.reviewDate } } : {}),
           ...payload,
           requestId: currentDraft.requestId,
           externalConsent: form.externalConsent,
@@ -1220,26 +1244,36 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
         });
       }
       setStoredDraft(null);
-      await onCreated();
+      await onCreated(saved);
     } catch (err) {
       setError(err.message);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
+  if (existingSourceJob && !editing) return <Modal title="已有复评提醒" onClose={onClose}>
+    <p>复评日期 {source.reviewDate} 已有「{existingSourceJob.name}」{existingSourceJob.status === "completed" ? "，提醒已触发" : "的提醒安排"}。如需另一次联系，可返回使用普通新建随访。</p>
+    <p>{followupDate(existingSourceJob.nextDue)}</p><button className="primary" onClick={() => onViewExisting(existingSourceJob)}>查看现有计划</button>
+  </Modal>;
+  const due = Date.parse(form.firstDueAt), latestDue = Date.now() + 366 * 86400000;
+  const dueError = !Number.isFinite(due) || due <= Date.now() || (!editing && due > latestDue)
+    ? `首次随访须晚于当前时间${!editing ? `，且不晚于 ${followupDate(latestDue)}` : ""}；请核对 ${form.firstDueAt || "未填写的时间"}。` : "";
   return (
     <Modal
       title={editing ? "编辑随访计划" : "新建随访计划"}
-      onClose={onClose}
+      onClose={() => { if (!savingRef.current) onClose(); }}
     >
       <form className="modal-form" onSubmit={submit}>
         <fieldset disabled={saving}>
+        {source && <p className="muted">来自已保存复评日期 {source.reviewDate}；09:00 为可修改的工作时段默认值。</p>}
+        <label>提醒类型<select aria-label="提醒类型" value={form.once ? "once" : "repeat"} disabled={editing || Boolean(source)} onChange={event => setForm({ ...form, once: event.target.value === "once" })}><option value="once">单次提醒</option><option value="repeat">周期提醒</option></select></label>
         <label>
           计划名称
           <input value={form.name} onChange={set("name")} required autoFocus />
         </label>
         <div className="form-grid">
-          <label>
+          {!form.once && <label>
             间隔天数
             <input
               type="number"
@@ -1248,7 +1282,7 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
               value={form.intervalDays}
               onChange={set("intervalDays")}
             />
-          </label>
+          </label>}
           <label>
             首次随访时间
             <input
@@ -1290,7 +1324,8 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
         {!editing && withSurvey && (
           <QuestionnaireEditor value={questionnaire} onChange={setQuestionnaire} />
         )}
-        {error && <p className="error-text">{error}</p>}
+        {dueError && <p role="alert" className="error-text">{dueError}</p>}
+        {error && <p role="alert" className="error-text">{error}</p>}
         <button className="primary" disabled={saving}>
           {editing ? "保存修改" : "创建随访计划"}
         </button>

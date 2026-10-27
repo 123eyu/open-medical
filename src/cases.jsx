@@ -10,6 +10,14 @@ import { Loader2, Plus, Search, Star, Trash2, UserPlus, X } from "lucide-react";
 // cases (starred + lessons) are the doctor's own experience layer.
 export function CasesView() {
   const [cases, setCases] = useState([]);
+  const [focusId, setFocusId] = useState(() => new URLSearchParams(window.location.search).get("case") || "");
+  const [focused, setFocused] = useState(null), [focusError, setFocusError] = useState("");
+  const focusRef = useRef(null), focusGeneration = useRef(0);
+  useEffect(() => {
+    const restore = () => setFocusId(new URLSearchParams(window.location.search).get("case") || "");
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   const [patients, setPatients] = useState([]);
   const [query, setQuery] = useState("");
   const [starredOnly, setStarredOnly] = useState(false);
@@ -32,10 +40,32 @@ export function CasesView() {
   });
   const [expanded, setExpanded] = useState(() => editing ? { [editing.id]: true } : {});
 
+  const refreshFocused = async (id = focusId, signal) => {
+    const generation = ++focusGeneration.current;
+    if (!id) return;
+    try {
+      const item = await api(`/api/cases/${encodeURIComponent(id)}`, { signal });
+      if (signal?.aborted || generation !== focusGeneration.current) return;
+      setFocused(item); setFocusError(""); setExpanded(value => ({ ...value, [item.id]: true }));
+    } catch (err) {
+      if (signal?.aborted || generation !== focusGeneration.current) return;
+      setFocused(null);
+      setFocusError(err.status === 404 || err.code === "NOT_FOUND" ? "此案例已不存在或不可读取。" : `此案例暂不可读取：${err.message}`);
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    setFocused(null); setFocusError("");
+    refreshFocused(focusId, controller.signal);
+    return () => { controller.abort(); focusGeneration.current++; };
+  }, [focusId]);
+  useEffect(() => { if (focused?.id === focusId) focusRef.current?.scrollIntoView({ block: "start" }); }, [focused, focusId]);
+
   const refresh = async () => {
     const [list, people] = await Promise.all([
       api(`/api/cases${starredOnly ? "?starred=1" : ""}`),
       api("/api/patients?summary=1"),
+      refreshFocused(),
     ]);
     setCases(list.cases);
     setPatients(people.patients.filter((p) => !p.archived));
@@ -53,6 +83,7 @@ export function CasesView() {
         `/api/cases${query ? `?query=${encodeURIComponent(query)}` : ""}`,
       );
       setCases(value.cases);
+      await refreshFocused();
       setSimilarMatches(null);
     } catch (err) {
       setError(err.message);
@@ -151,6 +182,7 @@ export function CasesView() {
     try {
       await mutateCase(item, "DELETE");
       if (editing?.id === item.id) setEditing(null);
+      if (item.id === focusId) { setFocused(null); setFocusError("此案例已不存在或不可读取。"); }
       await refresh();
     } catch (err) {
       setError(err.message);
@@ -174,6 +206,12 @@ export function CasesView() {
             {adding ? "取消" : "收入病例"}
           </button>
         </div>
+        {focusId && <div className="case-location" role="status">
+          {focusError || (focused?.id === focusId ? "已定位从病例线索打开的案例。" : "正在读取指定案例…")}
+          <button className="text-button" onClick={() => {
+            const url = new URL(window.location.href); url.searchParams.delete("case"); window.history.replaceState(window.history.state, "", url); setFocusId("");
+          }}>取消定位</button>
+        </div>}
         {actionConflict && <div role="alert">
           <p>案例已变化，精选或删除未执行。请查看最新内容后重新决定。</p>
           <button className="secondary" onClick={async () => { try { await refresh(); setActionConflict(null); setError(""); } catch (e) { setError(e.message); } }}>查看最新案例</button>
@@ -317,8 +355,8 @@ export function CasesView() {
           </button>
         </h3>
         <ul className="literature-results">
-          {cases.map((item) => (
-            <li className="literature-item" key={item.id}>
+          {(focused?.id === focusId ? [focused, ...cases.filter(item => item.id !== focusId)] : cases).map((item) => (
+            <li className="literature-item" key={item.id} ref={item.id === focusId ? focusRef : null} data-case-id={item.id}>
               <div className="literature-title-row">
                 <button
                   className="literature-title"
@@ -445,7 +483,7 @@ export function CasesView() {
               </div>
             </li>
           ))}
-          {!cases.length && (
+          {!cases.length && !focused && (
             <li className="memory-empty">
               {starredOnly ? "还没有精选案例。展开一份病例，补上经验教训并点星标，它就会在相似患者出现时优先被翻出来。" : "案例库为空。可在患者档案点「收进案例库」，把有价值的病例连同经验一起留下。"}
             </li>

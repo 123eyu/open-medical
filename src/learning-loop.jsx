@@ -1083,97 +1083,59 @@ export function PersonalReferences({ action }) {
   );
 }
 export function SimilarCaseCard({ patientId }) {
-  const [matches, setMatches] = useState([]),
-    [hidden, setHidden] = useState(false),
-    [collapsed, setCollapsed] = useState(false),
-    [error, setError] = useState("");
+  const [result, setResult] = useState({ patientId: null, status: "loading", matches: [], enabled: true });
+  const [retry, setRetry] = useState(0), [collapsed, setCollapsed] = useState(false),
+    [actionError, setActionError] = useState(""), [saving, setSaving] = useState(false);
   useEffect(() => {
-    let live = true;
-    api(`/api/learning/similar/${patientId}`)
-      .then((r) => {
-        if (live) {
-          setMatches(r.matches);
-          setHidden(!r.enabled);
-        }
-      })
-      .catch((e) => {
-        if (live) setError(e.message);
-      });
-    return () => {
-      live = false;
-    };
-  }, [patientId]);
-  const event = (type) =>
-    api("/api/learning/events", "POST", { type, subject: patientId }).catch(
-      (e) => setError(e.message),
-    );
-  if (hidden || !matches.length) return null;
-  return (
-    <section className="doctor-section" aria-label="你过去的相似病例">
-      <div className="review-heading">
-        <h3>你过去的相似病例（{matches.length}）</h3>
-        <button
-          onClick={() => {
-            setCollapsed(!collapsed);
-            event(collapsed ? "similar-expanded" : "similar-collapsed");
-          }}
-        >
-          {collapsed ? "展开" : "收起"}
-        </button>
-        <button
-          onClick={async () => {
-            try {
-              await api("/api/learning/settings", "PUT", {
-                similarCards: false,
-              });
-              await event("similar-disabled");
-              setHidden(true);
-            } catch (e) {
-              setError(e.message);
-            }
-          }}
-        >
-          不再提示
-        </button>
-      </div>
-      {!collapsed &&
-        matches.map((m) => {
-          // 相似病例卡默认只给摘要；OCR 过程性括注（“待核对：…OCR…”）不进入医生界面。
-          const text = String(m.diagnosis || "")
-            .replace(/（[^（）]*OCR[^（）]*）/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-          const long = text.length > 120;
-          return (
-            <div key={m.caseId}>
-              {long ? (
-                <details>
-                  <summary>
-                    {text.slice(0, 120)}…（共 {text.length} 字，点击展开全文）
-                  </summary>
-                  {text}
-                </details>
-              ) : (
-                text || m.diagnosis
-              )}
-              {m.clinicalSource?.type === "case-snapshot" && <small> · 历史案例快照</small>}
-              {m.curatedSources?.length ? <CuratedCaseSources sources={m.curatedSources}/> : m.lessons ? ` · 你的案例笔记：${m.lessons}` : ""}{" "}
-              <a
-                href={
-                  m.caseId.startsWith("patient:")
-                    ? `/?view=patients&patient=${encodeURIComponent(m.caseId.slice(8))}`
-                    : "/?view=cases"
-                }
-                onClick={() => event("similar-opened")}
-              >
-                打开
-              </a>
-            </div>
-          );
+    const controller = new AbortController();
+    setResult({ patientId, status: "loading", matches: [], enabled: true });
+    setCollapsed(false); setActionError("");
+    api(`/api/learning/similar/${patientId}`, { signal: controller.signal })
+      .then(r => { if (!controller.signal.aborted) setResult({ patientId, status: "ready", matches: r.matches || [], enabled: r.enabled }); })
+      .catch(e => { if (!controller.signal.aborted) setResult({ patientId, status: "failed", matches: [], enabled: true, error: e.message }); });
+    return () => controller.abort();
+  }, [patientId, retry]);
+  const event = type => api("/api/learning/events", "POST", { type, subject: patientId }).catch(() => {});
+  const current = result.patientId === patientId ? result : { status: "loading", matches: [], enabled: true };
+  const date = value => value && Number.isFinite(new Date(value).getTime()) ? new Date(value).toLocaleDateString("zh-CN") : "日期未记录";
+  return <section className="doctor-section local-case-clues" aria-label="本地相关病例线索">
+    <div className="review-heading">
+      <h3>本地相关病例线索{current.status === "ready" && current.enabled ? `（${current.matches.length}）` : ""}</h3>
+      {current.status === "ready" && current.enabled && <>
+        <button onClick={() => { setCollapsed(!collapsed); event(collapsed ? "similar-expanded" : "similar-collapsed"); }}>{collapsed ? "展开" : "收起"}</button>
+        <button disabled={saving} onClick={async () => {
+          setSaving(true); setActionError("");
+          try { await api("/api/learning/settings", "PUT", { similarCards: false }); setResult(value => ({ ...value, enabled: false })); event("similar-disabled"); }
+          catch (e) { setActionError(e.message); }
+          finally { setSaving(false); }
+        }}>不再提示</button>
+      </>}
+    </div>
+    {current.status === "loading" ? <p role="status">正在查找本地病例线索…</p>
+      : current.status === "failed" ? <div role="alert"><p>病例线索暂未读取：{current.error}</p><button onClick={() => setRetry(v => v + 1)}>重试病例检索</button></div>
+      : !current.enabled ? <p className="muted">病例线索提示已关闭。<a href="/?view=settings&doctor=1">管理提示设置</a></p>
+      : !collapsed && <>
+        <p className="muted">按诊断与术语检索，病程、治疗和结局仍需核对。</p>
+        {!current.matches.length && <p>暂未找到本地相关病例。</p>}
+        {current.matches.map(m => {
+          const text = String(m.diagnosis || "").replace(/（[^（）]*OCR[^（）]*）/g, "").replace(/\s+/g, " ").trim();
+          const source = m.clinicalSource, snapshot = source?.type === "case-snapshot";
+          const reasons = Array.isArray(m.reasons) ? m.reasons : [];
+          return <article key={m.caseId} className="local-case-clue">
+            {text.length > 120 ? <details><summary>{text.slice(0, 120)}…（展开诊断全文）</summary><p>{text}</p></details> : <h4>{text || "诊断未记录"}</h4>}
+            <p className="muted">{snapshot ? `历史案例快照 · 保存于 ${date(source.capturedAt)}` : `患者当前档案 · 更新于 ${date(source?.updatedAt)}`}
+              {Number.isInteger(m.age) ? ` · 约 ${m.age} 岁` : ""}{m.gender === "male" ? " · 男" : m.gender === "female" ? " · 女" : ""}</p>
+            {reasons.length ? <><ul>{reasons.slice(0, 2).map((reason, index) => <li key={index}>{reason}</li>)}</ul>
+              {reasons.length > 2 && <details><summary>其余匹配依据（{reasons.length - 2}）</summary><ul>{reasons.slice(2).map((reason, index) => <li key={index}>{reason}</li>)}</ul></details>}</>
+              : <p>匹配依据未提供，请打开记录核对。</p>}
+            {m.curatedSources?.length ? <CuratedCaseSources sources={m.curatedSources}/> : m.lessons ? <p>你的案例笔记：{m.lessons}</p> : null}
+            <a href={m.caseId.startsWith("patient:") ? `/?view=patients&patient=${encodeURIComponent(m.caseId.slice(8))}` : `/?view=cases&case=${encodeURIComponent(source?.caseId || m.caseId)}`}
+              onClick={() => event("similar-opened")}>打开{snapshot ? "历史案例" : "患者档案"}</a>
+          </article>;
         })}
-      {error && <p role="alert">{error}</p>}
-    </section>
-  );
+      </>}
+    {actionError && <p role="alert">{actionError}</p>}
+  </section>;
 }
 export function LearningMonth() {
   const [summary, setSummary] = useState(null);

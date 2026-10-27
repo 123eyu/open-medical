@@ -1,3 +1,4 @@
+import { followupDate } from "../shared/followup-display.mjs";
 import { CampaignPanel } from "./care-inbox";
 import { WechatOutreachPanel } from "./chat-autofollow";
 import { ChatFollowupsPanel } from "./chat-followups";
@@ -491,9 +492,9 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
                   <div className="job-main">
                     <b>{job.patientName}</b> · {job.name}
                     <small>
-                      {fmtDue(job.nextDue)} ·{" "}
+                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)} ·{" "}
                       {job.once ? "单次" : `每 ${job.intervalDays} 天`}
-                      {job.hasSurvey ? " · 含问卷" : ""}
+                      {job.hasSurvey ? " · 含问卷" : ""}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
                       {job.checklist?.length
                         ? ` · ${job.checklist.join("、")}`
                         : ""}
@@ -543,7 +544,7 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
                     <b>{job.patientName}</b> · {job.name}
                     <small>
                       {job.status === "paused" ? "已暂停 · " : ""}
-                      {fmtDue(job.nextDue)}
+                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
                     </small>
                   </div>
                   <div className="job-actions">

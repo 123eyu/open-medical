@@ -392,3 +392,7 @@
   font: inherit;
   cursor: pointer;
 }
+
+.local-case-clue { padding: 12px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.local-case-clue h4 { margin: 0 0 6px; }
+.local-case-clue ul { margin: 8px 0; padding-left: 20px; }

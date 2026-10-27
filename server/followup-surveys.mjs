@@ -287,22 +287,21 @@ export class FollowUpSurveys {
     check(row, "NOT_FOUND", "随访问卷不存在", 404);
     return JSON.parse(row.data);
   }
-  list(patientId) {
+  list(patientId, { reminderId, surveyId } = {}) {
     identifier(patientId);
+    const clauses = ["patient_id=?"], args = [patientId];
+    if (reminderId) { identifier(reminderId); clauses.push("json_extract(data,'$.reminderId')=?"); args.push(reminderId); }
+    if (surveyId) { identifier(surveyId); clauses.push("id=?"); args.push(surveyId); }
     const now = this.now();
-    return this.store.db
-      .prepare(
-        "SELECT data FROM followup_surveys WHERE patient_id=? ORDER BY rowid DESC LIMIT 100",
-      )
-      .all(patientId)
-      .map((r) => JSON.parse(r.data))
-      .map((row) =>
-        row.status === "sent" &&
-        row.expiresAt &&
-        Date.parse(row.expiresAt) < now
-          ? { ...row, status: "expired" }
-          : row,
-      );
+    return this.store.db.prepare(`SELECT data FROM followup_surveys WHERE ${clauses.join(" AND ")} ORDER BY rowid DESC LIMIT 100`).all(...args).map(r => {
+      const row = JSON.parse(r.data);
+      const reminder = row.reminderId ? this.store.db.prepare("SELECT id,status,data FROM reminders WHERE id=? AND patient_id=?").get(row.reminderId, patientId) : null;
+      const outcome = reminder ? JSON.parse(reminder.data).outcome : null;
+      return { ...row,
+        ...(row.status === "sent" && row.expiresAt && Date.parse(row.expiresAt) < now ? { status: "expired" } : {}),
+        linkedReminder: reminder ? { id: reminder.id, status: reminder.status, outcome: outcome ? { status: outcome.status, contactedAt: outcome.contactedAt, recordedAt: outcome.recordedAt } : null } : null,
+      };
+    });
   }
   // Latest sendable survey for chat interception; expired rows are skipped.
   pendingSurvey(patientId) {

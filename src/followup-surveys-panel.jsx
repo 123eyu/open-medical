@@ -1,3 +1,4 @@
+import { followupDate, contactOutcomeLabels } from "../shared/followup-display.mjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
 import { api } from "./agent-runtime";
@@ -14,7 +15,7 @@ const STATUS_LABELS = {
   cancelled: "已取消",
 };
 const CHANNEL_LABELS = { manual: "手动复制发送", wechat: "微信（已验证发送）", aibot: "企微机器人推送" };
-const fmtTime = (value) => (value ? new Date(value).toLocaleString("zh-CN", { dateStyle: "short", timeStyle: "short" }) : "");
+const fmtTime = followupDate;
 
 function answerOf(survey, questionId) {
   return (survey.answers || []).find((a) => a.questionId === questionId);
@@ -52,6 +53,7 @@ function CollectForm({ survey, busy, onSubmit, onCancel }) {
   };
   return (
     <form className="survey-collect" onSubmit={submit}>
+      <p className="muted">按实际答案代填。确认回收将新增独立问卷记录，已有电话记录会保留。</p>
       {closed && <p role="status" className="muted">此问卷已结束，以下代填草稿未提交，已保留供你核对。</p>}
       {survey.questionnaire.questions.map((question, index) => (
         <fieldset key={question.id} disabled={busy || closed}>
@@ -95,8 +97,10 @@ export function SurveyPanel(props) {
   return <PatientSurveys key={props.patientId} {...props} />;
 }
 
-function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
-  const [surveys, setSurveys] = useState(null);
+function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged, focus, onClearFocus }) {
+  const scope = JSON.stringify([patientId, focus?.patientId === patientId ? focus.reminderId || "" : "", focus?.patientId === patientId ? focus.surveyId || "" : ""]);
+  const [surveyState, setSurveyState] = useState({ scope: "", rows: null });
+  const surveys = surveyState.scope === scope ? surveyState.rows : null;
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -106,21 +110,26 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
   const [manual, setManual] = useState(null);
   const generation = useRef(0);
   const active = useRef(false);
+  const panelRef = useRef(null);
+  const focusedToken = useRef(null);
   const inFlight = useRef(false);
   const load = useCallback(async () => {
     const request = ++generation.current;
     setLoading(true);
     try {
-      const value = await api(`/api/patients/${patientId}/followup-surveys`);
+      const params = new URLSearchParams();
+      if (focus?.patientId === patientId && focus.reminderId) params.set("reminderId", focus.reminderId);
+      if (focus?.patientId === patientId && focus.surveyId) params.set("surveyId", focus.surveyId);
+      const value = await api(`/api/patients/${patientId}/followup-surveys${params.size ? `?${params}` : ""}`);
       if (!active.current || request !== generation.current) return;
-      setSurveys(value.surveys || []);
+      setSurveyState({ scope, rows: value.surveys || [] });
       setLoadError("");
     } catch (error) {
       if (active.current && request === generation.current) setLoadError(error.message);
     } finally {
       if (active.current && request === generation.current) setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId, focus?.patientId, focus?.reminderId, focus?.surveyId, scope]);
   useEffect(() => {
     active.current = true;
     return () => { active.current = false; generation.current++; };
@@ -130,6 +139,12 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
     const timer = setInterval(() => { if (!document.hidden && !inFlight.current) load(); }, 15000);
     return () => { generation.current++; clearInterval(timer); };
   }, [load, refreshKey]);
+  useEffect(() => {
+    if (focus?.patientId === patientId && surveys !== null && focusedToken.current !== focus) {
+      focusedToken.current = focus;
+      panelRef.current?.scrollIntoView({ block: "start" }); panelRef.current?.focus({ preventScroll: true });
+    }
+  }, [focus, patientId, surveys]);
   const refreshPanels = () => onRefresh ? onRefresh() : load();
   const run = async (surveyId, action, { closeFill = false } = {}) => {
     if (inFlight.current) return;
@@ -144,7 +159,7 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
       saved = true;
       if (!active.current) return;
       const updated = result.survey || result;
-      setSurveys(current => (current || []).map(survey => survey.id === updated.id ? updated : survey));
+      setSurveyState(current => current.scope === scope ? { ...current, rows: (current.rows || []).map(survey => survey.id === updated.id ? updated : survey) } : current);
       setSendFor(current => current === surveyId ? null : current);
       if (closeFill) setFillFor(current => current === surveyId ? null : current);
       if (result.text) setManual({ id: surveyId, text: result.text });
@@ -152,7 +167,10 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
       refreshPanels();
       await onChanged?.();
     } catch (error) {
-      if (active.current) setActionError(saved ? `操作已保存，但患者概况刷新失败：${error.message}` : error.message);
+      if (active.current) {
+        setActionError(saved ? `操作已保存，但患者概况刷新失败：${error.message}` : error.message);
+        if (error.code === "REVISION_CONFLICT") await load();
+      }
     } finally {
       inFlight.current = false;
       if (active.current) setBusy(false);
@@ -161,16 +179,17 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
   const send = (survey, channel) => run(survey.id, () =>
     api(`/api/patients/${patientId}/followup-surveys/${survey.id}/send`, "POST", { channel, consent: true }));
   return (
-    <section className="survey-panel" aria-label="随访问卷">
+    <section className="survey-panel" ref={panelRef} tabIndex={-1} aria-label="随访问卷">
       <div className="hub-section-head"><h3>随访问卷</h3><button className="text-button" disabled={busy || loading} onClick={refreshPanels}>刷新问卷</button></div>
       <p className="muted">随访到期后生成问卷。发送和代填提交需确认；已接入聊天收到完整题号回复后会自动回收计分，触发阈值时进入今日待办。</p>
+      {focus?.patientId === patientId && <p className="muted">仅显示这次联系关联的问卷。<button className="text-button" onClick={onClearFocus}>查看全部问卷</button></p>}
       {loadError && <p role="alert" className="form-error">问卷读取失败：{loadError} <button className="text-button" disabled={busy || loading} onClick={refreshPanels}>重试读取问卷</button></p>}
       {actionError && <p role="alert" className="form-error">{actionError}</p>}
       {surveys === null && loading && <p role="status">正在读取问卷…</p>}
       {!!surveys?.length && (
         <ul className="survey-list">
           {surveys.map((survey) => (
-            <li key={survey.id} className={`survey-card ${survey.alert ? "alerted" : ""}`}>
+            <li key={survey.id} data-survey-id={survey.id} className={`survey-card ${survey.alert ? "alerted" : ""}`}>
               <div className="survey-head">
                 <b>{survey.questionnaire.title}</b>
                 <span className={`badge survey-status ${survey.status}`}>{survey.status === "sent" && survey.channel === "manual" ? "手动渠道待回收" : STATUS_LABELS[survey.status] || survey.status}</span>
@@ -183,6 +202,11 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
                 {survey.sentAt ? ` · ${survey.channel === "manual" ? "渠道登记于" : "发送于"} ${fmtTime(survey.sentAt)}` : ""}
                 {survey.collectedAt ? ` · 回收于 ${fmtTime(survey.collectedAt)}` : ""}
               </small>
+              {["pending_send", "sent", "expired"].includes(survey.status) && survey.linkedReminder?.outcome && <details className="survey-contact-context" open>
+                <summary>此轮已登记联系：{contactOutcomeLabels[survey.linkedReminder.outcome.status] || "结果待核对"} · {fmtTime(survey.linkedReminder.outcome.contactedAt || survey.linkedReminder.outcome.recordedAt)}；问卷仍为{STATUS_LABELS[survey.status]}</summary>
+                <p className="muted">联系记录与问卷分别保存。可保留问卷、明确取消，或按实际答案代填；代填回收会新增独立的问卷联系记录，不覆盖电话记录。</p>
+              </details>}
+              {["pending_send", "sent", "expired"].includes(survey.status) && survey.linkedReminder?.status === "done" && !survey.linkedReminder.outcome && <p className="muted">此轮提醒已处理，未登记联系结果；问卷仍为{STATUS_LABELS[survey.status]}。</p>}
               {survey.status === "collected" && (
                 <ol className="survey-answers">
                   {survey.questionnaire.questions.map((question) => {
@@ -236,7 +260,7 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged }) {
           ))}
         </ul>
       )}
-      {surveys !== null && !surveys.length && <p className="muted">暂无问卷；给随访计划附加问卷后，到期会出现在这里。</p>}
+      {surveys !== null && !surveys.length && <p className="muted">{focus?.patientId === patientId ? "未找到此轮关联问卷，请核对当前患者与联系记录。" : "暂无问卷；给随访计划附加问卷后，到期会出现在这里。"}</p>}
     </section>
   );
 }

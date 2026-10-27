@@ -1,3 +1,4 @@
+import { followupDate } from "../shared/followup-display.mjs";
 import { useEffect, useRef, useState } from "react";
 import { patientOptionLabel } from "./patient-labels";
 import { useClinicalDraft } from "./clinical-drafts";
@@ -8,7 +9,7 @@ const outcomeLabels = {
   unreachable: "未联系上",
   declined: "患者暂不接受",
 };
-const date = (value) => new Date(value).toLocaleString("zh-CN");
+const date = followupDate;
 
 // A reminder firing is a scheduling event. A clinical follow-up is only
 // recorded when the doctor submits its outcome, checklist and notes.
@@ -19,7 +20,11 @@ export function FollowupRecords({
   onChanged,
   onOpenPatient,
   onOpenTask,
+  onViewSurvey,
 }) {
+  const [savedSurveyTarget, setSavedSurveyTarget] = useState(null);
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [contactPatients, setContactPatients] = useState([]);
   const [records, setRecords] = useState(null);
   const [history, setHistory] = useState(false);
@@ -108,8 +113,17 @@ export function FollowupRecords({
             : undefined,
         },
       );
-      setEditing(null);
-      setForm({});
+      setEditing(null); setForm({});
+      if (!mounted.current) return;
+      setSavedSurveyTarget(null);
+      if (!editing.manual && onViewSurvey) {
+        try {
+          const linked = await api(`/api/patients/${patientId || editing.patientId}/followup-surveys?reminderId=${encodeURIComponent(editing.id)}`);
+          if (!mounted.current) return;
+          if (linked.surveys.length) setSavedSurveyTarget({ patientId: patientId || editing.patientId, reminderId: editing.id });
+        } catch { if (mounted.current) setError("联系结果已保存；暂未读到此轮问卷，请刷新问卷列表核对。"); }
+      }
+      if (!mounted.current) return;
       setNotice(
         "随访结果已保存，可在随访记录中查看。" +
           (form.nextDueAt ? "下次提醒已安排。" : ""),
@@ -124,6 +138,7 @@ export function FollowupRecords({
     }
   };
   const begin = (record) => {
+    setSavedSurveyTarget(null);
     setEditing(record);
     setNotice("");
     setError("");
@@ -188,6 +203,7 @@ export function FollowupRecords({
       {notice && (
         <p role="status" className="form-notice">
           {notice}
+          {savedSurveyTarget && onViewSurvey && <button className="text-button" onClick={() => onViewSurvey(savedSurveyTarget)}>查看此轮问卷</button>}
         </p>
       )}
       <div className="tab-row">

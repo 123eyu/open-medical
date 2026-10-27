@@ -23,7 +23,7 @@ export function readLocation() {
 
 export function writeLocation(view, { id, tab, replace = false } = {}) {
   const url = new URL(window.location.href);
-  for (const key of ["view", "patient", "workspace", "session", "tab"]) url.searchParams.delete(key);
+  for (const key of ["view", "patient", "workspace", "session", "tab", "case"]) url.searchParams.delete(key);
   url.searchParams.set("view", view);
   if (id) url.searchParams.set(view === "patients" ? "patient" : view === "workspaces" ? "workspace" : "session", id);
   if (tab) url.searchParams.set("tab", tab);
