@@ -692,11 +692,9 @@ function App() {
       : "工作草稿";
   };
   const acceptArtifact = session?.artifacts.find((a) => a.id === acceptId);
-  const selectedFileIds = (
-    fileSelection[activeId] ||
-    session?.files.map((f) => f.id) ||
-    []
-  ).filter((id) => session?.files.some((f) => f.id === id));
+  const materialIdsFor = data => (fileSelection[data?.id] || data?.files.map(file => file.id) || [])
+    .filter(id => data?.files.some(file => file.id === id));
+  const selectedFileIds = materialIdsFor(session);
   // 能力驱动刷新:通用模式(无医疗能力)只拉工作区列表,不请求 /api/sessions
   // 医疗列表分别读取，失败时保留已加载数据并提供重试。
   // init 的闭包可能捕获旧 config,因此允许显式传入 bootstrap 结果。
@@ -999,6 +997,12 @@ function App() {
     let current = refreshedSession || session;
     if (!current) current = await create();
     if (!current || sendingRef.current.has(current.id)) return;
+    const submittedFileIds = materialIdsFor(current);
+    if (submittedFileIds.length > 10) {
+      setError("每轮最多选择 10 份材料，请先核对材料范围并取消多余选择；文件和输入已保留。");
+      setTab('materials'); setInspector(true);
+      return;
+    }
     const id = current.id;
     const submittedDraftKey = submissionContext?.key || draftContext.current.key;
     sendingRef.current.add(id);
@@ -1035,10 +1039,7 @@ function App() {
           ...(current.patientId ? { conversationParentRunId: current.id === session?.id && canFollowQuestion ? questionRunId : null } : {}),
           ...override,
           sessionRevision: current.revision,
-          fileIds: (
-            fileSelection[current.id] ||
-            current.files.map((f) => f.id)
-          ).filter((id) => current.files.some((f) => f.id === id)),
+          fileIds: submittedFileIds,
           requestId: crypto.randomUUID(),
         },
         (event) => {
@@ -1325,7 +1326,7 @@ function App() {
             : "") ||
           "",
       );
-      setInspector(options.tab === "results");
+      setInspector(options.tab === "results" || options.tab === "materials");
       if (options.artifactId) setAcceptId(options.artifactId);
       if (options.draft) {
         setNotice("已准备好任务要求。核对材料与问题后，点击发送开始；当前尚未执行。");
@@ -1615,6 +1616,7 @@ function App() {
               initialImport={patientRoute.import}
               onOpenWorkspace={(id, options = {}) => openTask(id, { newQuestion: !options.tab, ...options })}
               onSwitchCurrent={switchCurrentPatient}
+              onView={navigate}
               onChanged={refreshList}
             />
           ) : view === "literature" ? (
@@ -2132,6 +2134,10 @@ function App() {
                     {busy ? "正在处理当前问题，可补充要求。" : canFollowQuestion ? <>继续追问 · {session.messages.find(m => m.role === "user" && m.runId === [...questionIds].at(-1))?.content}</> : "新问题 · 使用患者档案与所选资料；以前的聊天不会自动带入。"}
                     {!busy && questionRunId && !canFollowQuestion && <span>这次问答未形成可追问的模型回答。再次发送会独立开始。</span>}
                   </div>}
+                  <section className="composer-materials" aria-label="本轮材料范围">
+                    {selectedFileIds.length ? <details><summary>本轮材料 · {selectedFileIds.length} 份</summary><ul>{selectedFileIds.map(id => <li key={id}>{session.files.find(file => file.id === id).name}</li>)}</ul></details> : <span>本轮未选择材料</span>}
+                    <button type="button" className="text-button" onClick={() => { setTab('materials'); setInspector(true); }}>核对材料范围</button>
+                  </section>
                   <form className="composer" onSubmit={send}>
                     <textarea
                       ref={inputRef}
@@ -2571,10 +2577,7 @@ function App() {
                                   {(file.size / 1024).toFixed(1)} KB ·{" "}
                                   {file.text.split("\n").length} 行
                                 </small>
-                                <MaterialDetails file={file} sessionId={activeId} />
-                                <p className="file-preview">
-                                  {file.extraction?.type === "image" ? "原图已保存。提问时可识别病历文字；模糊内容和数值请对照原图核对。" : file.text.replace(/\n\[PDF 第 \d+ 页扫描图\] artifactId:.*$/gm, "").slice(0, 110)}
-                                </p>
+                                <MaterialDetails file={file} sessionId={activeId} preview={file.extraction?.type === "image" ? "原图已保存。提问时可识别病历文字；模糊内容和数值请对照原图核对。" : file.text.replace(/\n\[PDF 第 \d+ 页扫描图\] artifactId:.*$/gm, "").slice(0, 110)} />
                               </div>
                             ))
                           )}

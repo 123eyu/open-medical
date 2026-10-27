@@ -15,6 +15,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const [draft, setDraft] = useState(() => normalize(detail));
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState(null);
   const inFlight = useRef(false);
   const searchVersion = useRef(0);
   useEffect(() => {
@@ -41,12 +42,22 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
     unit: "",
     date: "", source: "", note: "",
   });
-  const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "" });
+  const [newVisit, setNewVisit] = useClinicalDraft(detail.id, "visit", { date: "", reason: "", note: "", source: "" });
+  const [visitEdit, setVisitEdit] = useClinicalDraft(detail.id, "visitEdit", null);
+  const additions = {
+    diagnoses: Boolean(newDiagnosis.trim() || icdQuery.trim() || diagnosisMeta.date || diagnosisMeta.source),
+    medications: Boolean(newAllergy.trim() || newMed.name || newMed.dose || newMed.frequency || newMed.source),
+    labs: Object.values(newLab).some(Boolean),
+    visits: Object.values(newVisit).some(Boolean),
+  };
+  const hasAddition = section ? additions[section] : Object.values(additions).some(Boolean);
+  const feedback = text => setSaveFeedback({ patientId: detail.id, text });
 
   const patch = async (fields, intent = fields) => {
     if (inFlight.current) return false;
     inFlight.current = true;
     setSaving(true);
+    feedback("正在保存…");
     const signature = JSON.stringify(intent);
     const request = pendingMutation || { signature, body: { expectedRevision: detail.revision, ...fields, requestId: crypto.randomUUID() } };
     setPendingMutation(request);
@@ -54,13 +65,15 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       const saved = await api(`/api/patients/${detail.id}`, "PATCH", request.body);
       setPendingMutation(null);
       setDraft(normalize(saved));
-      try { await onChanged(); } catch (error) { onError?.(`记录已保存，但刷新失败：${error.message}。请刷新查看，勿重复添加。`); }
-      if (request.signature !== signature) { onError?.("先前保存已确认。当前新输入仍保留，请核对最新记录后再次保存。"); return false; }
+      feedback("记录已保存");
+      try { await onChanged(); } catch (error) { feedback("记录已保存，但刷新失败；请刷新查看，勿重复添加。"); onError?.(`记录已保存，但刷新失败：${error.message}。请刷新查看，勿重复添加。`); }
+      if (request.signature !== signature) { feedback("先前保存已确认；当前新输入尚未保存，请核对后再次保存。"); onError?.("先前保存已确认。当前新输入仍保留，请核对最新记录后再次保存。"); return false; }
       return true;
     } catch (err) {
       // A structured rejection proves this request did not commit. A lost
       // response is uncertain, so retry its exact body before another mutation.
       if (err.code) setPendingMutation(null);
+      feedback(err.code ? "本次修改尚未保存，输入已保留。" : "保存结果待确认，输入已保留；再次操作会先核对上次保存。");
       if (err.code === "REVISION_CONFLICT") {
         setConflict(true);
         onError?.("档案已被另一窗口更新。输入已保留，请载入最新记录后核对并重新添加。");
@@ -144,7 +157,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
   const addVisit = async () => {
     if (!newVisit.date || !newVisit.reason.trim()) return;
     if (!(await saveVisits([...draft.visits, { ...newVisit }], { visit: newVisit }))) return;
-    setNewVisit({ date: "", reason: "" });
+    setNewVisit({ date: "", reason: "", note: "", source: "" });
   };
   // 收进案例库：医生主动策展动作，点击即入库（精选标记），不再套一层确认。
   const [casePanel, setCasePanel] = useState(false);
@@ -179,6 +192,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
       className="detail-panel clinical-panel"
       aria-busy={saving}
     >
+      {saveFeedback?.patientId === detail.id && <p role="status">{saveFeedback.text}</p>}
+      {hasAddition && <p className="muted">新增输入尚未添加，请点击对应的添加按钮完成保存。</p>}
+      {visitEdit && <p className="muted">就诊更正尚未保存。</p>}
       {conflict && <section aria-label="临床记录版本核对"><p role="alert">档案版本已变化，尚未保存本次修改。新增输入已保留。</p><button type="button" onClick={async()=>{
         setSaving(true);
         try { await onChanged(); setConflict(false); onError?.(""); }
@@ -246,7 +262,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             onClick={() => addDiagnosis("", newDiagnosis)}
             disabled={!newDiagnosis.trim()}
           >
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加诊断
           </button>
           {icdResults.length > 0 && (
             <div className="icd-results">
@@ -296,7 +312,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             onClick={addAllergy}
             disabled={!newAllergy.trim()}
           >
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加过敏
           </button>
         </div>
       </section>}
@@ -362,7 +378,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
             onClick={addMedication}
             disabled={!newMed.name.trim()}
           >
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加用药
           </button>
         </div>
       </section>}
@@ -451,7 +467,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
               !newLab.item.trim() || !newLab.date || newLab.value === ""
             }
           >
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加检验
           </button>
         </div>
       </section>}
@@ -472,7 +488,9 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
                 <span>
                   {fmtDate(v.date)} · {v.reason}
                   {v.note ? ` · ${v.note}` : ""}
+                  {v.source && <small> · 来源：{v.source}</small>}
                 </span>
+                <button type="button" className="text-button" onClick={() => setVisitEdit({ index: realIndex, value: { ...v }, revision: detail.revision })}>更正就诊记录</button>
                 <button
                   className="icon-button"
                   title="移除"
@@ -487,6 +505,17 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           })}
           {!draft.visits.length && <li className="muted">未记录就诊。</li>}
         </ul>
+        {visitEdit && <form aria-label="更正就诊记录" onSubmit={async event => {
+          event.preventDefault();
+          if (!pendingMutation && visitEdit.revision !== detail.revision) { feedback("档案已变化，本次更正尚未保存；请取消更正后重新核对原记录。"); return; }
+          if (await saveVisits(draft.visits.map((visit, index) => index === visitEdit.index ? visitEdit.value : visit))) setVisitEdit(null);
+        }}>
+          <label>更正就诊日期<input type="date" required value={visitEdit.value.date || ''} onChange={event => setVisitEdit({ ...visitEdit, value: { ...visitEdit.value, date: event.target.value } })}/></label>
+          <label>更正就诊事由<input required maxLength={200} value={visitEdit.value.reason || ''} onChange={event => setVisitEdit({ ...visitEdit, value: { ...visitEdit.value, reason: event.target.value } })}/></label>
+          <label>更正就诊备注<textarea maxLength={500} rows={3} value={visitEdit.value.note || ''} onChange={event => setVisitEdit({ ...visitEdit, value: { ...visitEdit.value, note: event.target.value } })}/></label>
+          <label>更正就诊来源<input maxLength={200} value={visitEdit.value.source || ''} onChange={event => setVisitEdit({ ...visitEdit, value: { ...visitEdit.value, source: event.target.value } })}/></label>
+          <button type="button" onClick={() => setVisitEdit(null)}>取消就诊更正</button><button type="submit">保存就诊更正</button>
+        </form>}
         <div className="clinical-add clinical-add-med">
           <input
             type="date"
@@ -498,16 +527,20 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <input
             value={newVisit.reason}
             placeholder="就诊事由"
+            aria-label="就诊事由（必填）"
+            maxLength={200}
             onChange={(e) =>
               setNewVisit({ ...newVisit, reason: e.target.value })
             }
           />
+          <label>就诊备注（可选）<textarea rows={3} maxLength={500} placeholder="记录本次处理、观察与后续安排" value={newVisit.note || ''} onChange={event => setNewVisit({ ...newVisit, note: event.target.value })}/></label>
+          <label>就诊来源（可选）<input maxLength={200} placeholder="例如：本次复诊记录或原始资料名称" value={newVisit.source || ''} onChange={event => setNewVisit({ ...newVisit, source: event.target.value })}/></label>
           <button
             className="secondary"
             onClick={addVisit}
             disabled={!newVisit.date || !newVisit.reason.trim()}
           >
-            <Plus size={13} /> 添加
+            <Plus size={13} /> 添加就诊记录
           </button>
         </div>
       </section>}
@@ -526,7 +559,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
           <Share2 size={14} /> 脱敏分享 / 导出
         </button>
         <span className="muted">
-          已有记录的修改立即保存；新增内容须点击「添加」，切换栏目时暂存于本页，关闭或刷新前请完成添加。「脱敏分享」先预览打码结果再导出，文件不含姓名、电话与确切年龄。
+          状态选择与移除立即保存；新增记录和更正表单需点击相应的添加或保存按钮。未提交输入仅暂存于当前窗口，关闭或刷新前请完成保存。
         </span>
       </div>
       {casePanel && <div className="clinical-case-save">

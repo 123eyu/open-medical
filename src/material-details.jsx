@@ -36,7 +36,7 @@ export function materialQualityLevel(file) {
   return null;
 }
 
-export function MaterialDetails({ file, sessionId, visionSupported = null, onChanged, onError, initiallyOpen = false, onEditingChange }) {
+export function MaterialDetails({ file, sessionId, visionSupported = null, onChanged, onError, initiallyOpen = false, onEditingChange, preview }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [mode, setMode] = useState('compare');
   const [editing, setEditing] = useState(false);
@@ -53,7 +53,7 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
   }, [editing, busy, onEditingChange]);
   const e = file.extraction;
   // 纯文本材料（txt/md/csv/json）没有 extraction：保留原来的「查看文字内容」折叠块。
-  if (!e) return <details open={initiallyOpen || undefined}><summary>查看文字内容</summary><pre>{file.text || '暂无可读取文字'}</pre></details>;
+  if (!e) return <><details open={open} onToggle={event => setOpen(event.currentTarget.open)}><summary>查看文字内容</summary><pre>{file.text || '暂无可读取文字'}</pre></details>{!open && preview && <p className="file-preview">{preview}</p>}</>;
   const images = e.type === 'image' ? [{ artifactId: e.artifactId }] : e.pageImages || [];
   const label = e.type === 'image' ? '图片 · 已保存原图 · 可本地 OCR / 视觉读取'
     : e.type === 'text' ? '文本材料 · 已由医生修正'
@@ -152,8 +152,8 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
       {previous && <span className="ocr-badge plain">{previous}</span>}
       {edited && <span className="ocr-badge plain">{edited}</span>}
     </p>}
-    {images.length > 0 && <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary>查看{e.type === 'image' ? '原图' : '扫描页'}与识别文字对照</summary>
-      {open && <>
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary>{images.length ? `查看${e.type === 'image' ? '原图' : '扫描页'}与识别文字对照` : '查看文字内容'}</summary>
+      {open && (images.length === 0 ? <pre>{file.text || '暂无可读取文字'}</pre> : <>
         <div className="ocr-seg" role="tablist" aria-label="对照方式">
           <button className={mode === 'compare' ? 'active' : ''} onClick={() => setMode('compare')}>图文对照</button>
           <button className={mode === 'text' ? 'active' : ''} onClick={() => setMode('text')}>仅文字</button>
@@ -162,8 +162,9 @@ export function MaterialDetails({ file, sessionId, visionSupported = null, onCha
           {mode === 'compare' && compareBody}
           {mode === 'text' && <pre className="ocr-text-only">{displayText(cleanText(file.text)) || INDEX_PLACEHOLDER}</pre>}
         </>}
-      </>}
-    </details>}
+      </>)}
+    </details>
+    {!open && preview && <p className="file-preview">{preview}</p>}
     {canReprepare && visionSupported !== null && <div className="ocr-actions">
       {visionSupported
         ? <button className="secondary" disabled={busy} onClick={reprepare}>用识别模型重新识别并整理</button>

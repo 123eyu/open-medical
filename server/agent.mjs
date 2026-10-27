@@ -1557,6 +1557,7 @@ export function createServer(options = {}) {
         return send(res, 200, doctorOverview.read({
           kind: url.searchParams.get("kind") || "all", query: url.searchParams.get("q") || "",
           group: url.searchParams.get("group") || "",
+          patientId: url.searchParams.get("patientId") || "",
           offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 12),
         }));
       if (path === "/api/followup-plans" && req.method === "GET")

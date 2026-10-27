@@ -12,10 +12,11 @@ const TRIAL_STEP = { shortlisted: "联系患者，说明研究", contacted: "登
 // computed before pagination. A row never doubles as a "complete" action.
 export class DoctorOverview {
   constructor(store, sessions, { schedule, extensions, contactMatches, trialWork } = {}) { this.store = store; this.sessions = sessions; this.schedule = schedule; this.extensions = extensions; this.contactMatches = contactMatches; this.trialWork = trialWork; }
-  read({ kind = "all", query = "", group = "", offset = 0, limit = 12, now = Date.now() } = {}) {
+  read({ kind = "all", query = "", group = "", patientId = "", offset = 0, limit = 12, now = Date.now() } = {}) {
     check(AGENDA_KINDS.includes(kind), "INVALID_INPUT", "待办分类无效");
     check(typeof query === "string" && query.length <= 100, "INVALID_INPUT", "搜索词过长");
     check(typeof group === "string" && group.length <= 40, "INVALID_INPUT", "分组名过长");
+    check(typeof patientId === "string" && patientId.length <= 200, "INVALID_INPUT", "患者编号无效");
     check(Number.isSafeInteger(offset) && offset >= 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100,
       "INVALID_INPUT", "分页参数无效");
     const db = this.store.db;
@@ -24,12 +25,13 @@ export class DoctorOverview {
       const p = JSON.parse(row.data);
       return [row.id, { id: row.id, name: p.name, patientNumber: p.patientNumber || "", birthYear: p.birthYear, archived: p.archived, groups: p.groups || [] }];
     }));
+    check(!patientId || people.has(patientId), "NOT_FOUND", "患者不存在", 404);
     // 分组联动：分组待办只保留属于该分组在管患者的事项；与患者无关的
     // 通用事项（认领收件箱、工作台进化等）在筛选时隐藏。
     const groupMembers = group
       ? new Set([...people.values()].filter((p) => !p.archived && p.groups.includes(group)).map((p) => p.id))
       : null;
-    const inGroup = (item) => !groupMembers || (item.patientId && groupMembers.has(item.patientId));
+    const inGroup = (item) => (!patientId || item.patientId === patientId) && (!groupMembers || (item.patientId && groupMembers.has(item.patientId)));
     const rows = [], work = [];
     const place = (list) => (item) => {
       const patient = item.patientId ? people.get(item.patientId) : null;
@@ -171,6 +173,6 @@ export class DoctorOverview {
     const workItems = work.filter((item) => inGroup(item) && matchesQuery(item)).sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
     return { counts, total: filtered.length, offset, limit, hasMore: offset + limit < filtered.length,
       items: filtered.slice(offset, offset + limit), work: { total: workItems.length, items: workItems.slice(0, 30) },
-      generatedAt: now, patientCount: [...people.values()].filter((p) => !p.archived).length };
+      generatedAt: now, patientCount: [...people.values()].filter((p) => !p.archived && (!patientId || p.id === patientId)).length };
   }
 }

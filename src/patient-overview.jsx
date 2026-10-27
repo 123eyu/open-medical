@@ -9,6 +9,7 @@ import {
   groupDiagnoses,
 } from "../shared/diagnoses.mjs";
 import "./patient-overview.css";
+import { PatientAttention } from "./patient-attention";
 
 function OverviewLink({ children, onClick }) {
   return (
@@ -19,7 +20,7 @@ function OverviewLink({ children, onClick }) {
   );
 }
 
-export function PatientOverview({ patient, session, groups, onNavigate }) {
+export function PatientOverview({ patient, session, groups, onNavigate, onOpenWorkspace, onView }) {
   const diagnosisGroups = groupDiagnoses(patient.diagnoses);
   const diagnosisCount = diagnosisGroups.reduce((total, group) => total + group.items.length, 0);
   const visits = [...(patient.visits || [])].sort((a, b) =>
@@ -36,26 +37,10 @@ export function PatientOverview({ patient, session, groups, onNavigate }) {
   const medications = patient.medications || [];
   const activeMeds = medications.filter((m) => m.status === "active");
   const plan = patient.treatmentPlan;
-  const counts = patient.counts || {};
-  const pending = [
-    ["到期随访", counts.dueFollowups, "followups"],
-    ["未处理消息", counts.unprocessedMessages, "messages"],
-  ].filter(([, count]) => count > 0);
 
   return (
     <div className="patient-overview">
-      {pending.length > 0 && (
-        <aside className="overview-attention" aria-label="待处理事项">
-          <h3>需要处理</h3>
-          {pending.map(([label, count, tab]) => (
-            <button key={tab} onClick={() => onNavigate(tab)}>
-              <span>{label}</span>
-              <b>{count}</b>
-              <ArrowUpRight size={14} aria-hidden="true" />
-            </button>
-          ))}
-        </aside>
-      )}
+      <PatientAttention patient={patient} onNavigate={onNavigate} onOpenWorkspace={onOpenWorkspace} onView={onView} />
 
       <div className="patient-overview-grid">
         <section
@@ -146,7 +131,7 @@ export function PatientOverview({ patient, session, groups, onNavigate }) {
             {!plan && <p className="overview-meta">尚未建立治疗方案</p>}
           </div>
           <OverviewLink onClick={() => onNavigate("medications")}>
-            查看用药记录与预后
+            核对用药与资料来源
           </OverviewLink>
         </section>
 

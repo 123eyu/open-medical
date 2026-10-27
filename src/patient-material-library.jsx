@@ -280,11 +280,6 @@ export function PatientMaterialLibrary({
                 onError={onError}
                 onEditingChange={setEditing}
               />
-              {selected.extraction &&
-                !(
-                  selected.extraction.artifactId ||
-                  selected.extraction.pageImages?.length
-                ) && <pre>{selected.text || "暂无可读取文字"}</pre>}
             </article>
           )}
         </div>

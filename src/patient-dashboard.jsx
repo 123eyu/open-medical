@@ -40,7 +40,7 @@ function LabPlot({ group, compact = false }) {
     {dates.length > 1 ? <><text x="60" y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
   </svg></div>;
 }
-export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, view = "overview", focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
+export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
   const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
   useEffect(() => {
     if (editRequest?.patientId !== patient.id || editRequest?.tab !== view) return;
@@ -117,10 +117,10 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
   return <section className="patient-dashboard" aria-label="患者资料面板">
     <header className="chart-heading"><div><h2>{titles[view]}</h2><p>更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>
     {editing ? <ClinicalPanel detail={patient} section={view} onChanged={onChanged} onError={onError}/> : <>
-    {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical}/><HabitSuggestion key={patient.id} patientId={patient.id}/><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></>}
+    {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView}/><HabitSuggestion key={patient.id} patientId={patient.id}/><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></>}
     {view === 'diagnoses' && <PatientHistory patient={patient} files={files} onEdit={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged} citedFileName={citedFileName} onSummarize={()=>onOpenWorkspace(session.id, {draft: `请根据当前患者（ID：${patient.id}）已有档案及原始资料，重新整理并保存精简病史摘要，保留其他临床记录。${CLINICAL_SUMMARY_INSTRUCTION}`})}/>}
     <div>
-      {view === 'medications' && <TreatmentPanel patient={patient} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}
+      {view === 'medications' && <TreatmentPanel patient={patient} files={files} citedFileName={citedFileName} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}
     </div>
     {view === 'labs' && <section className="chart-section chart-labs" aria-label="检验资料与趋势"><div className="lab-reading-toolbar">
         <span className="muted">{groups.length} 项指标 · {patient.labs?.length || 0} 条记录</span>
@@ -189,9 +189,10 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
     </section>}
     <div>
       {view === 'visits' && <section id="chart-visits" className="chart-section" aria-label="就诊时间轴"><header><h3>就诊时间轴</h3><small>按资料中的日期排列</small></header>{visits.length ? <ol className="chart-timeline">{visitsSorted.map((v,i)=>{
-        const cited = citedFileName(v.note) || citedFileName(v.reason);
-        const target = cited && files.find(f => f.name.toLowerCase() === cited.toLowerCase());
-        return <li key={i}><time>{v.date || '日期未记录'}</time><h4>{v.reason}</h4>{v.note && <p>{v.note}</p>}{target && <button className="text-button" onClick={()=>onClinical('library', { focusFile: target.id })}>查看原文 {target.name}</button>}</li>;
+        const cited = citedFileName(v.source) || citedFileName(v.note) || citedFileName(v.reason) || v.source;
+        const matches = cited ? files.filter(f => f.name.toLowerCase() === cited.toLowerCase()) : [];
+        const target = matches.length === 1 ? matches[0] : null;
+        return <li key={i}><time>{v.date || '日期未记录'}</time><h4>{v.reason}</h4>{v.note && <p>{v.note}</p>}{v.source && <p className="muted">来源：{v.source}</p>}{target && <button className="text-button" onClick={()=>onClinical('library', { focusFile: target.id })}>查看原文 {target.name}</button>}{matches.length > 1 && <button className="text-button" onClick={()=>onClinical('library')}>同名资料有多份，到资料库核对</button>}</li>;
       })}</ol> : <p className="chart-empty">暂无就诊记录。</p>}</section>}
       {view === 'library' && <>{ocrNotice && <p role="status">{ocrNotice}</p>}{!!session.intakeIssues?.length && <div role="status"><b>以下资料未能导入</b>{session.intakeIssues.map((issue, i) => <p key={i}>{issue.name}：{issue.error || '读取失败'}</p>)}</div>}<PatientMaterialLibrary files={files} sessionId={session.id} focusFile={focusFile} visionSupported={visionSupported} onChanged={handleMaterialsChanged} onError={onError} onOpenWorkspace={onOpenWorkspace}/></>}
     </div>

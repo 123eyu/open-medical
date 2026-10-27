@@ -719,3 +719,9 @@
 .plan-conflict { border:1px solid var(--border); padding:16px; }
 .plan-conflict p { white-space:pre-wrap; overflow-wrap:anywhere; }
 .plan-conflict > div { border-bottom:1px solid var(--border); padding:10px 0; }
+
+.composer-materials { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:8px 2px; color:var(--muted); font-size:12px; }
+.composer-materials details { min-width:0; flex:1; }
+.composer-materials summary { cursor:pointer; }
+.composer-materials ul { padding-left:18px; margin:6px 0; max-height:160px; overflow:auto; overflow-wrap:anywhere; }
+.composer-materials > button { flex-shrink:0; }

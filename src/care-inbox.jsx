@@ -1,5 +1,5 @@
-import { messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
-import { useCallback, useEffect, useState } from "react";
+import { messageChannelLabel, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, Contact, Inbox, Loader2, MessageSquare, RefreshCw, Send, Settings2, Stethoscope, UserCog } from "lucide-react";
 import { api } from "./agent-runtime";
 import { Modal } from "./components";
@@ -23,13 +23,21 @@ function Empty({ children }) {
 
 const TAB_KEY = "omw-care-tab";
 // Lets the agenda open 患者消息 on a given tab.
-export function requestCareTab(tab) { try { sessionStorage.setItem(TAB_KEY, tab); } catch { /* storage unavailable */ } }
+export function requestCareTab(tab) { try { sessionStorage.setItem(TAB_KEY, typeof tab === "string" ? tab : JSON.stringify(tab)); } catch { /* storage unavailable */ } }
 function takeCareTab() {
-  try { const tab = sessionStorage.getItem(TAB_KEY); sessionStorage.removeItem(TAB_KEY); return TABS.some(([id]) => id === tab) ? tab : "alerts"; } catch { return "alerts"; }
+  try {
+    const raw = sessionStorage.getItem(TAB_KEY); sessionStorage.removeItem(TAB_KEY);
+    const intent = raw?.startsWith("{") ? JSON.parse(raw) : { tab: raw };
+    const tab = TABS.some(([id]) => id === intent.tab) ? intent.tab : "alerts";
+    return { tab, ...(["alerts", "drafts", "messages"].includes(tab) && typeof intent.patientId === "string" && intent.patientId ? { patientId: intent.patientId, patientName: intent.patientName } : {}) };
+  } catch { return { tab: "alerts" }; }
 }
 
 export function CareInbox({ onOpenPatient }) {
-  const [tab, setTab] = useState(takeCareTab);
+  const [intent] = useState(takeCareTab);
+  const [tab, setTab] = useState(intent.tab);
+  const [patientFilter, setPatientFilter] = useState(intent.patientId ? { id: intent.patientId, name: intent.patientName } : null);
+  const loadGeneration = useRef(0);
   const [overview, setOverview] = useState(null);
   const [data, setData] = useState({});
   const [error, setError] = useState("");
@@ -45,19 +53,22 @@ export function CareInbox({ onOpenPatient }) {
   useEffect(() => { loadSetup(); }, [loadSetup]);
 
   const load = useCallback(async () => {
+    const request = ++loadGeneration.current;
     const paths = { alerts: "/api/care/alerts?status=open", drafts: "/api/care/replies?status=draft", messages: "/api/care/inbox?limit=100", settings: "/api/care/settings" };
+    const path = paths[tab] && `${paths[tab]}${patientFilter && ["alerts", "drafts", "messages"].includes(tab) ? `&patientId=${encodeURIComponent(patientFilter.id)}` : ""}`;
     try {
-      const [ov, value] = await Promise.all([api("/api/care/overview"), paths[tab] ? api(paths[tab]) : null]);
+      const [ov, value] = await Promise.all([api("/api/care/overview"), path ? api(path) : null]);
+      if (request !== loadGeneration.current) return;
       setOverview(ov);
       if (value) setData((d) => ({ ...d, [tab]: value }));
       setError("");
-    } catch (e) { setError(e.message); }
-  }, [tab]);
+    } catch (e) { if (request === loadGeneration.current) setError(e.message); }
+  }, [tab, patientFilter]);
 
   useEffect(() => {
     load();
     const timer = setInterval(() => { if (document.visibilityState === "visible") load(); }, 15000);
-    return () => clearInterval(timer);
+    return () => { loadGeneration.current++; clearInterval(timer); };
   }, [load]);
 
   useEffect(() => {
@@ -73,9 +84,10 @@ export function CareInbox({ onOpenPatient }) {
   }
 
   const stats = overview?.stats || {};
-  const counts = { alerts: stats.openAlerts, drafts: stats.drafts, contacts: stats.contactMatches };
+  const counts = patientFilter ? {} : { alerts: stats.openAlerts, drafts: stats.drafts, contacts: stats.contactMatches };
   return <main id="main" className="work-directory care-inbox">
     <header className="directory-heading"><div><h1>患者消息</h1></div></header>
+    {patientFilter && <section className="care-notice" aria-label="患者筛选"><span>当前患者：{patientFilter.name || patientFilter.id}</span><button type="button" className="text-button" onClick={() => { loadGeneration.current++; setData({}); setError(""); setPatientFilter(null); }}>清除患者筛选</button></section>}
     {setup && !setup.essential && !setupLater && <section className="care-setup-banner" aria-label="企业微信接入">
       <div><strong>患者消息连接尚未就绪</strong>
         <span>可先导入聊天记录整理随访</span></div>
@@ -83,10 +95,10 @@ export function CareInbox({ onOpenPatient }) {
       <button type="button" className="secondary" onClick={() => { setSetupLater(true); try { sessionStorage.setItem("omw-care-setup-later", "1"); } catch { /* storage unavailable */ } }}>稍后</button>
     </section>}
     {setupOpen && <CareSetup onClose={() => { setSetupOpen(false); loadSetup(); load(); }} onChanged={loadSetup} />}
-    <section className="care-stats" aria-label="今日统计">
+    {!patientFilter && <section className="care-stats" aria-label="今日统计（全部患者）">
       {[["今日消息", stats.messagesToday], ["待处理", stats.pending], ["未处理提醒", stats.openAlerts, stats.urgentAlerts ? "urgent" : ""], ["今日自动回复", stats.autoRepliedToday], ["待发送草稿", stats.drafts], ["进行中随访", stats.activeCampaigns]].filter(([, value], index) => index < 3 || value > 0).map(([label, value, tone]) =>
         <div key={label} className={`care-stat ${tone || ""}`}><strong>{value ?? "—"}</strong><span>{label}</span></div>)}
-    </section>
+    </section>}
     {overview && <details className="care-channel-details"><summary>连接状态 · {MODES.find(([id]) => id === overview.settings?.autoReply?.mode)?.[1] || "未设置"}</summary><div className="care-channels">
       自动回复：<b>{MODES.find(([id]) => id === overview.settings?.autoReply?.mode)?.[1] || "未设置"}</b>
       {(overview.channels || []).map((c) => <span key={c.id} className={c.configured ? "ok" : ""}>{c.label}{c.configured ? (c.autoSend ? " · 可自动发送" : " · 需确认发送") : " · 未配置"}</span>)}
@@ -98,9 +110,9 @@ export function CareInbox({ onOpenPatient }) {
     {overview?.kfSync?.lastError && <p role="alert" className="care-error">微信客服拉取失败：{overview.kfSync.lastError}</p>}
     {overview?.processing && !overview.processing.enabled && <p role="status" className="care-notice">自动处理已暂停</p>}
     <nav className="care-tabs" aria-label="患者消息分类">
-      {TABS.map(([id, label, Icon]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}><Icon size={16} />{label}{counts[id] ? <em>{counts[id]}</em> : null}</button>)}
+      {TABS.map(([id, label, Icon]) => <button key={id} aria-pressed={tab === id} onClick={() => { if (id === tab) { load(); return; } loadGeneration.current++; setData({}); setError(""); setTab(id); if (["settings", "contacts"].includes(id)) setPatientFilter(null); }}><Icon size={16} />{label}{counts[id] ? <em>{counts[id]}</em> : null}</button>)}
     </nav>
-    {error && <p role="alert" className="care-error">{error}</p>}
+    {error && <p role="alert" className="care-error">{error}<button type="button" className="text-button" onClick={load}>重试</button></p>}
     {notice && <p role="status" className="care-notice">{notice}</p>}
     {!data[tab] && tab !== "contacts" && !error && <p role="status" className="care-loading"><Loader2 size={16} className="spin" />正在读取…</p>}
     {tab === "alerts" && data.alerts && <AlertList alerts={data.alerts.alerts || []} busy={busy} onOpenPatient={onOpenPatient}
@@ -157,7 +169,7 @@ function DraftCard({ reply, busy, onSave, onSend, onDiscard, onOpenPatient }) {
   const [text, setText] = useState(reply.text || "");
   const dirty = text !== reply.text;
   return <li className="care-card">
-    <header><PatientLink id={reply.patientId} name={reply.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{reply.mode === "campaign" ? "随访" : "回复"} · {reply.channel || "默认渠道"}</span><time>{fmt(reply.createdAt)}</time></header>
+    <header><PatientLink id={reply.patientId} name={reply.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{reply.mode === "campaign" ? "随访" : "回复"} · {reply.channel === "manual" ? "人工发送" : messageChannelLabel(reply.channel)}</span><time>{fmt(reply.createdAt)}</time></header>
     {reply.reason && <p className="care-reason">{reply.reason}</p>}
     <textarea aria-label="回复内容" rows={Math.min(10, Math.max(3, text.split("\n").length + 1))} value={text} onChange={(e) => setText(e.target.value)} />
     {reply.sources?.length > 0 && <p className="care-sources">依据：{reply.sources.map((s) => <span key={s.id}>{s.title || s.id}</span>)}</p>}
@@ -186,11 +198,12 @@ function MessageList({ messages, patients, busy, onProcess, onMark, onAssign, on
   return <ul className="care-list compact">{messages.map((m) => {
     const s = m.state || {};
     return <li key={m.id} className={`care-card level-${s.level || "routine"}`}>
-      <header><PatientLink id={m.patientId} name={m.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{m.direction === "out" ? "发出" : "收到"} · {messageSpeakerLabel(m)} · {m.channel}</span>
+      <header><PatientLink id={m.patientId} name={m.patientName} onOpenPatient={onOpenPatient} /><span className="care-tag">{m.direction === "out" ? "发出" : "收到"} · {messageSpeakerLabel(m)} · {messageChannelLabel(m.channel)}</span>
         {s.level && s.level !== "routine" && <span className={`care-level ${s.level}`}>{LEVEL[s.level]}</span>}
         {s.category && <span className="care-tag">{CATEGORY[s.category] || s.category}</span>}
         <span className="care-status">{STATUS[s.status] || s.status || "—"}</span><time>{m.timeUnknown ? messageTimeLabel(m) : fmt(m.time)}</time></header>
       <p className="care-text">{m.text}</p>
+      {messageSpeakerLabel(m) === "身份待核对" && <p className="care-hint">原记录未核实说话人。</p>}
       {m.attachments?.length > 0 && <p className="care-sources">附件：{m.attachments.map((f, i) => <span key={i}>{f.name || f.type}</span>)}</p>}
       {s.reasons?.length > 0 && <p className="care-hint">{s.reasons.join("；")}</p>}
       {m.direction !== "out" && <footer>

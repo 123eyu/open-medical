@@ -10,7 +10,7 @@ const medicationStates = { active: '正在使用', unknown: '未记录状态', s
 const planStates = { active: '进行中', paused: '已暂停', completed: '已完成' };
 const emptyPlan = { title: '', goal: '', interventions: '', startDate: '', reviewDate: '', status: 'active', prognosis: '', assessmentDate: '', source: '' };
 
-export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNavigate, onChanged }) {
+export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNavigate, onChanged, files = [], citedFileName = () => null }) {
   const plan = patient.treatmentPlan;
   const interventions = (plan?.interventions || '').split('\n').filter(line => line.trim());
   const [editor, setEditor] = useClinicalDraft(patient.id, "treatmentPlan", null);
@@ -23,6 +23,10 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
   const [filter, setFilter] = useState(() => patient.medications?.some(m => m.status === 'active') ? 'active' : 'all');
   const [metric, setMetric] = useState('');
   const meds = patient.medications || [];
+  const sourceFiles = source => {
+    const name = citedFileName(source) || source;
+    return files.filter(file => file.name.toLocaleLowerCase() === String(name).trim().toLocaleLowerCase());
+  };
   const allergies = patient.allergies || [];
   const counts = Object.fromEntries(Object.keys(medicationStates).map(state => [state, meds.filter(m => (m.status || 'unknown') === state).length]));
   const visibleMeds = meds.filter(m => filter === 'all' || (m.status || 'unknown') === filter);
@@ -101,7 +105,7 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
         <section className="treatment-card" aria-label="用药管理">
           <header><div><h3>用药管理 <small>{meds.length} 种记录</small></h3></div><button className="text-button" onClick={onEditMedications}>管理用药 <ArrowUpRight size={15}/></button></header>
           <div className="treatment-filters" aria-label="筛选用药状态">{[['active',`正在使用 ${counts.active}`],['unknown',`未记录状态 ${counts.unknown}`],['stopped',`已停用 ${counts.stopped}`],['all','全部']].map(([id,label])=><button key={id} aria-pressed={filter===id} className={filter===id?'selected':''} onClick={()=>setFilter(id)}>{label}</button>)}</div>
-          {visibleMeds.length ? <ul className="treatment-medications">{visibleMeds.map((med,i)=><li key={i}><div className="treatment-pill-icon"><Pill size={19}/></div><div className="treatment-med-content"><div className="treatment-med-name"><h4>{med.name}</h4><span className={`treatment-med-state ${med.status || 'unknown'}`}>{medicationStates[med.status] || medicationStates.unknown}</span></div><dl><div><dt>剂量</dt><dd>{med.dose || '未记录'}</dd></div><div><dt>频次 / 用法</dt><dd>{med.frequency || '未记录'}</dd></div></dl>{med.note && <p>{med.note}</p>}{(med.source || med.sources?.length) && <details className="treatment-provenance"><summary>资料来源</summary><p>{diagnosisSources(med).join('；')}</p></details>}</div></li>)}</ul> : <div className="treatment-empty compact"><Pill size={25}/><p>{meds.length ? `暂无「${medicationStates[filter] || '全部'}」用药记录` : '尚无用药记录。'}</p><button className="text-button" onClick={onEditMedications}>添加用药</button></div>}
+          {visibleMeds.length ? <ul className="treatment-medications">{visibleMeds.map((med,i)=><li key={i}><div className="treatment-pill-icon"><Pill size={19}/></div><div className="treatment-med-content"><div className="treatment-med-name"><h4>{med.name}</h4><span className={`treatment-med-state ${med.status || 'unknown'}`}>{medicationStates[med.status] || medicationStates.unknown}</span></div><dl><div><dt>剂量</dt><dd>{med.dose || '未记录'}</dd></div><div><dt>频次 / 用法</dt><dd>{med.frequency || '未记录'}</dd></div></dl>{med.note && <p>{med.note}</p>}{diagnosisSources(med).length ? <details className="treatment-provenance"><summary>资料来源</summary>{diagnosisSources(med).map(source=><p key={source}>{source}{sourceFiles(source).length === 1 && <button className="text-button" onClick={()=>onNavigate('library', {focusFile:sourceFiles(source)[0].id})}>查看原始资料</button>}{sourceFiles(source).length > 1 && <button className="text-button" onClick={()=>onNavigate('library')}>同名资料有多份，到资料库核对</button>}</p>)}</details> : <p className="treatment-muted">用药来源未记录</p>}</div></li>)}</ul> : <div className="treatment-empty compact"><Pill size={25}/><p>{meds.length ? `暂无「${medicationStates[filter] || '全部'}」用药记录` : '尚无用药记录。'}</p><button className="text-button" onClick={onEditMedications}>添加用药</button></div>}
           <footer className="treatment-med-footer"><span>服药执行情况需通过随访核对</span><button className="text-button" onClick={()=>onNavigate('followups')}>安排用药随访 <ArrowUpRight size={14}/></button></footer>
         </section>
       </div>

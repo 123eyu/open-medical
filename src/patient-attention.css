@@ -1,0 +1,6 @@
+.patient-attention { margin-bottom: 20px; }
+.patient-attention .agenda-item { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 12px 0; }
+.patient-attention .agenda-content, .patient-attention .agenda-action { grid-column: auto; }
+.patient-attention .agenda-content b, .patient-attention .agenda-content small { white-space: normal; overflow-wrap: anywhere; }
+.patient-attention .agenda-action { max-width: 140px; }
+.patient-attention > p { padding: 0 4px; }

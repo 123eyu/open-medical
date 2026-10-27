@@ -38,6 +38,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
   const latest = datedHistory[0];
   const counts = Object.fromEntries(Object.keys(DIAGNOSIS_STATUS_LABELS).map(status => [status, groups.find(g => g.status === status)?.items.length || 0]));
   const total = clinicalGroups.reduce((sum,g)=>sum+g.items.length,0);
+  const hasRecords = Boolean(summary?.text || patient.note || files.length || ['diagnoses','medications','labs','visits'].some(key => patient[key]?.length));
   const otherDiagnosisSummary = [
     uncertain.length && `待核对 ${uncertain.length} 项`,
     findings.length && `影像与检验发现 ${findings.length} 项`,
@@ -48,7 +49,8 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
   const matches = clinicalGroups.filter(g => filter === 'all' || filter === g.status).map(g=>({...g,items:g.items.filter(d=>[d.name,d.code,d.note,...diagnosisSources(d)].filter(Boolean).join(' ').toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))})).filter(g=>g.items.length);
   const sourceLink = (source, navigate = false) => {
     const name = citedFileName(source);
-    const file = name && files.find(f=>f.name === name);
+    const matches = name ? files.filter(f=>f.name === name) : [];
+    const file = matches.length === 1 ? matches[0] : null;
     if (file && navigate) onNavigate('library', { focusFile: file.id });
     return !!file;
   };
@@ -73,6 +75,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
 
     <div className="history-layout">
       <div className="history-main">
+        {!hasRecords && <section className="history-card" aria-label="开始临床记录"><h3>从本次就诊开始</h3><p>先登记诊断或就诊经过，也可添加原始资料，之后再整理病史摘要。</p><button className="primary" disabled={patient.archived} onClick={onEdit}>添加诊断记录</button><button className="text-button" onClick={()=>onNavigate('visits', {edit:true})}>记录本次就诊</button><button className="text-button" onClick={()=>onNavigate('library')}>添加原始资料</button></section>}
         <section className="history-card history-summary" aria-label="病史摘要">
           <header><div><h3>病史摘要</h3></div><button className="text-button" disabled={patient.archived || busy} onClick={editSummary}><Pencil size={14}/>{summary?.text ? '编辑摘要' : '补充摘要'}</button></header>
           {editor ? <form onSubmit={saveSummary} aria-label="编辑病史摘要"><fieldset disabled={busy}>
@@ -96,7 +99,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
             </section>}
             <footer><button type="button" className="secondary" onClick={()=>{setEditor(null);setConflict(null);}}>取消</button><button type="submit" disabled={!!conflict || SUMMARY_FIELDS.some(([key])=>!editor[key].trim()) || !editor.source.trim()}>{busy ? '正在保存…' : '保存摘要'}</button></footer>
           </fieldset></form> : <>
-            {concise ? <dl className="history-snapshot">{SUMMARY_FIELDS.map(([key,label])=><div key={key}><dt>{label}</dt><dd className="clinical-summary-text">{concise[key]}</dd></div>)}</dl> : <>
+            {concise ? <dl className="history-snapshot">{SUMMARY_FIELDS.map(([key,label])=><div key={key}><dt>{label}</dt><dd className="clinical-summary-text">{concise[key]}</dd></div>)}</dl> : !hasRecords ? <p className="history-muted">也可直接补充本次问诊摘要，并记录来源。</p> : <>
               <dl className="history-snapshot">
                 <div><dt>最近记录</dt><dd>{latest ? <>{latest.date} · {latest.reason}</> : '尚无已注明日期的就诊记录'}</dd></div>
                 <div><dt>诊断概况</dt><dd>{clinicalGroups.flatMap(g=>g.items).slice(0,3).map(d=><span className="history-snapshot-item" key={d.name}>{d.name} · {DIAGNOSIS_STATUS_SHORT[groups.find(g=>g.items.includes(d)).status]}</span>)}{!total && diagnosisEmptyText}{total>3 && <small>另有 {total-3} 项，见下方诊断列表</small>}</dd></div>
@@ -106,17 +109,17 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
             </>}
             {concise && <RecordSource sources={summary.source?[summary.source]:[]} onSource={sourceLink}/>}
             {summary?.text && !concise && <details className="history-original"><summary>查看既有病史记录与来源</summary><div className="history-summary-copy">{paragraphs(summary.text).map((p,i)=><p key={i}>{p}</p>)}</div><RecordSource sources={summary.source?[summary.source]:[]} onSource={sourceLink}/></details>}
-            <button className="text-button history-expand" disabled={patient.archived || !onSummarize} onClick={onSummarize}>整理精简摘要 <ArrowUpRight size={14}/></button>
+            {hasRecords && <button className="text-button history-expand" disabled={patient.archived || !onSummarize} onClick={onSummarize}>准备摘要整理草稿 <ArrowUpRight size={14}/></button>}
           </>}
 
         </section>
-        <section className="history-card history-problems" aria-label="诊断列表">
+        {hasRecords && <section className="history-card history-problems" aria-label="诊断列表">
           <header><div><h3>确诊与疑似诊断 <small>{total} 项记录</small></h3></div><button className="text-button" onClick={onEdit}>编辑诊断 <ArrowUpRight size={14}/></button></header>
           <nav className="history-status-nav" aria-label="诊断分类">{[['all','全部诊断',total],...['confirmed','suspected'].map(id=>[id,DIAGNOSIS_STATUS_SHORT[id],counts[id]])].map(([id,label,count])=><button key={id} className={filter===id?'selected':''} aria-pressed={filter===id} onClick={()=>setFilter(id)}><span>{label}</span><strong>{count}<small>项</small></strong></button>)}</nav>
           <label className="history-search"><Search size={17}/><input type="search" aria-label="搜索诊断与病史记录" placeholder="搜索诊断、ICD 编码或备注" value={query} onChange={e=>setQuery(e.target.value)}/></label>
           <div className="history-filter-caption"><span>{filter==='all'?'全部分类':DIAGNOSIS_STATUS_LABELS[filter]} · {matches.reduce((sum,g)=>sum+g.items.length,0)} 项</span>{(filter!=='all' || query) && <button className="text-button" onClick={()=>{setFilter('all');setQuery('');}}>清除筛选</button>}</div>
           {matches.length ? matches.map(group=><div className={`history-diagnosis-group ${group.status}`} key={group.status}><h4><span/>{group.label}<small>{group.items.length}</small></h4><ul>{group.items.map((d,i)=><li key={`${d.name}-${i}`}><div className="history-diagnosis-title"><h5>{d.name}</h5><span className={`history-diagnosis-badge ${group.status}`}>{DIAGNOSIS_STATUS_SHORT[group.status]}</span></div><div className="history-diagnosis-meta">{d.code && <span>ICD · {d.code}</span>}<span>{d.date ? `记录日期 · ${d.date}` : '日期未记录'}</span></div>{d.note && <p className="history-diagnosis-note">{d.note}</p>}<RecordSource sources={diagnosisSources(d)} onSource={sourceLink}/></li>)}</ul></div>) : <div className="history-empty compact"><Stethoscope size={26}/><p>{total ? '没有符合条件的诊断记录' : diagnosisEmptyText}</p>{!total && <button className="text-button" onClick={onEdit}>添加诊断记录 <ArrowUpRight size={14}/></button>}</div>}
-        </section>
+        </section>}
       </div>
       <aside className="history-aside">
         {patient.note && <section className="history-card" aria-label="资料备注"><header><h3>资料备注</h3></header><p className="clinical-summary-text">{patient.note}</p></section>}

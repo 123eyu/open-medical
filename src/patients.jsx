@@ -1,5 +1,6 @@
 import { useClinicalDraft } from "./clinical-drafts";
 import { parsePastedMessages } from "../shared/message-import.mjs";
+import { messageChannelLabel, messageSpeakerLabel } from "../shared/message-provenance.mjs";
 import { CampaignPanel } from "./care-inbox";
 import { ChatFollowupsPanel } from "./chat-followups";
 import { WeComPanel } from "./wecom-panel";
@@ -82,6 +83,7 @@ export { parsePastedMessages };
 export function PatientsView({
   config,
   onOpenWorkspace,
+  onView,
   onSwitchCurrent,
   onChanged,
   onLocationChange,
@@ -502,7 +504,7 @@ export function PatientsView({
                 <div className="todo-row" key={m.id}>
                   <span>
                     <small>
-                      {m.channel} · {fmtDate(m.time)}
+                      {messageChannelLabel(m.channel)} · {fmtDate(m.time)}
                       {m.patientHint ? ` · 线索：${m.patientHint}` : ""}
                     </small>
                     {m.text.slice(0, 80)}
@@ -642,12 +644,12 @@ export function PatientsView({
             <button className={["messages", "followups", "tracking", "appointments"].includes(tab) ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
           </nav>
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
-            {(isRecordTab(tab) ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 未处理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
+            {(isRecordTab(tab) ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
           </nav>}
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} onChanged={onChanged} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace}/></div>}
+          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
           {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "overview" && (
             <div className="detail-panel">
@@ -770,9 +772,9 @@ export function PatientsView({
                 </button>
                 <small className="muted">
                   {detail.counts.unprocessedMessages
-                    ? `现有 ${detail.counts.unprocessedMessages} 条未处理消息。`
-                    : "暂无未处理消息。"}{" "}
-                  总结完成后，结果保存在问诊工作区，消息标记为已处理。
+                    ? `现有 ${detail.counts.unprocessedMessages} 条待整理消息。`
+                    : "暂无待整理消息。"}{" "}
+                  总结保存在任务记录，仅将本次摘要包含的消息标记为已整理。整理不等于已回复或已完成联系；回复草稿单独核对。
                 </small>
               </div>
               <ChatFollowupsPanel key={detail.id} patients={[detail]} initialPatientId={detail.id} />
@@ -799,16 +801,17 @@ export function PatientsView({
                 {messages.map((m) => (
                   <div className="msg-row" key={m.id}>
                     <span className={`msg-dir ${m.direction}`}>
-                      {{ patient: "患者", doctor: "医生", family: "家属", unknown: "身份待核对" }[m.speaker] || (m.direction === "in" ? "患" : "医")}
+                      {messageSpeakerLabel(m)}
                     </span>
                     <span>
                       {m.text}
                       <small>
-                        {m.timeUnknown ? `时间待核对（原文：${m.rawTime || "未提供"}；导入于 ${fmtDate(m.collectedAt)}）` : fmtDate(m.time)} · {m.channel}
+                        {m.timeUnknown ? `时间待核对（原文：${m.rawTime || "未提供"}；导入于 ${fmtDate(m.collectedAt)}）` : fmtDate(m.time)} · {messageChannelLabel(m.channel)}
                         {m.processed ? " · 已整理" : ""}
+                        {messageSpeakerLabel(m) === "身份待核对" ? " · 原记录未核实说话人" : ""}
                       </small>
                     </span>
-                    {!m.processed && <em className="pill warn">未处理</em>}
+                    {!m.processed && <em className="pill warn">待整理</em>}
                   </div>
                 ))}
                 {!messages.length && (
@@ -1265,7 +1268,7 @@ function FollowupModal({ patientId, job, onClose, onCreated }) {
               checked={form.externalConsent}
               onChange={set("externalConsent")}
             />
-            授权本计划到期时，自动把该患者未处理的消息原文发送给当前模型服务生成摘要（仅本次随访计划生效）
+            授权本计划到期时，自动把该患者待整理的消息原文发送给当前模型服务生成摘要（仅本次随访计划生效）
           </label>
         )}
         {!editing && (
