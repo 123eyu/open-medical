@@ -16,6 +16,7 @@ import { diffLines } from "diff";
 import { hasCurrentArtifactReview } from "../shared/artifact-review-display.mjs";
 import { eventDateWarnings } from "../shared/timeline-display.mjs";
 import { diagnosisStatus, DIAGNOSIS_STATUS_SHORT } from "../shared/diagnoses.mjs";
+import { recentLabs } from "../shared/recent-labs.mjs";
 
 /* ---------- 工具名中文名（医疗 + 通用） ---------- */
 const TOOL_NAMES = {
@@ -307,7 +308,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
 }
 
 /* ---------- 患者速览卡 ---------- */
-export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onOpenWorkspace, compact }) {
+export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onOpenWorkspace, onOpenLabs, compact }) {
   if (!patient && !detail) return null;
   const p = detail || patient;
   const allergies = (p.allergies || []).map((a) => (typeof a === "string" ? a : a.substance || a.name || "")).filter(Boolean);
@@ -316,6 +317,8 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
     return name ? `${name}（${DIAGNOSIS_STATUS_SHORT[diagnosisStatus(typeof d === "string" ? d : { ...d, name })]}）` : "";
   }).filter(Boolean);
   const meds = p.medications || [];
+  const labs = p.labs || [];
+  const displayedLabs = recentLabs(labs);
   const counts = p.counts || {};
   return (
     <div className={`patient-summary ${compact ? "compact" : ""}`}>
@@ -350,17 +353,19 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
           )}
         </div>
         <div className="ps-col">
-          <h5>最近录入检验</h5>
-          {(p.labs || []).length ? (
-            (p.labs || []).slice(-3).reverse().map((l, i) => (
+          <h5>最近检验</h5>
+          <span className="ps-empty">已展示 {displayedLabs.length} / 共 {labs.length} 条</span>
+          {labs.length ? (
+            displayedLabs.map((l, i) => (
               <div className="vital" key={i}>
                 <div className="row1"><b>{l.value}</b><span className="u">{l.item}{l.unit ? ` · ${l.unit}` : ""}</span></div>
-                <div className="row2"><span className="d">{l.date || ""}</span></div>
+                <div className="row2"><span className="d">{l.date || "日期未记录"}</span></div>
               </div>
             ))
           ) : (
             <span className="ps-empty">暂无检验记录</span>
           )}
+          {onOpenLabs && <button type="button" className="text-button" onClick={onOpenLabs}>查看全部检验</button>}
         </div>
         <div className="ps-col">
           <h5>待办与成果</h5>

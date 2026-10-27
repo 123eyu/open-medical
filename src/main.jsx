@@ -1842,6 +1842,7 @@ function App() {
                         onOpenDetail={() =>
                           openPatient({ id: session.patientId })
                         }
+                        onOpenLabs={() => openPatient({ id: session.patientId, tab: "labs" })}
                       />
                     )}
                     {(!session?.messages.length || (session?.patientId && !questionRunId && !busy)) && (
@@ -2096,6 +2097,7 @@ function App() {
                             patient={p}
                             compact
                             onOpenDetail={() => openPatient({ id: p.id })}
+                            onOpenLabs={() => openPatient({ id: p.id, tab: "labs" })}
                           />
                         ))}
                       </div>
