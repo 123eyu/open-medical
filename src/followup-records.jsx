@@ -1,5 +1,5 @@
 import { followupDate } from "../shared/followup-display.mjs";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { patientOptionLabel } from "./patient-labels";
 import { useClinicalDraft } from "./clinical-drafts";
 import { api } from "./agent-runtime";
@@ -10,6 +10,8 @@ const outcomeLabels = {
   declined: "患者暂不接受",
 };
 const date = followupDate;
+const contactForm = (record = {}) => ({ requestId: crypto.randomUUID(), title: "主动联系记录", contactedAt: "", status: record.attempt ? "" : "completed", note: "", contactMethod: "unspecified", clinical: { symptoms: "", medications: "", results: "", plan: "" }, checkedItems: [], nextDueAt: "", nextName: "后续随访", noRetryReason: "" });
+const hasContactInput = form => [form.note, form.contactedAt, form.nextDueAt, form.noRetryReason, ...Object.values(form.clinical || {})].some(value => String(value || "").trim()) || form.checkedItems?.length || (form.title && form.title !== "主动联系记录") || (form.contactMethod && form.contactMethod !== "unspecified") || (form.status && form.status !== "completed");
 
 // A reminder firing is a scheduling event. A clinical follow-up is only
 // recorded when the doctor submits its outcome, checklist and notes.
@@ -25,7 +27,8 @@ export function FollowupRecords({
   const [savedSurveyTarget, setSavedSurveyTarget] = useState(null);
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  const [contactPatients, setContactPatients] = useState([]);
+  const [contactPatients, setContactPatients] = useState(null);
+  const [contactsLoading, setContactsLoading] = useState(false), [contactError, setContactError] = useState("");
   const [records, setRecords] = useState(null);
   const [query, setQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
@@ -41,6 +44,17 @@ export function FollowupRecords({
   const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const loadContacts = useCallback(async () => {
+    setContactsLoading(true); setContactError("");
+    try {
+      const value = await api("/api/patients?summary=1");
+      if (mounted.current) setContactPatients(value.patients.filter(patient => !patient.archived));
+    } catch (err) { if (mounted.current) setContactError(`联系患者列表读取失败：${err.message}`); }
+    finally { if (mounted.current) setContactsLoading(false); }
+  }, []);
+  const globalContact = Boolean(editing?.manual && !patientId);
+  useEffect(() => { if (globalContact) loadContacts(); }, [globalContact, loadContacts]);
+  const contactAvailable = !globalContact || (!contactsLoading && !contactError && contactPatients?.some(patient => patient.id === editing.patientId));
   const refresh = async () => {
     const request = ++generation.current;
     const value = await api(
@@ -93,7 +107,7 @@ export function FollowupRecords({
   };
   const save = async (event) => {
     event.preventDefault();
-    if (inFlight.current) return;
+    if (inFlight.current || !contactAvailable) return;
     inFlight.current = true;
     setBusy(true);
     setError("");
@@ -143,19 +157,7 @@ export function FollowupRecords({
     setEditing(record);
     setNotice("");
     setError("");
-    setForm({
-      requestId: crypto.randomUUID(),
-      title: "主动联系记录",
-      contactedAt: "",
-      status: record.attempt ? "" : "completed",
-      note: "",
-      contactMethod: "unspecified",
-      clinical: { symptoms: "", medications: "", results: "", plan: "" },
-      checkedItems: [],
-      nextDueAt: "",
-      nextName: "后续随访",
-      noRetryReason: "",
-    });
+    setForm(contactForm(record));
   };
   return (
     <section className="followup-records" aria-label="随访结果登记">
@@ -164,16 +166,7 @@ export function FollowupRecords({
         <button
           className="secondary"
           disabled={busy || Boolean(editing) || Boolean(addendum)}
-          onClick={async () => {
-            if (!patientId) {
-              try {
-                const data = await api("/api/patients?summary=1");
-                setContactPatients(data.patients.filter((p) => !p.archived));
-              } catch (e) {
-                setError(e.message);
-                return;
-              }
-            }
+          onClick={() => {
             begin({
               manual: true,
               patientId: patientId || "",
@@ -489,24 +482,32 @@ export function FollowupRecords({
                 <select
                   required
                   aria-label="联系的患者"
+                  disabled={contactsLoading || Boolean(contactError)}
                   value={editing.patientId}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    if (e.target.value === editing.patientId) return;
+                    if (editing.patientId && hasContactInput(form) && !window.confirm("更换患者会清空本次未保存的联系内容。确认更换患者？")) return;
+                    setForm(editing.patientId ? contactForm() : { ...form, requestId: crypto.randomUUID() });
                     setEditing({
                       ...editing,
                       patientId: e.target.value,
                       patientName:
-                        contactPatients.find((p) => p.id === e.target.value)
+                        contactPatients?.find((p) => p.id === e.target.value)
                           ?.name || "选择患者",
-                    })
-                  }
+                    });
+                  }}
                 >
                   <option value="">请选择患者</option>
-                  {contactPatients.map((p) => (
+                  {editing.patientId && !contactPatients?.some(patient => patient.id === editing.patientId) && <option value={editing.patientId}>{editing.patientName} · 待核对档案</option>}
+                  {(contactPatients || []).map((p) => (
                     <option value={p.id} key={p.id}>
                       {patientOptionLabel(p, contactPatients)}
                     </option>
                   ))}
                 </select>
+                {contactsLoading && <span role="status">正在读取可联系的患者…</span>}
+                {contactError && <span role="alert">{contactError}<button type="button" onClick={loadContacts}>重试读取患者</button></span>}
+                {!contactsLoading && !contactError && editing.patientId && !contactAvailable && <span role="alert">草稿患者不在当前在管列表中，请核对患者档案或更换患者。</span>}
               </label>
             )}
             {editing.manual && (
@@ -622,6 +623,7 @@ export function FollowupRecords({
               随访记录
               <textarea
                 autoFocus
+                aria-label="随访记录"
                 required
                 maxLength={5000}
                 rows={4}
@@ -658,7 +660,7 @@ export function FollowupRecords({
               </label>
             )}
             <div className="toolbar-actions">
-              <button className="primary" type="submit" disabled={!form.note.trim()}>
+              <button className="primary" type="submit" disabled={!form.note.trim() || !contactAvailable}>
                 {busy ? "保存中…" : "保存随访结果"}
               </button>
               <button
