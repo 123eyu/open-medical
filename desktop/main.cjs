@@ -74,7 +74,16 @@ let runtime,
   window,
   tray,
   origin,
-  quitting = false;
+  quitting = false,
+  relaunchRequested = false,
+  shuttingDown = false,
+  shutdownComplete = false;
+
+function requestRelaunch() {
+  if (quitting) return;
+  relaunchRequested = true;
+  app.quit();
+}
 
 function openWindow() {
   // Windows 上隐藏系统标题栏和菜单条，改用页面顶栏作为标题栏（可拖拽），
@@ -132,6 +141,18 @@ function openWindow() {
   window.webContents.on("will-attach-webview", (event) =>
     event.preventDefault(),
   );
+  window.webContents.on("will-prevent-unload", (event) => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: "question",
+      buttons: ["继续编辑", quitting ? relaunchRequested ? "放弃并重启" : "放弃并退出" : "放弃并继续"],
+      defaultId: 0,
+      cancelId: 0,
+      message: "有尚未保存的内容",
+      detail: "关闭、刷新或重启后，未保存的内容将丢失。",
+    });
+    if (choice === 1) event.preventDefault();
+    else { quitting = false; relaunchRequested = false; }
+  });
   // Windows/Linux 去掉应用菜单后，刷新与开发者工具的原生快捷键随菜单消失，
   // 这里手动补上；macOS 保留系统菜单栏，由菜单角色负责，不重复注册。
   if (process.platform !== "darwin")
@@ -458,11 +479,9 @@ async function start() {
     });
     return app.getLoginItemSettings().openAtLogin;
   });
-  ipcMain.handle("omw:relaunch", () => {
-    app.relaunch();
-    app.quit();
-  });
+  ipcMain.handle("omw:relaunch", requestRelaunch);
   const showWorkspace = () => {
+    if (quitting) return;
     if (window) {
       window.show();
       window.focus();
@@ -484,7 +503,7 @@ async function start() {
     notification.show();
     return true;
   });
-  // The app hosts its own runtime; before-quit shuts it down. The generic
+  // The app hosts its own runtime; will-quit shuts it down after edits are resolved. The generic
   // daemon (platform.mjs), if running, is independent and stays untouched.
   const stopDaemonAndQuit = async () => {
     await app.quit();
@@ -569,10 +588,7 @@ async function start() {
             { label: "打开配置目录", click: () => shell.openPath(dataDirectory) },
             {
               label: "重启以应用配置",
-              click: () => {
-                app.relaunch();
-                app.quit();
-              },
+              click: requestRelaunch,
             },
             { type: "separator" },
             { role: "reload", label: "重新加载工作台" },
@@ -594,6 +610,7 @@ async function start() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => {
+    if (quitting) return;
     if (window) {
       window.show();
       window.focus();
@@ -617,16 +634,25 @@ else {
       app.quit();
     });
   app.on("activate", () => {
-    if (origin && !window) openWindow();
+    if (!quitting && origin && !window) openWindow();
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
     /* macOS keeps scheduled jobs alive until explicit Quit. */
   });
-  app.on("before-quit", (event) => {
-    if (quitting || !runtime) return;
+  app.on("before-quit", () => { quitting = true; });
+  // A window may cancel quitting to preserve a draft. Keep its API alive until
+  // every window has accepted closing, and schedule relaunch only after shutdown.
+  app.on("will-quit", (event) => {
+    if (shutdownComplete || !runtime) return;
     event.preventDefault();
-    quitting = true;
-    runtime.shutdown().finally(() => app.quit());
+    if (shuttingDown) return;
+    shuttingDown = true;
+    runtime.shutdown().catch(error => console.error("Runtime shutdown failed:", error)).finally(() => {
+      shutdownComplete = true;
+      if (relaunchRequested) app.relaunch();
+      // Let Electron finish cancelling this will-quit event before trying again.
+      setImmediate(() => app.quit());
+    });
   });
 }

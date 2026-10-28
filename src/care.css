@@ -146,6 +146,7 @@
 .appointment-form label { display:flex; flex-direction:column; gap:4px; font-size:13px; }
 .appointment-form input { border:1px solid var(--border); border-radius:6px; padding:7px 9px; font:inherit; background:#fff; }
 .appointment-form .toolbar-actions { grid-column:1 / -1; justify-content:flex-end; }
+.appointment-form > p { grid-column:1 / -1; }
 .care-tracking-card.overdue { border-left:4px solid #ba963d; }
 .new-labs { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; background:#fbf6e9; border:1px solid #ecdcae; border-radius:10px; padding:10px 14px; margin:0 0 12px; }
 .new-labs > div { flex:1; min-width:240px; display:flex; flex-direction:column; gap:2px; }
@@ -202,6 +203,10 @@ ul.ext-builtin-skills p { margin:4px 0 0; }
 
 .appointment-form > fieldset { grid-column:1 / -1; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:10px 14px; border:0; padding:0; margin:0; min-width:0; }
 .appointment-form select { min-width:0; padding:7px 9px; font:inherit; border:1px solid var(--border); border-radius:6px; background:#fff; }
+.appointment-conflict { grid-column:1 / -1; min-width:0; border-top:1px solid var(--border); padding-top:12px; }
+.appointment-conflict > div { padding:10px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+.appointment-conflict > div p { margin:6px 0; }
+.appointment-conflict > button { margin-top:12px; white-space:normal; }
 .appointment-draft { display:grid; gap:12px; padding:16px; margin-top:16px; border:1px solid var(--border); border-radius:10px; }
 .appointment-draft label { display:grid; gap:6px; }
 .appointment-draft textarea { width:100%; min-width:0; box-sizing:border-box; padding:10px; font:inherit; border:1px solid var(--border); border-radius:6px; }
