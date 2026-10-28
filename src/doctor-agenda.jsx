@@ -1,5 +1,5 @@
 import { LearningMonth } from "./learning-loop";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, CheckCheck, Search, RotateCw, UserPlus } from "lucide-react";
 import { api } from "./agent-runtime";
 import { requestCareTab } from "./care-inbox";
@@ -28,6 +28,9 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(null);
   const [error, setError] = useState("");
+  const [hasUpdates, setHasUpdates] = useState(false);
+  const displayed = useRef(null);
+  const loadedScope = useRef("");
   useEffect(() => {
     // 分组筛选项来自患者列表的在用分组（全局助手确认的分组会出现在这里）。
     api("/api/patients?summary=1&archived=1")
@@ -37,20 +40,37 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   useEffect(() => {
     let live = true;
     let generation = 0;
-    const load = async () => {
+    let fetching = false;
+    const scope = JSON.stringify([kind, query, group, offset]);
+    if (loadedScope.current !== scope) {
+      loadedScope.current = scope;
+      displayed.current = null;
+      setData(null); setHasUpdates(false);
+    }
+    setLoading(true); setError("");
+    const load = async (background = false) => {
+      if (fetching) return;
+      fetching = true;
       const request = ++generation;
-      setLoading(true);
+      const silently = background && Boolean(displayed.current);
+      if (!silently) setLoading(true);
       try {
         const result = await api(`/api/doctor/overview?kind=${kind}&q=${encodeURIComponent(query)}${group ? `&group=${encodeURIComponent(group)}` : ""}&offset=${offset}&limit=6`);
         if (live && request === generation) {
+          if (silently) {
+            setHasUpdates(JSON.stringify({ ...result, generatedAt: 0 }) !== JSON.stringify({ ...displayed.current, generatedAt: 0 }));
+            setError("");
+            return;
+          }
           if (offset && offset >= result.total) { setOffset(Math.max(0, Math.floor((result.total - 1) / 6) * 6)); return; }
-          setData(result); setError("");
+          displayed.current = result;
+          setData(result); setHasUpdates(false); setError("");
         }
       } catch (err) { if (live && request === generation) setError(err.message); }
-      finally { if (live && request === generation) setLoading(false); }
+      finally { fetching = false; if (live && request === generation && !silently) setLoading(false); }
     };
     const delay = setTimeout(load, query ? 200 : 0);
-    const interval = setInterval(() => { if (!document.hidden) load(); }, 15000);
+    const interval = setInterval(() => { if (!document.hidden) load(true); }, 15000);
     return () => { live = false; clearTimeout(delay); clearInterval(interval); };
   }, [kind, query, group, offset, refreshKey]);
   const open = async (item) => {
@@ -88,6 +108,7 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
         </select></label>}
       </div>
       {error && <p className="form-error" role="alert">{error}<button className="text-button" onClick={() => setRefreshKey((value) => value + 1)}>重试</button></p>}
+      {hasUpdates && <p className="notice" role="status">今日待办有更新。<button className="text-button" disabled={loading} onClick={() => setRefreshKey(value => value + 1)}>刷新查看更新</button></p>}
       {!data && !error && <div className="agenda-loading" role="status">正在整理今日待办…</div>}
       {data && !data.items.length && <div className="agenda-empty">
         <CheckCheck size={24} />
