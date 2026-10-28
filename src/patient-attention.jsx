@@ -18,6 +18,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [opening, setOpening] = useState("");
   useEffect(() => {
     let live = true;
@@ -34,7 +35,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
         items.push(...result.items);
         if (!result.hasMore) break;
       }
-      if (live) setData({ ...result, items });
+      if (live) setData({ ...result, items, receivedAt: Date.now() });
     })()
       .catch((e) => {
         if (live) setError(e.message);
@@ -49,7 +50,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
 
   async function open(item) {
     setOpening(item.id);
-    setError("");
+    setActionError("");
     const action = item.action;
     try {
       if (action.type === "patient") await onNavigate(action.tab || "overview");
@@ -71,7 +72,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
         await onView(action.view);
       }
     } catch (e) {
-      setError(e.message);
+      setActionError(`无法${item.action.label}：${e.message}`);
     } finally {
       setOpening("");
     }
@@ -84,19 +85,33 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
       aria-busy={loading}
     >
       <header className="overview-card-heading">
-        <h3>需要处理 {data && !error ? `· ${data.total} 项` : ""}</h3>
-        <button
-          type="button"
-          className="text-button"
-          disabled={loading}
-          onClick={() => setRefresh((value) => value + 1)}
-        >
-          刷新
-        </button>
+        <h3>需要处理 {data ? `· ${data.total} 项` : ""}</h3>
+        <div className="attention-refresh">
+          {data && (
+            <span className="overview-meta">
+              读取于{" "}
+              <time dateTime={new Date(data.receivedAt).toISOString()}>
+                {new Date(data.receivedAt).toLocaleTimeString("zh-CN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </time>
+            </span>
+          )}
+          <button
+            type="button"
+            className="text-button"
+            disabled={loading}
+            onClick={() => setRefresh((value) => value + 1)}
+          >
+            刷新
+          </button>
+        </div>
       </header>
       {error && (
         <p role="alert" className="form-error">
           待处理事项读取失败：{error}
+          {data && <span>仍显示上次读取的内容，可能不是最新状态。</span>}
           <button
             type="button"
             className="text-button"
@@ -107,7 +122,16 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
           </button>
         </p>
       )}
-      {loading && <p role="status">正在读取待处理事项…</p>}
+      {actionError && (
+        <p role="alert" className="form-error">
+          {actionError}，可重新打开。
+        </p>
+      )}
+      {loading && (
+        <p role="status">
+          {data ? "正在刷新，保留上次读取的内容…" : "正在读取待处理事项…"}
+        </p>
+      )}
       {!loading && !error && data?.total === 0 && (
         <p className="overview-empty">当前没有待处理的患者事项。</p>
       )}
@@ -117,7 +141,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
             type="button"
             className={`agenda-item${item.severity === "critical" ? " attention-critical" : ""}`}
             key={item.id}
-            disabled={loading || Boolean(opening)}
+            disabled={Boolean(opening)}
             onClick={() => open(item)}
           >
             <span className="agenda-content">
@@ -138,7 +162,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
               )}
               <span className="agenda-action">
                 {opening === item.id ? "打开中…" : item.action.label}
-                <ArrowUpRight size={14} />
+                <ArrowUpRight size={14} aria-hidden="true" />
               </span>
             </span>
           </button>

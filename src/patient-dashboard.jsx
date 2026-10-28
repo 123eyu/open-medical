@@ -38,8 +38,8 @@ function LabPlot({ group, compact = false }) {
     {dates.length > 1 ? <><text x={left} y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
   </svg></div>;
 }
-export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", followups = [], focusFile = null, editRequest, onEditRequestHandled, onChanged, onError }) {
-  const [editing, setEditing] = useState(() => hasClinicalDraft(patient.id, view));
+export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", followups = [], focusFile = null, focusLab = null, editRequest, onEditRequestHandled, onChanged, onError }) {
+  const [editing, setEditing] = useState(() => focusLab?.patientId === patient.id ? false : hasClinicalDraft(patient.id, view));
   useEffect(() => {
     if (editRequest?.patientId !== patient.id || editRequest?.tab !== view) return;
     setEditing(true);
@@ -55,9 +55,21 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
   const [monitorForm, setMonitorForm] = useState(null);
   const [monitorBusy, setMonitorBusy] = useState(false);
   const monitorThreshold = useRef(null);
+  const focusedLab = useRef(null);
+  const [releasedFocus, setReleasedFocus] = useState(null);
   useEffect(() => { if (monitorForm) { monitorThreshold.current?.focus(); monitorThreshold.current?.scrollIntoView({block:'center'}); } }, [monitorForm?.item, monitorForm?.unit]);
   const groups = useMemo(()=>dashboardLabGroups(patient.labs || []),[patient.labs]);
   const layout = dashboardLabLayout(patient.labs || [], display, monitors);
+  const focusKey = focusLab?.patientId === patient.id && releasedFocus !== focusLab ? focusLab.key : null;
+  const visibleLabs = layout.groups.filter(group => !layout.hidden.some(hidden => hidden.key === group.key) || group.key === focusKey);
+  const hiddenLabs = layout.hidden.filter(group => group.key !== focusKey);
+  useEffect(() => {
+    if (view !== 'labs' || !focusKey || !focusedLab.current) return;
+    const records = focusedLab.current.querySelector('.chart-lab-records');
+    if (records) records.open = true;
+    focusedLab.current.scrollIntoView({ block: 'start' });
+    focusedLab.current.focus({ preventScroll: true });
+  }, [view, focusKey, editing]);
   const comparisonDates = [...new Set(layout.comparison.flatMap(g => g.records.map(r => r.date || '日期未记录')))].sort().reverse();
   const visits=patient.visits || [];
   const files=session.files || [];
@@ -78,6 +90,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
     try {
       const result = await api(`/api/patients/${patient.id}/lab-display`, 'PATCH', { expectedRevision: display.revision, ...patch });
       setDisplay(result.preferences);
+      if (patch.reset || patch.hidden?.includes(focusKey) || patch.collapsed?.includes(focusKey)) setReleasedFocus(focusLab);
       onChanged?.();
     } catch (error) {
       onError?.(error.message);
@@ -86,7 +99,12 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
   };
   const toggleDisplay = (field, key) => {
     const current = display[field] || (field === 'compare' ? groups.map(g => g.key) : []);
-    saveDisplay({ [field]: current.includes(key) ? current.filter(k => k !== key) : [...current, key] });
+    const selected = current.includes(key) && !(field === 'collapsed' && key === focusKey);
+    saveDisplay({ [field]: selected ? current.filter(k => k !== key) : [...new Set([...current, key])] });
+  };
+  const hideLab = key => {
+    if (display.hidden?.includes(key)) setReleasedFocus(focusLab);
+    else saveDisplay({ hidden: [...(display.hidden || []), key] });
   };
   const startMonitor = group => setMonitorForm({item: group.item, unit: group.unit || '', op: 'gt', threshold: '', recheckDays: '', severity: 'warning', note: ''});
   const submitMonitor = async (event) => {
@@ -115,7 +133,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
   };
   const handleMaterialsChanged = (message) => { setOcrNotice(typeof message === 'string' ? message : ''); return onChanged?.(); };
   return <section className="patient-dashboard" aria-label="患者资料面板">
-    <header className="chart-heading"><div><h2>{titles[view]}</h2><p>更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{view === 'labs' && <div className="toolbar-actions">{!editing && <button className="secondary" disabled={patient.archived} onClick={()=>setEditing(true)}>添加检验</button>}<button className="secondary" disabled={patient.archived} onClick={()=>onOpenWorkspace(session.id, {tab:'materials'})}>添加报告资料</button></div>}{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>
+    <header className="chart-heading"><div><h2>{titles[view]}</h2><p>档案更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{view === 'labs' && <div className="toolbar-actions">{!editing && <button className="secondary" disabled={patient.archived} onClick={()=>setEditing(true)}>添加检验</button>}<button className="secondary" disabled={patient.archived} onClick={()=>onOpenWorkspace(session.id, {tab:'materials'})}>添加报告资料</button></div>}{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>
     {editing ? <ClinicalPanel detail={patient} section={view} onChanged={onChanged} onError={onError}/> : <>
     {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView}/><HabitSuggestion key={patient.id} patientId={patient.id}/><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></>}
     {view === 'diagnoses' && <PatientHistory patient={patient} files={files} onEdit={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged} citedFileName={citedFileName} onSummarize={()=>onOpenWorkspace(session.id, {draft: `请根据当前患者（ID：${patient.id}）已有档案及原始资料，重新整理并保存精简病史摘要，保留其他临床记录。${CLINICAL_SUMMARY_INSTRUCTION}`})}/>}
@@ -138,10 +156,12 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
           return <td key={date} title={records.map(r=>diagnosisSources(r).join('；') || '来源未记录').join('；')}>{records.length ? records.map(r=>r.value).join(' / ') : '—'}</td>;
         })}</tr>)}</tbody>
       </table></div>}
-      <h3 className="lab-section-title">逐项趋势与来源</h3><div className="chart-lab-grid">{layout.visible.map(group=>{
-        const collapsed = layout.collapsed.has(group.key);
+      <h3 className="lab-section-title">逐项趋势与来源</h3><div className="chart-lab-grid">{visibleLabs.map(group=>{
+        const focused = group.key === focusKey;
+        const collapsed = layout.collapsed.has(group.key) && !focused;
         const latest = group.records.at(-1);
-        return <article className="chart-lab-card" key={group.key} aria-label={`${group.item} ${group.unit || '单位未记录'}`}>
+        return <article className={`chart-lab-card${focused ? ' is-focused' : ''}`} key={group.key} ref={focused ? focusedLab : undefined} tabIndex={-1} aria-label={`${group.item} ${group.unit || '单位未记录'}`}>
+          {focused && layout.hidden.some(hidden => hidden.key === group.key) && <p className="chart-lab-hint">已临时展开这项记录；离开后仍按原展示设置显示。</p>}
           <header><div><h4>{group.item}</h4><small>{group.unit || '单位未记录'} · {group.records.length} 次记录</small></div>
             <div className="chart-lab-latest"><b>{group.latestConflict ? '同日有不同数值' : latest?.value}</b><small>{latest?.date || '日期未记录'}</small></div>
           </header>
@@ -150,7 +170,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
             <button className="text-button" disabled={displayBusy} onClick={()=>saveDisplay({order:[group.key, ...layout.groups.map(g=>g.key).filter(k=>k!==group.key)]})}>排在最前</button>
             <button className="text-button" disabled={displayBusy} aria-pressed={layout.comparison.some(g=>g.key===group.key)} onClick={()=>toggleDisplay('compare',group.key)}>{layout.comparison.some(g=>g.key===group.key) ? '移出对照' : '加入对照'}</button>
             <button className="text-button" disabled={displayBusy} aria-expanded={!collapsed} onClick={()=>toggleDisplay('collapsed',group.key)}>{collapsed ? '展开趋势' : '折叠趋势'}</button>
-            <button className="text-button" disabled={displayBusy} onClick={()=>toggleDisplay('hidden',group.key)}>隐藏</button>
+            <button className="text-button" disabled={displayBusy} onClick={()=>hideLab(group.key)}>隐藏</button>
           </details>
           {!collapsed && <>
             {group.canPlot ? <LabPlot group={group}/> : <p className="chart-empty">缺少有效日期或数值，请核对明细。</p>}
@@ -161,7 +181,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
           </>}
         </article>;
       })}</div>
-      {!!layout.hidden.length && <details className="chart-hidden-labs"><summary>已隐藏 {layout.hidden.length} 项检验 · 展开后可恢复</summary>{layout.hidden.map(g=><div key={g.key}><span>{g.item} · {g.unit || '单位未记录'}</span><button className="text-button" disabled={displayBusy} onClick={()=>toggleDisplay('hidden',g.key)}>恢复展示</button></div>)}</details>}
+      {!!hiddenLabs.length && <details className="chart-hidden-labs"><summary>已隐藏 {hiddenLabs.length} 项检验 · 展开后可恢复</summary>{hiddenLabs.map(g=><div key={g.key}><span>{g.item} · {g.unit || '单位未记录'}</span><button className="text-button" disabled={displayBusy} onClick={()=>toggleDisplay('hidden',g.key)}>恢复展示</button></div>)}</details>}
       {!groups.length && <p className="chart-empty">资料中尚无结构化检验记录。</p>}
       {(!!groups.length || !!monitors.length) && <div className="chart-monitors" aria-label="个性化检验监测">
         <header><div><h4>个性化监测</h4><p>在指标上点“设置监测”可设阈值或复查间隔；越界或到期进入今日待办的风险提示。隐藏指标不影响监测。</p></div></header>

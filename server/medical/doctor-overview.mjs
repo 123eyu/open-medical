@@ -1,4 +1,5 @@
 import { check } from "../errors.mjs";
+import { isCalendarDate } from "../../shared/calendar-date.mjs";
 
 export const AGENDA_KINDS = ["all", "risk", "visit", "followup", "tracking", "messages", "trial", "custom"];
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
@@ -74,8 +75,10 @@ export class DoctorOverview {
     // Lab values added to the chart since the doctor last marked them read.
     for (const { patientId, labs } of this.schedule?.allNewLabs() || []) {
       const shown = labs.slice(0, 3).map((l) => `${l.item} ${l.value}${l.unit || ""}`).join("、");
-      add({ id: `labs:${patientId}`, kind: "tracking", patientId, title: `待阅检验结果 ${labs.length} 项`, detail: `${shown}${labs.length > 3 ? " 等" : ""}（${labs[0].date}），查看后点「标记已阅」`,
-        at: labs[0].date, weight: 4, count: labs.length, action: { type: "patient", tab: "labs", label: "查看结果" } });
+      const date = isCalendarDate(labs[0].date) ? labs[0].date : "";
+      const undated = labs.filter(lab => !isCalendarDate(lab.date)).length;
+      add({ id: `labs:${patientId}`, kind: "tracking", patientId, title: `待阅检验结果 ${labs.length} 项`, detail: `${shown}${labs.length > 3 ? " 等" : ""}（${date ? `最近日期 ${date}` : "日期待核对"}${date && undated ? `；另有 ${undated} 条日期待核对` : ""}），查看后点「标记已阅」`,
+        at: date, weight: 4, count: labs.length, action: { type: "patient", tab: "labs", label: "查看结果" } });
     }
     // Reminders are created when a follow-up falls due.
     for (const row of db.prepare("SELECT id,patient_id,due_at,data FROM reminders WHERE status='pending'").all()) {

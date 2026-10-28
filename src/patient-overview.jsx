@@ -5,7 +5,8 @@ import {
   ClipboardList,
   Pill,
 } from "lucide-react";
-import { groupDiagnoses } from "../shared/diagnoses.mjs";
+import { diagnosisSources, groupDiagnoses } from "../shared/diagnoses.mjs";
+import { dashboardLabSummary } from "../shared/patient-dashboard.mjs";
 import "./patient-overview.css";
 import { PatientAttention } from "./patient-attention";
 
@@ -34,16 +35,19 @@ export function PatientOverview({
   const visits = [...(patient.visits || [])].sort((a, b) =>
     String(b.date || "").localeCompare(String(a.date || "")),
   );
-  const labs = groups
-    .slice()
-    .sort((a, b) =>
-      String(b.records.at(-1)?.date || "").localeCompare(
-        String(a.records.at(-1)?.date || ""),
-      ),
-    )
+  const summaries = groups.map(dashboardLabSummary);
+  const labs = summaries
+    .toSorted((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
+  const undatedLabs = summaries.reduce(
+    (total, group) => total + group.undatedCount,
+    0,
+  );
   const medications = patient.medications || [];
   const activeMeds = medications.filter((m) => m.status === "active");
+  const unknownMeds = medications.filter(
+    (m) => !m.status || m.status === "unknown",
+  );
   const plan = patient.treatmentPlan;
 
   return (
@@ -137,10 +141,16 @@ export function PatientOverview({
                     {activeMeds.slice(0, 4).map((m, i) => (
                       <li key={m.id || i}>
                         <strong>{m.name || m.drug || "未命名用药"}</strong>
-                        <span>
-                          {[m.dose, m.frequency].filter(Boolean).join(" · ") ||
-                            "剂量与频次未记录"}
-                        </span>
+                        <dl className="overview-medication-details">
+                          <div>
+                            <dt>剂量</dt>
+                            <dd>{m.dose || "未记录"}</dd>
+                          </div>
+                          <div>
+                            <dt>频次 / 用法</dt>
+                            <dd>{m.frequency || "未记录"}</dd>
+                          </div>
+                        </dl>
                       </li>
                     ))}
                   </ul>
@@ -157,6 +167,16 @@ export function PatientOverview({
                     ? `已保存 ${medications.length} 项用药记录，暂无标记为正在使用的用药。`
                     : "尚无用药记录"}
                 </p>
+              )}
+              {unknownMeds.length > 0 && (
+                <button
+                  className="text-button overview-review-link"
+                  disabled={patient.archived}
+                  onClick={() => onNavigate("medications", { edit: true })}
+                >
+                  核对 {unknownMeds.length} 项未记录状态的用药
+                  <ArrowUpRight size={14} aria-hidden="true" />
+                </button>
               )}
               {!plan && <p className="overview-meta">尚未建立治疗方案</p>}
             </div>
@@ -175,33 +195,82 @@ export function PatientOverview({
                 <Activity size={18} aria-hidden="true" />
                 最近检验
               </h3>
-              <span>{labs.length ? `最近 ${labs.length} 项` : "暂无记录"}</span>
+              <span>
+                {labs.length
+                  ? `展示 ${labs.length} / 共 ${groups.length} 项指标`
+                  : "暂无记录"}
+              </span>
             </header>
             <div className="overview-card-body">
               {labs.length ? (
                 <ul className="overview-lab-list">
                   {labs.map((g) => {
-                    const latest = g.records.at(-1);
-                    const latestValues = [
-                      ...new Set(
-                        g.records
-                          .filter((r) => r.date === latest?.date)
-                          .map((r) => r.value),
-                      ),
-                    ];
                     return (
                       <li key={g.key}>
-                        <div>
-                          <b>{g.item}</b>
-                          <small>
-                            {latest?.date || "日期未记录"}
-                            {g.conflict && " · 含同日不同结果"}
-                          </small>
+                        <div className="overview-lab-main">
+                          <div className="overview-lab-identity">
+                            <button
+                              className="text-button overview-lab-name"
+                              aria-label={`核对${g.item} ${g.unit || "单位未记录"}的记录与来源`}
+                              onClick={() =>
+                                onNavigate("labs", { focusLab: g.key })
+                              }
+                            >
+                              <b>{g.item}</b>
+                              <ArrowUpRight size={14} aria-hidden="true" />
+                            </button>
+                            <small>
+                              {g.date || "日期待核对"}
+                              {g.conflict && " · 含同日不同结果"}
+                            </small>
+                          </div>
+                          <div className="overview-lab-value">
+                            <strong>{g.values.join(" / ")}</strong>
+                            <small>{g.unit || "单位未记录"}</small>
+                          </div>
                         </div>
-                        <div className="overview-lab-value">
-                          <strong>{latestValues.join(" / ")}</strong>
-                          <small>{g.unit || "单位未记录"}</small>
-                        </div>
+                        <details className="overview-lab-evidence">
+                          <summary>参考范围与来源</summary>
+                          {g.latestRecords.map((record, index) => (
+                            <div
+                              className="overview-lab-evidence-record"
+                              key={index}
+                            >
+                              {g.latestRecords.length > 1 && (
+                                <b>
+                                  {record.value ?? "结果未记录"}{" "}
+                                  {g.unit || "单位未记录"}
+                                </b>
+                              )}
+                              <dl>
+                                <div>
+                                  <dt>报告参考范围</dt>
+                                  <dd>
+                                    {record.referenceRange ||
+                                      "未记录，需核对原报告"}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt>来源</dt>
+                                  <dd>
+                                    {diagnosisSources(record).join("；") ||
+                                      "来源未记录"}
+                                  </dd>
+                                </div>
+                              </dl>
+                              {record.note && <p>{record.note}</p>}
+                            </div>
+                          ))}
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              onNavigate("labs", { focusLab: g.key })
+                            }
+                          >
+                            查看这项的全部记录与原文入口{" "}
+                            <ArrowUpRight size={14} aria-hidden="true" />
+                          </button>
+                        </details>
                       </li>
                     );
                   })}
@@ -209,6 +278,11 @@ export function PatientOverview({
               ) : (
                 <p className="overview-empty">
                   补充检验资料后，在这里查看最近结果。
+                </p>
+              )}
+              {undatedLabs > 0 && (
+                <p className="overview-meta">
+                  有 {undatedLabs} 条检验日期待核对，未用于判断最近日期。
                 </p>
               )}
             </div>

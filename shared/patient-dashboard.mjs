@@ -1,3 +1,5 @@
+import { isCalendarDate } from './calendar-date.mjs';
+
 // Only compare observations with exactly matching item names and units.
 export function dashboardLabGroups(labs = []) {
   const groups = new Map();
@@ -19,6 +21,21 @@ export function dashboardLabGroups(labs = []) {
     const points = dated.toSorted((a,b) => a.date===b.date ? a.value-b.value : String(a.date).localeCompare(String(b.date)));
     return { ...group, records, points, conflict, conflictDates, latestConflict, distinctDates: dates.size, canPlot: points.length > 0 };
   });
+}
+
+// Unknown dates must not compete with known dates for the "most recent" result.
+// Keep every source record for review, even when values happen to be identical.
+export function dashboardLabSummary(group) {
+  const dated = group.records.filter(record => isCalendarDate(record.date));
+  const date = dated.map(record => record.date).sort().at(-1) || '';
+  const records = date ? dated.filter(record => record.date === date) : group.records;
+  return {
+    ...group,
+    date,
+    latestRecords: records,
+    values: [...new Set(records.map(record => record.value ?? '结果未记录'))],
+    undatedCount: group.records.length - dated.length,
+  };
 }
 
 // Notes contain arbitrary provenance/identity checks and are never a clinical summary.

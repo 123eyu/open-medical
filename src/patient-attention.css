@@ -9,6 +9,15 @@
 .patient-overview .patient-attention .overview-card-heading {
   margin-bottom: 0;
 }
+.patient-attention .attention-refresh {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+.patient-attention .form-error > span {
+  display: block;
+}
 .patient-attention .agenda-item {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;

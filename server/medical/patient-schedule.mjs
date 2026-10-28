@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { check, identifier, string } from "../errors.mjs";
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
+import { isCalendarDate } from "../../shared/calendar-date.mjs";
 
 // Two patient-facing reminders the agenda needs: return-visit appointments
 // and lab results the doctor has not looked at yet. Both are bookkeeping;
@@ -9,6 +10,7 @@ export const APPOINTMENT_STATUS = Object.freeze({ scheduled: "已预约", attend
 const DATE = /^\d{4}-\d{2}-\d{2}$/, TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const labKey = (lab) => createHash("sha256").update(JSON.stringify([lab.item, lab.value, lab.unit || "", lab.date])).digest("hex").slice(0, 32);
 const labReviewToken = (patientId, lab) => createHash("sha256").update(JSON.stringify([patientId, labKey(lab)])).digest("hex").slice(0, 32);
+const newestLabFirst = (a, b) => (isCalendarDate(b.date) ? b.date : "").localeCompare(isCalendarDate(a.date) ? a.date : "");
 const localDate = (ms) => { const d = new Date(ms); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 
 export class PatientSchedule {
@@ -117,14 +119,14 @@ export class PatientSchedule {
   newLabs(patientId) {
     const patient = this.patients.row(identifier(patientId));
     const seen = new Set(this.db.prepare("SELECT key FROM lab_reviews WHERE patient_id=?").all(patient.id).map((r) => r.key));
-    return (patient.labs || []).filter((lab) => !seen.has(labKey(lab))).sort((a, b) => b.date.localeCompare(a.date));
+    return (patient.labs || []).filter((lab) => !seen.has(labKey(lab))).sort(newestLabFirst);
   }
   allNewLabs() {
     const seen = new Set(this.db.prepare("SELECT patient_id||char(1)||key k FROM lab_reviews").all().map((r) => r.k));
     const out = [];
     for (const p of this.patients.all()) {
       if (p.archived) continue;
-      const labs = (p.labs || []).filter((lab) => !seen.has(`${p.id}\u0001${labKey(lab)}`)).sort((a, b) => b.date.localeCompare(a.date));
+      const labs = (p.labs || []).filter((lab) => !seen.has(`${p.id}\u0001${labKey(lab)}`)).sort(newestLabFirst);
       if (labs.length) out.push({ patientId: p.id, labs });
     }
     return out;

@@ -181,3 +181,11 @@
 .chart-hidden-labs { margin-top:20px; border-top:1px solid var(--border); }
 .chart-hidden-labs > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:8px 0; }
 @media(max-width:1000px) { .chart-lab-grid { grid-template-columns:minmax(0,1fr); } }
+.chart-lab-card.is-focused {
+  border-color: var(--accent);
+  scroll-margin-top: 20px;
+}
+.chart-lab-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}

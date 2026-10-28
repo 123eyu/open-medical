@@ -103,10 +103,13 @@ export function PatientsView({
   // 时间轴「查看原文」跨标签跳转的目标材料：状态放在父级，因为按 tab 切换
   // 会重挂载 PatientDashboard，组件内的 state 活不过那次重挂。
   const [sourceFocus, setSourceFocus] = useState(null);
+  const [labFocus, setLabFocus] = useState(null);
+  useEffect(() => { if (tab !== "labs") setLabFocus(null); }, [tab]);
   const openRecordTab = (nextTab, opts = {}) => {
     setTab(nextTab);
     setClinicalEditRequest(opts.edit ? { patientId: detail.id, tab: nextTab } : null);
     if ("focusFile" in opts) setSourceFocus(opts.focusFile);
+    if (nextTab === "labs") setLabFocus(opts.focusLab ? { patientId: detail.id, key: opts.focusLab } : null);
     if (nextTab === "followups" && opts.patientId === detail?.id && opts.reviewDate) {
       setFollowupSource({ patientId: detail.id, reviewDate: opts.reviewDate, title: opts.title });
       setEditingFollowup(null); setModal("followup");
@@ -657,8 +660,8 @@ export function PatientsView({
           </nav>}
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
-          {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => setTab("labs")} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
+          {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => openRecordTab("labs")} />}
+          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
           {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "overview" && (
             <div className="detail-panel">
