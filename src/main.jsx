@@ -1379,7 +1379,7 @@ function App() {
     if (!config) return;
     const patient = patientsList.find((p) => p.id === visiblePatientRoute.id);
     const patientTitle = [patient?.name || "患者", patient?.patientNumber || visiblePatientRoute.id,
-      ({ overview: "概览", diagnoses: "诊断与病史", clinical: "治疗与预后", medications: "治疗与预后", labs: "检验趋势", visits: "就诊经过", library: "资料库", messages: "沟通", appointments: "预约", followups: "随访" })[visiblePatientRoute.tab] || "患者"].filter(Boolean).join(" · ");
+      ({ overview: "概览", diagnoses: "诊断与病史", clinical: "治疗与预后", medications: "治疗与预后", labs: "检验结果", visits: "就诊经过", library: "资料库", messages: "沟通", appointments: "预约", followups: "随访" })[visiblePatientRoute.tab] || "患者"].filter(Boolean).join(" · ");
     document.title = medical
       ? `${view === "patients" && visiblePatientRoute.id ? patientTitle : VIEW_LABELS[view] || "医疗工作台"} · Open Medical`
       : `${VIEW_LABELS[view] || "通用工作台"} · Open Agent`;

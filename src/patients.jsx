@@ -34,7 +34,7 @@ import { LabImportModal } from "./lab-import";
 import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
 
-const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验趋势"], ["visits", "就诊经过"], ["library", "资料库"]];
+const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
 
 const GENDER = { male: "男", female: "女", unknown: "" };
@@ -590,7 +590,7 @@ export function PatientsView({
                     ? "无已知过敏"
                     : "过敏史尚未核对"}
                 </em>
-                {detail.allergyStatus !== "none_known" && <button type="button" className="text-button" disabled={detail.archived} onClick={() => openRecordTab("medications", { edit: true })}>核对过敏史</button>}
+                {["overview", "medications"].includes(tab) && detail.allergyStatus !== "none_known" && <button type="button" className="text-button" disabled={detail.archived} onClick={() => openRecordTab("medications", { edit: true })}>核对过敏史</button>}
                 </span>
               )}
             </div>

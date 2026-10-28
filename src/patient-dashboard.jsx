@@ -1,7 +1,8 @@
 import { HabitSuggestion, SimilarCaseCard } from "./learning-loop";
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import { dashboardLabGroups, dashboardLabLayout } from '../shared/patient-dashboard.mjs';
+import { dashboardLabGroups } from '../shared/patient-dashboard.mjs';
+import { PatientLabs } from './patient-labs';
 import { PatientOverview } from './patient-overview';
 import { PatientMaterialLibrary } from './patient-material-library';
 import { api } from './agent-runtime';
@@ -45,168 +46,24 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
     setEditing(true);
     onEditRequestHandled?.();
   }, [editRequest, patient.id, view, onEditRequestHandled]);
-  const titles = {overview:'患者概览',diagnoses:'诊断与病史',medications:'治疗方案与预后',labs:'检验趋势',visits:'就诊经过',library:'资料库'};
-  const [display, setDisplay] = useState(patient.labDisplay || { revision: 0 });
-  const [displayBusy, setDisplayBusy] = useState(false);
+  const titles = {overview:'患者概览',diagnoses:'诊断与病史',medications:'治疗方案与预后',labs:'检验结果',visits:'就诊经过',library:'资料库'};
   const [visionSupported, setVisionSupported] = useState(false);
   const [ocrNotice, setOcrNotice] = useState('');
-  const [monitors, setMonitors] = useState([]);
-  const [monitorAlerts, setMonitorAlerts] = useState({});
-  const [monitorForm, setMonitorForm] = useState(null);
-  const [monitorBusy, setMonitorBusy] = useState(false);
-  const monitorThreshold = useRef(null);
-  const focusedLab = useRef(null);
-  const [releasedFocus, setReleasedFocus] = useState(null);
-  useEffect(() => { if (monitorForm) { monitorThreshold.current?.focus(); monitorThreshold.current?.scrollIntoView({block:'center'}); } }, [monitorForm?.item, monitorForm?.unit]);
   const groups = useMemo(()=>dashboardLabGroups(patient.labs || []),[patient.labs]);
-  const layout = dashboardLabLayout(patient.labs || [], display, monitors);
-  const focusKey = focusLab?.patientId === patient.id && releasedFocus !== focusLab ? focusLab.key : null;
-  const visibleLabs = layout.groups.filter(group => !layout.hidden.some(hidden => hidden.key === group.key) || group.key === focusKey);
-  const hiddenLabs = layout.hidden.filter(group => group.key !== focusKey);
-  useEffect(() => {
-    if (view !== 'labs' || !focusKey || !focusedLab.current) return;
-    const records = focusedLab.current.querySelector('.chart-lab-records');
-    if (records) records.open = true;
-    focusedLab.current.scrollIntoView({ block: 'start' });
-    focusedLab.current.focus({ preventScroll: true });
-  }, [view, focusKey, editing]);
-  const comparisonDates = [...new Set(layout.comparison.flatMap(g => g.records.map(r => r.date || '日期未记录')))].sort().reverse();
   const visits=patient.visits || [];
   const files=session.files || [];
   const visitsSorted=[...visits].sort((a,b)=>String(b.date || '').localeCompare(String(a.date || '')));
   useEffect(() => { api('/api/ocr-settings').then(s => setVisionSupported(s.imageCapable === true)).catch(() => {}); }, []);
-  const loadMonitors = () => {
-    api(`/api/patients/${patient.id}/lab-monitors`).then(s => setMonitors(s.monitors || [])).catch(() => {});
-    api(`/api/risk-alerts?patientId=${patient.id}`).then(s => {
-      const map = {};
-      for (const alert of s.alerts || []) if (typeof alert.ruleKey === 'string' && alert.ruleKey.startsWith('lab_monitor_')) map[alert.ruleKey.slice('lab_monitor_'.length)] = alert;
-      setMonitorAlerts(map);
-    }).catch(() => {});
-  };
-  useEffect(() => { loadMonitors(); }, [patient.id]);
-  useEffect(() => { setDisplay(patient.labDisplay || { revision: 0 }); }, [patient.id, patient.labDisplay]);
-  const saveDisplay = async patch => {
-    setDisplayBusy(true);
-    try {
-      const result = await api(`/api/patients/${patient.id}/lab-display`, 'PATCH', { expectedRevision: display.revision, ...patch });
-      setDisplay(result.preferences);
-      if (patch.reset || patch.hidden?.includes(focusKey) || patch.collapsed?.includes(focusKey)) setReleasedFocus(focusLab);
-      onChanged?.();
-    } catch (error) {
-      onError?.(error.message);
-      try { const result = await api(`/api/patients/${patient.id}/lab-display`); setDisplay(result.preferences); } catch {}
-    } finally { setDisplayBusy(false); }
-  };
-  const toggleDisplay = (field, key) => {
-    const current = display[field] || (field === 'compare' ? groups.map(g => g.key) : []);
-    const selected = current.includes(key) && !(field === 'collapsed' && key === focusKey);
-    saveDisplay({ [field]: selected ? current.filter(k => k !== key) : [...new Set([...current, key])] });
-  };
-  const hideLab = key => {
-    if (display.hidden?.includes(key)) setReleasedFocus(focusLab);
-    else saveDisplay({ hidden: [...(display.hidden || []), key] });
-  };
-  const startMonitor = group => setMonitorForm({item: group.item, unit: group.unit || '', op: 'gt', threshold: '', recheckDays: '', severity: 'warning', note: ''});
-  const submitMonitor = async (event) => {
-    event.preventDefault();
-    const threshold = Number(monitorForm.threshold);
-    if (monitorForm.threshold === '' || !Number.isFinite(threshold)) { onError?.('监测阈值须为数值'); return; }
-    const recheck = monitorForm.recheckDays === '' || monitorForm.recheckDays === null ? null : Number(monitorForm.recheckDays);
-    setMonitorBusy(true);
-    try {
-      await api(`/api/patients/${patient.id}/lab-monitors`, 'POST', { item: monitorForm.item, unit: monitorForm.unit, op: monitorForm.op, threshold, recheckDays: recheck, severity: monitorForm.severity, note: monitorForm.note });
-      setMonitorForm(null);
-      loadMonitors();
-    } catch (error) { onError?.(error.message); } finally { setMonitorBusy(false); }
-  };
-  const toggleMonitor = async (monitor) => {
-    try {
-      await api(`/api/patients/${patient.id}/lab-monitors/${monitor.id}`, 'PATCH', { revision: monitor.revision, status: monitor.status === 'paused' ? 'active' : 'paused' });
-      loadMonitors();
-    } catch (error) { onError?.(error.message); }
-  };
-  const removeMonitor = async (monitor) => {
-    try {
-      await api(`/api/patients/${patient.id}/lab-monitors/${monitor.id}`, 'DELETE', { revision: monitor.revision });
-      loadMonitors();
-    } catch (error) { onError?.(error.message); }
-  };
   const handleMaterialsChanged = (message) => { setOcrNotice(typeof message === 'string' ? message : ''); return onChanged?.(); };
   return <section className="patient-dashboard" aria-label="患者资料面板">
-    <header className="chart-heading"><div><h2>{titles[view]}</h2><p>档案更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{view === 'labs' && <div className="toolbar-actions">{!editing && <button className="secondary" disabled={patient.archived} onClick={()=>setEditing(true)}>添加检验</button>}<button className="secondary" disabled={patient.archived} onClick={()=>onOpenWorkspace(session.id, {tab:'materials'})}>添加报告资料</button></div>}{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>
+    {(view !== 'labs' || editing) && <header className="chart-heading"><div><h2>{titles[view]}</h2><p>档案更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{view === 'labs' && <div className="toolbar-actions">{!editing && <button className="secondary" disabled={patient.archived} onClick={()=>setEditing(true)}>添加检验</button>}<button className="secondary" disabled={patient.archived} onClick={()=>onOpenWorkspace(session.id, {tab:'materials'})}>添加报告资料</button></div>}{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>}
     {editing ? <ClinicalPanel detail={patient} section={view} onChanged={onChanged} onError={onError}/> : <>
     {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={riskPanel}/><HabitSuggestion key={patient.id} patientId={patient.id}/><details className="workspace-optional"><summary>相似病例参考</summary><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></details></>}
     {view === 'diagnoses' && <PatientHistory patient={patient} files={files} onEdit={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged} citedFileName={citedFileName} onSummarize={()=>onOpenWorkspace(session.id, {draft: `请根据当前患者（ID：${patient.id}）已有档案及原始资料，重新整理并保存精简病史摘要，保留其他临床记录。${CLINICAL_SUMMARY_INSTRUCTION}`})}/>}
     <div>
       {view === 'medications' && <TreatmentPanel patient={patient} followups={followups} files={files} citedFileName={citedFileName} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}
     </div>
-    {view === 'labs' && <section className="chart-section chart-labs" aria-label="检验资料与趋势"><div className="lab-reading-toolbar">
-        <span className="muted">{groups.length} 项指标 · {patient.labs?.length || 0} 条记录</span>
-        <details className="lab-display-options"><summary>展示与对照设置</summary>
-          <p>同项目、同单位分别展示。监测项目、同日数值冲突和多次检验优先；趋势仅呈现记录，不自动判断正常或异常。</p>
-          <button className="secondary" onClick={()=>onOpenWorkspace(session.id, {draft: `请帮我调整当前患者的检验趋势展示习惯（患者 ID：${patient.id}）。先读取当前展示偏好和指标，我想调整：`})}>和 AI 调整展示</button>
-          <button className="text-button" disabled={displayBusy} onClick={()=>saveDisplay({reset:true})}>恢复默认展示</button>
-        </details>
-      </div>
-      {!!layout.comparison.length && <div className="chart-table-wrap chart-lab-comparison"><table>
-        <caption>检验结果对照 · {layout.comparison.length} 项</caption>
-        <thead><tr><th>检验项目 / 单位</th>{comparisonDates.map(date=><th key={date}>{date}</th>)}</tr></thead>
-        <tbody>{layout.comparison.map(g=><tr key={g.key}><th>{g.item}<small>{g.unit || '单位未记录'}</small></th>{comparisonDates.map(date=>{
-          const records = g.records.filter(r=>(r.date || '日期未记录') === date);
-          return <td key={date} title={records.map(r=>diagnosisSources(r).join('；') || '来源未记录').join('；')}>{records.length ? records.map(r=>r.value).join(' / ') : '—'}</td>;
-        })}</tr>)}</tbody>
-      </table></div>}
-      <h3 className="lab-section-title">逐项趋势与来源</h3><div className="chart-lab-grid">{visibleLabs.map(group=>{
-        const focused = group.key === focusKey;
-        const collapsed = layout.collapsed.has(group.key) && !focused;
-        const latest = group.records.at(-1);
-        return <article className={`chart-lab-card${focused ? ' is-focused' : ''}`} key={group.key} ref={focused ? focusedLab : undefined} tabIndex={-1} aria-label={`${group.item} ${group.unit || '单位未记录'}`}>
-          {focused && layout.hidden.some(hidden => hidden.key === group.key) && <p className="chart-lab-hint">已临时展开这项记录；离开后仍按原展示设置显示。</p>}
-          <header><div><h4>{group.item}</h4><small>{group.unit || '单位未记录'} · {group.records.length} 次记录</small></div>
-            <div className="chart-lab-latest"><b>{group.latestConflict ? '同日有不同数值' : latest?.value}</b><small>{latest?.date || '日期未记录'}</small></div>
-          </header>
-          <button className="text-button" disabled={patient.archived} onClick={()=>startMonitor(group)}>设置监测</button>
-          <details className="chart-lab-actions"><summary>对照与展示</summary>
-            <button className="text-button" disabled={displayBusy} onClick={()=>saveDisplay({order:[group.key, ...layout.groups.map(g=>g.key).filter(k=>k!==group.key)]})}>排在最前</button>
-            <button className="text-button" disabled={displayBusy} aria-pressed={layout.comparison.some(g=>g.key===group.key)} onClick={()=>toggleDisplay('compare',group.key)}>{layout.comparison.some(g=>g.key===group.key) ? '移出对照' : '加入对照'}</button>
-            <button className="text-button" disabled={displayBusy} aria-expanded={!collapsed} onClick={()=>toggleDisplay('collapsed',group.key)}>{collapsed ? '展开趋势' : '折叠趋势'}</button>
-            <button className="text-button" disabled={displayBusy} onClick={()=>hideLab(group.key)}>隐藏</button>
-          </details>
-          {!collapsed && <>
-            {group.canPlot ? <LabPlot group={group}/> : <p className="chart-empty">缺少有效日期或数值，请核对明细。</p>}
-            {group.conflict && <p className="chart-lab-hint">{group.conflictDates.join('、')} 存在同日不同数值，已保留全部记录与来源。</p>}
-            {group.distinctDates === 1 && <p className="chart-lab-hint">目前只有一天的记录，还连不成趋势线。</p>}
-            {!group.unit && <p className="chart-lab-hint">单位未记录，纵轴只表示数值相对高低。</p>}
-            <details className="chart-lab-records"><summary>全部记录与来源 · {group.records.length} 条</summary><div className="chart-table-wrap"><table><caption>{group.item} · 全部记录</caption><thead><tr><th>日期</th><th>结果</th><th>单位</th><th>报告参考范围</th><th>来源</th><th>备注</th></tr></thead><tbody>{group.records.toReversed().map((r,i)=>{ const cited = citedFileName(diagnosisSources(r).join("；")); const matches = cited ? files.filter(f=>f.name.toLowerCase()===cited.toLowerCase()) : []; return <tr key={i}><td>{r.date || '日期未记录'}</td><td><b>{r.value}</b></td><td>{r.unit || '未记录'}</td><td>{r.referenceRange || '未记录，查看原报告'}</td><td>{diagnosisSources(r).join('；') || '来源未记录'}{matches.length === 1 && <button className="text-button" onClick={()=>onClinical('library',{focusFile:matches[0].id})}>查看原文 {matches[0].name}</button>}{matches.length > 1 && <button className="text-button" onClick={()=>onClinical('library')}>同名资料有多份，到资料库核对</button>}</td><td>{r.note || '—'}</td></tr>;})}</tbody></table></div></details>
-          </>}
-        </article>;
-      })}</div>
-      {!!hiddenLabs.length && <details className="chart-hidden-labs"><summary>已隐藏 {hiddenLabs.length} 项检验 · 展开后可恢复</summary>{hiddenLabs.map(g=><div key={g.key}><span>{g.item} · {g.unit || '单位未记录'}</span><button className="text-button" disabled={displayBusy} onClick={()=>toggleDisplay('hidden',g.key)}>恢复展示</button></div>)}</details>}
-      {!groups.length && <p className="chart-empty">资料中尚无结构化检验记录。</p>}
-      {(!!groups.length || !!monitors.length) && <div className="chart-monitors" aria-label="个性化检验监测">
-        <header><div><h4>个性化监测</h4><p>在指标上点“设置监测”可设阈值或复查间隔；越界或到期进入今日待办的风险提示。隐藏指标不影响监测。</p></div></header>
-        {monitorForm && <form className="chart-monitor-form" onSubmit={submitMonitor}>
-          <div className="chart-monitor-row"><b>{monitorForm.item}</b><label>条件<select value={monitorForm.op} onChange={e=>setMonitorForm({...monitorForm, op: e.target.value})}><option value="gt">高于</option><option value="lt">低于</option></select></label>
-          <label>阈值<input ref={monitorThreshold} type="number" step="any" required value={monitorForm.threshold} onChange={e=>setMonitorForm({...monitorForm, threshold: e.target.value})}/><span>{monitorForm.unit || '单位未记录'}</span></label>
-          <label>复查间隔（天，可选）<input type="number" min="1" max="3650" value={monitorForm.recheckDays} onChange={e=>setMonitorForm({...monitorForm, recheckDays: e.target.value})}/></label>
-          <label>严重度<select value={monitorForm.severity} onChange={e=>setMonitorForm({...monitorForm, severity: e.target.value})}><option value="warning">提醒</option><option value="critical">重要</option></select></label>
-          <label>备注<input value={monitorForm.note} maxLength={200} onChange={e=>setMonitorForm({...monitorForm, note: e.target.value})}/></label></div>
-          <div className="chart-monitor-actions"><button className="primary" type="submit" disabled={monitorBusy}>保存并开始监测</button><button className="text-button" type="button" onClick={()=>setMonitorForm(null)}>取消</button></div>
-        </form>}
-        {!!monitors.length && <ul className="chart-monitor-list">{monitors.map(m => {
-          const alert = monitorAlerts[m.id];
-          return <li key={m.id}>
-            <b>{m.item}</b><span>{m.op === 'gt' ? '高于' : '低于'} {m.threshold}{m.unitHint || ''}</span>
-            {!!m.recheckDays && <span>每 {m.recheckDays} 天复查</span>}
-            <span className={`chart-monitor-sev ${m.severity}`}>{m.severity === 'critical' ? '重要' : '提醒'}</span>
-            {m.status === 'paused' ? <span className="chart-monitor-state paused">已暂停</span> : alert && alert.status !== 'resolved' ? <span className="chart-monitor-state fired">已触发 · 见今日待办</span> : <span className="chart-monitor-state">监测中</span>}
-            {m.note && <small className="muted">{m.note}</small>}
-            <span className="chart-monitor-actions"><button className="text-button" onClick={()=>toggleMonitor(m)}>{m.status === 'paused' ? '恢复' : '暂停'}</button><button className="text-button danger" onClick={()=>removeMonitor(m)}>删除</button></span>
-          </li>;
-        })}</ul>}
-        {!monitors.length && !monitorForm && <p className="muted">尚未设置个性化监测。内置的通用风险规则不受影响，始终生效。</p>}
-      </div>}
-    </section>}
+    {view === 'labs' && <PatientLabs patient={patient} session={session} focusLab={focusLab} onChanged={onChanged} onError={onError} onClinical={onClinical} onOpenWorkspace={onOpenWorkspace} onEdit={()=>setEditing(true)} Plot={LabPlot} citedFileName={citedFileName}/>}
     <div>
       {view === 'visits' && <section id="chart-visits" className="chart-section" aria-label="就诊时间轴"><header><h3>就诊时间轴</h3><small>按资料中的日期排列</small></header>{visits.length ? <ol className="chart-timeline">{visitsSorted.map((v,i)=>{
         const cited = citedFileName(v.source) || citedFileName(v.note) || citedFileName(v.reason) || v.source;

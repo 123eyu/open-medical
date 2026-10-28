@@ -38,6 +38,28 @@ export function dashboardLabSummary(group) {
   };
 }
 
+// Compare distinct dated observations only; an ambiguous value must never become
+// an apparently precise change. Units are already separated by dashboardLabGroups.
+export function dashboardLabComparison(group) {
+  const summary = dashboardLabSummary(group);
+  const previousDate = group.records.map(record => record.date)
+    .filter(date => isCalendarDate(date) && date < summary.date).sort().at(-1) || '';
+  const previousRecords = group.records.filter(record => previousDate && record.date === previousDate);
+  const previousValues = [...new Set(previousRecords.map(record => record.value ?? '结果未记录'))];
+  let delta = null, deltaReason = '';
+  if (!summary.date) deltaReason = '日期未明确';
+  else if (!previousDate) deltaReason = '暂无可比记录';
+  else if (summary.values.length !== 1 || previousValues.length !== 1) deltaReason = '同日多值，暂不比较';
+  else if (!group.unit?.trim()) deltaReason = '单位未明确';
+  else if (!Number.isFinite(summary.values[0]) || !Number.isFinite(previousValues[0])) deltaReason = '非精确数值';
+  else {
+    const difference = summary.values[0] - previousValues[0];
+    if (Number.isFinite(difference)) delta = Number(difference.toPrecision(12));
+    else deltaReason = '变化超出数值范围';
+  }
+  return { ...summary, previousDate, previousValues, delta, deltaReason };
+}
+
 // Notes contain arbitrary provenance/identity checks and are never a clinical summary.
 export function dashboardHistory(patient) {
   return [...(patient.visits || [])].sort((a,b)=>String(a.date || "9999").localeCompare(String(b.date || "9999")));
