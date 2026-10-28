@@ -38,15 +38,21 @@ export function CareTasksPanel({ patient, files = [], onChanged, onNavigate, onS
   const [data, setData] = useState(null), [status, setStatus] = useState("active"), [offset, setOffset] = useState(0);
   const [refresh, setRefresh] = useState(0), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const loadedView = useRef("");
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   useEffect(() => {
     let live = true;
+    const view = JSON.stringify([patient.id, status, offset]);
+    if (loadedView.current !== view) setData(null);
+    loadedView.current = view;
+    setLoading(true); setError("");
     api(`/api/patients/${patient.id}/care-tasks?status=${status}&offset=${offset}`).then((result) => {
       if (!live) return;
       if (offset && offset >= result.total) { setOffset(Math.max(0, Math.floor((result.total - 1) / 20) * 20)); return; }
       setData(result); setError("");
-    }).catch((err) => { if (live) setError(err.message); });
+    }).catch((err) => { if (live) setError(err.message); }).finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, [patient.id, status, offset, refresh]);
   const saved = async () => {
@@ -60,8 +66,8 @@ export function CareTasksPanel({ patient, files = [], onChanged, onNavigate, onS
     <header className="care-tracking-header"><div><h3>检查与转诊跟进</h3><p className="muted">记下何时跟进，收到结果后核对，再登记告知情况。这里记录实际处理，不会自动发送消息。</p></div>
       <button className="primary" disabled={patient.archived} onClick={() => setEditing({ action: "create" })}><Plus size={14} /> 新增待跟进</button></header>
     <div className="toolbar-actions"><button className={`chip ${status === "active" ? "active" : ""}`} onClick={() => { setStatus("active"); setOffset(0); }}>进行中</button><button className={`chip ${status === "closed" ? "active" : ""}`} onClick={() => { setStatus("closed"); setOffset(0); }}>已结束</button><button className="text-button" onClick={() => setRefresh((n) => n + 1)} aria-label="刷新跟进事项"><RotateCw size={14} /></button></div>
-    {error && <p className="error-text" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    {!data && !error && <p className="muted">正在读取跟进事项…</p>}
+    {error && <p className="error-text" role="alert">{error}<button className="text-button" disabled={loading} onClick={() => setRefresh(n => n + 1)}>重试读取跟进事项</button></p>}{notice && <p className="notice" role="status">{notice}</p>}
+    {!data && loading && <p className="muted" role="status">正在读取{status === "active" ? "进行中" : "已结束"}的跟进事项…</p>}
     {data?.items.map((task) => <article className="care-tracking-card" key={task.id}>
       <div className="care-tracking-title"><span className="pill">{states[task.status]}</span><small>{kinds[task.kind]}</small><span className={task.dueAt < Date.now() && primary[task.status] ? "care-due" : "muted"}>跟进时间 {format(task.dueAt)}</span></div>
       <h4>{task.title}</h4>{task.note && <p>{task.note}</p>}
