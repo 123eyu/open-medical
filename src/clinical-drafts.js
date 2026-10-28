@@ -9,11 +9,14 @@ export function hasClinicalDraft(patientId, section) {
 }
 export function useClinicalDraft(patientId, field, initial) {
   const key = `${patientId}:${field}`;
-  const [value, update] = useState(() => drafts.get(key) ?? initial);
+  const [state, update] = useState(() => ({ key, value: drafts.get(key) ?? initial }));
+  const value = state.key === key ? state.value : drafts.get(key) ?? initial;
+  if (state.key !== key) update({ key, value });
   const setValue = next => {
-    if (JSON.stringify(next) === JSON.stringify(initial)) drafts.delete(key);
-    else drafts.set(key, next);
-    update(next);
+    const resolved = typeof next === "function" ? next(drafts.get(key) ?? initial) : next;
+    if (JSON.stringify(resolved) === JSON.stringify(initial)) drafts.delete(key);
+    else drafts.set(key, resolved);
+    update(current => current.key === key ? { key, value: resolved } : current);
   };
   return [value, setValue];
 }
