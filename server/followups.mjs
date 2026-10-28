@@ -777,6 +777,14 @@ export class FollowUpManager {
         .get(id);
       check(row, "NOT_FOUND", "提醒不存在", 404);
       const reminder = JSON.parse(row.data);
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const completionFingerprint = createHash("sha256").update(JSON.stringify(
+        Object.fromEntries(["status", "note", "contactedAt", "checkedItems", "noRetryReason", "nextDueAt", "nextName", "contactMethod", "clinical"].map(key => [key, input[key] ?? null])),
+      )).digest("hex");
+      if (requestId && reminder.outcome?.requestId === requestId) {
+        check(reminder.outcome.requestFingerprint === completionFingerprint, "REQUEST_CONFLICT", "这次随访结果已保存且内容不同，请先查看记录，再追加更正", 409);
+        return reminder;
+      }
       check(
         !reminder.outcome,
         "ALREADY_RECORDED",
@@ -827,6 +835,7 @@ export class FollowUpManager {
       }
       check(input.status === "completed" || (!checkedItems.length && !Object.keys(clinical).length),"INVALID_INPUT","未联系上或拒绝随访时，不能勾选已核实项目或填写本次临床反馈；请在联系记录中说明。");
       reminder.outcome = {
+        ...(requestId ? { requestId, requestFingerprint: completionFingerprint } : {}),
         contactMethod, clinical,
         ...(input.status === "unreachable" && !nextJob ? { noRetryReason } : {}),
         status: input.status,
