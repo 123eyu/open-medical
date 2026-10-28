@@ -92,3 +92,5 @@
 @container (max-width:800px) { .treatment-grid { grid-template-columns:1fr; } .treatment-aside { grid-template-columns:repeat(2,minmax(0,1fr)); } .treatment-trends { grid-column:1/-1; } .treatment-trends svg[role=img] { max-height:200px; } }
 @container (max-width:520px) { .treatment-aside { grid-template-columns:1fr; } .treatment-summary { grid-template-columns:1fr; gap:10px; } .treatment-summary>div { padding:0; border:0; grid-template-columns:6em 1fr; } .treatment-summary>div>span:last-child { grid-column:2; } .treatment-allergy { flex-wrap:wrap; } .treatment-allergy>div { flex-direction:column; gap:5px; } .treatment-card { padding:16px; } .treatment-form-grid { grid-template-columns:1fr; } .treatment-form-grid .source-field { grid-column:auto; } .treatment-editor footer { flex-wrap:wrap; } .treatment-editor footer span { flex-basis:100%; } .treatment-med-name { flex-wrap:wrap; gap:2px; } }
 @media (prefers-reduced-motion:reduce) { .treatment-workspace button { transition:none; } }
+
+.treatment-allergy:not(.has-allergy) { padding:8px 0 14px; background:transparent; border:0; border-bottom:1px solid var(--border); border-radius:0; color:var(--muted); }

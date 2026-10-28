@@ -335,7 +335,6 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
         </div>
         <div className="ps-badges">
           {allergies.length > 0 && <span className="badge no">过敏：{allergies.join("、")}</span>}
-          {!allergies.length && <span className="badge">{p.allergyStatus === "none_known" ? "无已知过敏" : "过敏史尚未核对"}</span>}
           <span className="pill local">◈ 本地</span>
         </div>
       </div>

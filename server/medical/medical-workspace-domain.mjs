@@ -1,3 +1,4 @@
+import { LITERATURE_RESEARCH_GUIDANCE, verifyLiteratureResearch, researchAnswer } from "./literature-research.mjs";
 import { PATIENT_RECORD_INTENT } from "./record-intent.mjs";
 import {configureTrialTools,TRIAL_GUIDANCE,trialAnswer} from './trial-eligibility-tools.mjs';
 import {configureTaskPresentation} from './task-presentation.mjs';
@@ -67,6 +68,7 @@ export function createMedicalWorkspaceDomain({
   saveIntakeNotes = () => {},
   saveDisplayResult = () => {},
   readKnowledgeEvidence = () => ({}),
+  readResearchEvidence = () => ({}),
   patients = null,
   pending = null,
   followups = null,
@@ -89,7 +91,10 @@ export function createMedicalWorkspaceDomain({
         : GenericDomain.system;
     },
     limits: GenericDomain.limits,
-    beforeComplete: args => verifyKnowledgeAnswer({...args, evidence: readKnowledgeEvidence(args.context)}),
+    beforeComplete: args => {
+      verifyKnowledgeAnswer({...args, evidence: readKnowledgeEvidence(args.context)});
+      verifyLiteratureResearch({...args, evidence: readResearchEvidence(args.context)});
+    },
     preparedResponse(workspace,runId) {
       if(!workspace?.runs)return null;
       const run=workspace.runs.find(r=>r.id===runId);
@@ -104,7 +109,7 @@ export function createMedicalWorkspaceDomain({
       const result=type==='similar_cases'?similarCaseAnswer(workspace,runId,{text:''}):assessmentAnswer(workspace,runId,{text:''});
       return {message:{role:'assistant',content:result.text}};
     },
-    finalizeResult: (workspace,runId,result) => trialAnswer(workspace,runId,similarCaseAnswer(workspace,runId,assessmentAnswer(workspace,runId,finalizeKnowledgeAnswer(result)))),
+    finalizeResult: (workspace,runId,result) => researchAnswer(workspace,runId,trialAnswer(workspace,runId,similarCaseAnswer(workspace,runId,assessmentAnswer(workspace,runId,finalizeKnowledgeAnswer(result))))),
     contextManagement: true,
     allowAutoFileWrites: true,
     // 能力快照的领域事实：医疗叠层开关走共享判定点，通用内核不感知。
@@ -138,6 +143,7 @@ export function createMedicalWorkspaceDomain({
         "检验页面展示偏好：用户要求调整指标排序、日期对比、折叠或隐藏时，先 patient_lab_display_get，再 patient_lab_display_update 实际保存。只改变当前患者的页面展示，不创建病历提案、技能或自动化规则；未指定范围时只用于当前患者。保存成功后准确说明改动。",
         workspace.patientId ? `当前已关联患者编号：${workspace.patientId}。可调用 read_patient_brief 读取最新档案；不必让医生重新输入已有病史。` : "",
         run.policy?.workflow === "patient-assessment" ? ASSESSMENT_GUIDANCE : "",
+        run.policy?.workflow === "literature-research" ? LITERATURE_RESEARCH_GUIDANCE : "",
         run.policy?.workflow === "similar-case-search" ? SIMILAR_CASE_GUIDANCE : "",
         run.policy?.workflow === "similar-case-search" && run.policy.searchScope === "local" ? "本轮医生限定仅本地检索：只使用本机患者档案和本地病例库，不进行网上检索。online_case_search 和 literature_fetch 不可用。完成一次 similar_case_search 后直接核对候选并提交 finish_similar_case_search；无候选也提交真实的本地检索结果。" : "",
         run.policy?.presentation === "diagnostic" ? "辅助诊断结果请调用 present_diagnostic_review 整理支持依据、不同点和待补资料，不能把可能诊断当确诊。若只是评估治疗方案，继续用治疗方案评估工具。" : "",

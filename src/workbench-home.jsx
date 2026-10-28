@@ -1,3 +1,4 @@
+import { ModelConsent } from "./model-consent";
 import "./focused-workspace.css";
 import { BackupStatus } from "./backup-panel";
 import { patientOptionLabel } from "./patient-labels";
@@ -762,11 +763,11 @@ export function WorkbenchHome({
                   >
                     模型 <b>{config?.model || "未配置"}</b>
                   </button>
-                  <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>更多设置 · {accessMode === "auto" ? "会话自动" : "逐次确认"}</button>
+                  <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>设置</button>
                   {runtimeOptions && <><span className="tb-divider" />
                   <label
                     className="tb-item"
-                    title="访问权限：逐次确认=每轮发送前勾选外发；会话自动=本会话内外发免勾选"
+                    title="选择每次发送前确认，或持续同意当前应用使用已配置的模型服务；关闭应用后失效"
                   >
                     权限
                     <select
@@ -774,8 +775,8 @@ export function WorkbenchHome({
                       onChange={(e) => onAccessModeChange(e.target.value)}
                       disabled={starting}
                     >
-                      <option value="each">逐次确认</option>
-                      <option value="auto">会话自动</option>
+                      <option value="each">每次询问</option>
+                      <option value="auto">持续同意</option>
                     </select>
                   </label>
                   {config?.modelConfigured && (
@@ -798,15 +799,7 @@ export function WorkbenchHome({
               )}
               <span className="composer-spacer" />
               {consentRequired && !isFollowup && (
-                <label className="tb-check">
-                  <input
-                    type="checkbox"
-                    checked={consent}
-                    onChange={(e) => onConsentChange(e.target.checked)}
-                    disabled={starting}
-                  />
-                  {config?.provider === "local" ? "本轮允许本机模型与已启用的联网工具" : "本轮允许外发"}
-                </label>
+                <ModelConsent config={config} patient={Boolean(patientId)} checked={consent} onChange={onConsentChange} disabled={starting}/>
               )}
               <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !prompt.trim() || (Boolean(patientId) && !data) || (consentRequired && !consent))}>
                 {starting ? <Loader2 size={17} className="spin"/> : isFollowup ? <ArrowRight size={17}/> : <ArrowUp size={17}/>}

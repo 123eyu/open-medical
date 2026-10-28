@@ -281,7 +281,7 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
 
       {(!section || section === 'medications') && <section>
         <h3>过敏史</h3>
-        {!draft.allergies.length && <label className="clinical-status-field">核对状态<select aria-label="过敏史核对状态" value={draft.allergyStatus} onChange={(e) => patch({ allergyStatus: e.target.value })}>
+        {!draft.allergies.length && <label className="clinical-status-field">记录状态<select aria-label="过敏史记录状态" value={draft.allergyStatus} onChange={(e) => patch({ allergyStatus: e.target.value })}>
           <option value="unknown">尚未记录</option><option value="none_known">无已知过敏</option>
         </select></label>}
         <div className="allergy-chips">
@@ -298,7 +298,6 @@ export function ClinicalPanel({ detail, onChanged, onError, section }) {
               </button>
             </span>
           ))}
-          {!draft.allergies.length && <span className="muted">未记录。</span>}
         </div>
         <div className="clinical-add">
           <input

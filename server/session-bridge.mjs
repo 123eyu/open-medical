@@ -778,7 +778,7 @@ export class SessionBridge {
   // 返回 {kind:"workspace", handle} | {kind:"legacy", handle}；本地规则
   // 模式返回 {kind:"local", plan}，由 executeSend 同步执行。
   prepareSend(id, body) {
-    check(body.workflow !== "knowledge-answer" || resolveMode(body.mode || "local") !== "local", "MODEL_REQUIRED", "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
+    check(!["knowledge-answer", "literature-research"].includes(body.workflow) || resolveMode(body.mode || "local") !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
     if (!this.isSessionWorkspace(id))
       return { kind: "legacy", handle: this.runtime.prepare(id, body) };
     const w = this.requireSessionWorkspace(id);
@@ -799,7 +799,7 @@ export class SessionBridge {
     const requestedMode = body.mode || "local";
     const mode = resolveMode(requestedMode);
     const policy = medicalPolicy(message);
-    if (["patient-intake", "knowledge-answer"].includes(body.workflow)) policy.workflow = body.workflow;
+    if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
     if (body.requestId !== undefined)
       check(
         !this.service.store.hasRequest(id, body.requestId),
@@ -864,11 +864,11 @@ export class SessionBridge {
       412,
     );
     // 患者页一键入口可显式指定评估工作流，不再依赖草稿文本命中正则。
-    const assessment = Boolean(w.patientId && policy.workflow !== "patient-intake" && (body.workflow === "patient-assessment" || assessmentQuestion(message)));
-    const similarCases = Boolean(w.patientId && policy.workflow !== "patient-intake" && similarCaseQuestion(message));
+    const assessment = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && (body.workflow === "patient-assessment" || assessmentQuestion(message)));
+    const similarCases = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && similarCaseQuestion(message));
     if (assessment) policy.workflow = "patient-assessment";
     if (similarCases) { policy.workflow = "similar-case-search"; policy.intent = "similar_cases"; policy.searchScope = similarCaseSearchScope(message); }
-    policy.presentation = taskPresentation(message);
+    policy.presentation = policy.workflow === "literature-research" ? "literature" : taskPresentation(message);
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
     const fileIds = this.selectMaterials(w, body.fileIds);
     const sources = this.buildSources(w, message, fileIds);
@@ -1420,9 +1420,9 @@ export class SessionBridge {
         const w = bridge.requireSessionWorkspace(sessionId);
         const message = string(body.message, "任务", 200000);
         const mode = resolveMode(body.mode);
-        check(body.workflow !== "knowledge-answer" || mode !== "local", "MODEL_REQUIRED", "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
+        check(!["knowledge-answer", "literature-research"].includes(body.workflow) || mode !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
         const policy = medicalPolicy(message);
-        if (["patient-intake", "knowledge-answer"].includes(body.workflow)) policy.workflow = body.workflow;
+        if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
         const fileIds = bridge.selectMaterials(w, body.fileIds || []);
         const sources = bridge.buildSources(w, message, fileIds);
         if (mode === "local")

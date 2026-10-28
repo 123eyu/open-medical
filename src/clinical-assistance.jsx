@@ -1,32 +1,38 @@
-import {useClinicalDraft} from './clinical-drafts';
-import {clinicalDiagnoses} from '../shared/diagnoses.mjs';
-import {ASSISTANCE_PROFILES,suggestedProfiles,assistanceDraft} from '../shared/clinical-assistance.mjs';
+import { useClinicalDraft } from './clinical-drafts';
+import { clinicalDiagnoses } from '../shared/diagnoses.mjs';
 import './clinical-assistance.css';
-export function ClinicalAssistance({patient,session,onNavigate,onOpenTask}) {
- const suggested=suggestedProfiles(patient);
- const [profileId,setProfileId]=useClinicalDraft(patient.id,'assistanceProfile',suggested[0]?.id || 'general');
- const [question,setQuestion]=useClinicalDraft(patient.id,'assistanceQuestion','');
- const profile=ASSISTANCE_PROFILES.find(p=>p.id===profileId) || ASSISTANCE_PROFILES[0];
- const diagnoses=clinicalDiagnoses(patient.diagnoses).map(d=>d.name);
- const medications=patient.medications||[];
- const hasRecords=Boolean(patient.clinicalSummary?.text || patient.note || session?.files?.length || ['diagnoses','medications','labs','visits'].some(key=>patient[key]?.length));
- const unknown=medications.filter(m=>!m.status || m.status==='unknown').length;
- const start=kind=>onOpenTask(patient.sessionId,{draft:assistanceDraft(kind,profile,question),...(kind==='assessment'?{workflow:'patient-assessment'}:{})});
- const results=(session?.artifacts||[]).filter(a=>['treatment_review','similar_cases'].includes(a.type));
- return <section className="clinical-assistance" aria-label="患者诊疗辅助面板">
-  <div className="assistance-context">
-   <span className="assistance-caption">已登记诊断</span>
-   <p>{diagnoses.slice(0,2).join(' · ') || '尚未登记诊断'}</p>
-   {diagnoses.length>2 && <details className="assistance-diagnoses"><summary>查看全部 {diagnoses.length} 项诊断</summary><ul>{diagnoses.map((d,i)=><li key={i}>{d}</li>)}</ul><button className="text-button" onClick={()=>onNavigate('diagnoses')}>打开诊断与病史</button></details>}
-   <div className="assistance-status"><button title="点击打开用药记录，补标每种药是「正在使用」还是「已停用」" onClick={()=>onNavigate('medications')}>{unknown ? `${unknown} 条用药状态未记录` : '查看用药记录'}</button><span>{patient.allergies?.length?'已有过敏记录':patient.allergyStatus==='none_known'?'无已知过敏':'过敏史未记录'}</span></div>
-  </div>
-  <div className="assistance-layout"><div className="assistance-main">
-   <section className="assistance-question"><h2>这次想了解什么？</h2><label htmlFor="assistance-question">本次诊疗问题（可选）</label><textarea id="assistance-question" aria-label="本次诊疗问题" value={question} onChange={e=>setQuestion(e.target.value)} placeholder="例如：现有治疗方案是否合适？还需要补充哪些检查？"/>
-   {!hasRecords && <p>尚无临床记录或原始资料。可先<button className="text-button" onClick={()=>onNavigate('diagnoses')}>补充临床记录</button>或<button className="text-button" onClick={()=>onNavigate('library')}>添加原始资料</button>。</p>}
-   <div className="assistance-question-footer"><span>{question.trim() ? '围绕本次问题准备草稿' : '默认核对现有资料与待补问题'}</span><button className="text-button" onClick={()=>{setQuestion('');setProfileId(suggested[0]?.id || 'general');}}>清除问题与关注方向</button><button className="primary" onClick={()=>start('assessment')}>准备诊疗评估</button></div><small className="muted">点击后在问诊工作台填入任务草稿；核对并发送后才开始分析。</small></section>
-   <details className="assistance-disclosure"><summary>调整评估重点 <span>{profile.name}</span></summary><div className="assistance-detail-body"><label>关注方向<select aria-label="诊疗关注方向" value={profileId} onChange={e=>setProfileId(e.target.value)}>{ASSISTANCE_PROFILES.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><p>评估时会核对以下方面；这不是已确认的问题清单。</p><ul>{profile.topics.map(topic=><li key={topic}>{topic}</li>)}</ul><a href={profile.source} target="_blank" rel="noreferrer">{profile.sourceName}</a><div className="assistance-links"><button className="text-button" onClick={()=>onNavigate('diagnoses')}>诊断与病史</button><button className="text-button" onClick={()=>onNavigate('labs')}>检验结果</button></div></div></details>
-   <details className="assistance-disclosure"><summary>用药核对、检查与随访</summary><div className="assistance-detail-body assistance-more-actions"><div><h3>用药核对</h3><p>{medications.length ? `已登记 ${medications.length} 条用药记录，核对目前使用情况与安全性。` : '尚无结构化用药记录，可结合原始材料核对。'}</p><button className="secondary" onClick={()=>start('medication')}>准备用药核对</button></div><div><h3>检查与随访</h3><p>整理已有安排和下一步待确认事项。</p><button className="secondary" onClick={()=>start('followup')}>整理下一步问题</button><div className="assistance-links"><button className="text-button" onClick={()=>onNavigate('tracking')}>检查与转诊</button><button className="text-button" onClick={()=>onNavigate('followups')}>随访计划</button></div></div></div></details>
-  </div><aside className="assistance-evidence" aria-label="诊疗参考入口"><h3>也可以先看看</h3><button className="assistance-reference" aria-label="看看相似患者" onClick={()=>start('similar')}><b>看看相似患者 <span aria-hidden="true">↗</span></b><small>本地患者 · 网上病例</small></button><button className="assistance-reference" aria-label="相关指南与文献" onClick={()=>start('literature')}><b>相关指南与文献 <span aria-hidden="true">↗</span></b><small>诊疗指南 · 临床研究</small></button>{results.length>0 && <details className="assistance-saved"><summary>已有参考结果 · {results.length}（展示最近两份）</summary>{results.slice(-2).map(a=><button key={a.id} className="text-button" onClick={()=>onOpenTask(patient.sessionId,{tab:'results',artifactId:a.id})}>{a.title || '查看结果'} · {a.status==='rejected'?'需修订':'已保存'}</button>)}<button className="text-button" onClick={()=>onOpenTask(patient.sessionId,{tab:'results'})}>查看全部结果</button></details>}</aside></div>
-  <p className="assistance-footnote">点选后生成任务草稿，发送后开始分析或检索；结果供医生核对。</p>
- </section>;
+
+const starters = [
+  ['assessment', '分析病情', '请结合这位患者的病史和检查，分析目前病情、主要依据及需要关注的问题。'],
+  ['medication', '查看用药', '请结合这位患者的记录，解释当前用药，并分析需要关注的用药问题。'],
+  ['literature', '文献研究', '请围绕这位患者的主要诊疗问题，查阅相关指南和研究，比较证据并总结对这位患者的参考价值。'],
+  ['similar', '相似病例', '请查找这位患者的相似病例，比较共同点、差异和可参考的经验。'],
+  ['followup', '整理随访', '请结合已记录的诊疗安排，整理这位患者的后续复查与随访事项。'],
+];
+
+export function ClinicalAssistance({ patient, session, onNavigate, onOpenTask }) {
+  const [question, setQuestion] = useClinicalDraft(patient.id, 'assistanceQuestion', '');
+  const [kind, setKind] = useClinicalDraft(patient.id, 'assistanceKind', 'question');
+  const diagnoses = clinicalDiagnoses(patient.diagnoses).map(d => d.name);
+  const results = (session?.artifacts || []).filter(a => ['treatment_review', 'similar_cases'].includes(a.type));
+  const start = event => {
+    event.preventDefault();
+    if (!question.trim()) return;
+    onOpenTask(patient.sessionId, { draft: question.trim(), ...(kind === 'literature' ? { workflow: 'literature-research' } : {}) });
+  };
+  return <section className="clinical-assistance" aria-label="患者诊疗辅助面板">
+    <header className="assistance-intro"><h1>围绕这位患者，直接提问</h1><p>结合已保存的病历和资料，分析问题、查阅证据，或帮助整理记录。</p></header>
+    <form className="assistance-question" onSubmit={start}>
+      <label className="sr-only" htmlFor="assistance-question">本次诊疗问题</label>
+      <textarea id="assistance-question" aria-label="本次诊疗问题" value={question} onChange={e => setQuestion(e.target.value)} placeholder="你想了解什么，或者希望帮这位患者做什么？"/>
+      <div className="assistance-question-footer"><span>已关联 {patient.name} 的档案</span><button type="submit" className="primary" disabled={!question.trim()}>进入对话 →</button></div>
+    </form>
+    <div className="assistance-starters" aria-label="选择问题方向">{starters.map(([id, label, prompt]) => <button className="secondary" key={id} aria-pressed={kind === id} onClick={() => { setKind(id); setQuestion(prompt); }}>{label}</button>)}</div>
+    <details className="assistance-patient-context"><summary>查看已关联的病情资料{diagnoses.length ? ` · ${diagnoses.slice(0, 2).join('、')}` : ''}</summary>
+      {patient.clinicalSummary?.text && <p>{patient.clinicalSummary.text}</p>}
+      {!!diagnoses.length && <ul>{diagnoses.map((name, index) => <li key={index}>{name}</li>)}</ul>}
+      <div className="assistance-links"><button className="text-button" onClick={() => onNavigate('diagnoses')}>诊断与病史</button><button className="text-button" onClick={() => onNavigate('medications')}>治疗与用药</button><button className="text-button" onClick={() => onNavigate('labs')}>检验结果</button><button className="text-button" onClick={() => onNavigate('library')}>原始资料</button></div>
+    </details>
+    {!!results.length && <details className="assistance-saved"><summary>已有分析 · {results.length} 份</summary>{results.slice(-3).reverse().map(result => <button key={result.id} className="text-button" onClick={() => onOpenTask(patient.sessionId, { tab: 'results', artifactId: result.id })}>{result.title || '查看分析'}</button>)}</details>}
+  </section>;
 }

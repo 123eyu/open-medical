@@ -722,9 +722,9 @@ export function validateIdentityInput(input = {}) {
 }
 function allergyState(patient, input) {
   const status = input.allergyStatus;
-  check(status === undefined || ["unknown", "none_known", "recorded"].includes(status), "INVALID_INPUT", "过敏史核对状态无效");
+  check(status === undefined || ["unknown", "none_known", "recorded"].includes(status), "INVALID_INPUT", "过敏史记录状态无效");
   if ((patient.allergies || []).length) {
-    check(status === undefined || status === "recorded", "INVALID_INPUT", "已有过敏原记录，不能标记为无已知过敏或未核对");
+    check(status === undefined || status === "recorded", "INVALID_INPUT", "已有过敏原记录，不能标记为无已知过敏或未记录");
     return "recorded";
   }
   check(status !== "recorded", "INVALID_INPUT", "请先填写已知过敏原");

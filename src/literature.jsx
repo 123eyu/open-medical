@@ -8,6 +8,7 @@ import { Search, Loader2, FilePlus, Copy, ExternalLink, Check } from "lucide-rea
 export function LiteratureView({ onOpenTask }) {
   const [specialty, setSpecialty] = useState("");
   const [query, setQuery] = useState("");
+  const [mode, setMode] = useState("research");
   const [source, setSource] = useState("pubmed");
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
@@ -36,9 +37,13 @@ export function LiteratureView({ onOpenTask }) {
     setError("");
     setResults(null);
     try {
-      if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(searchQuery)) {
-        const session = await api("/api/sessions", "POST", { title: `文献检索 · ${searchQuery.slice(0, 40)}` });
-        await onOpenTask(session.id, { draft: `请检索以下主题的论文：${searchQuery}。先提取核心医学概念并改写为 2–4 组英文检索式，分组检索、去重，核对摘要相关性后列出文献和出处。首选来源 ${options.source || source}。${yearFrom ? `起始年 ${yearFrom}。` : ""}${yearTo ? `结束年 ${yearTo}。` : ""}不要把未命中说成没有相关论文。` });
+      if (mode === "research" || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(searchQuery)) {
+        const session = await api("/api/sessions", "POST", { title: `${mode === "research" ? "文献研究" : "文献检索"} · ${searchQuery.slice(0, 40)}` });
+        const scope = [yearFrom && `起始年：${yearFrom}`, yearTo && `结束年：${yearTo}`].filter(Boolean).join('；');
+        await onOpenTask(session.id, {
+          draft: `${mode === "research" ? '请围绕这个问题查阅文献，比较研究证据并给出综合结论：' : '请查找以下主题的论文：'}\n${searchQuery}\n\n优先来源：${options.source || source}${scope ? `；${scope}` : ''}。`,
+          ...(mode === "research" ? { workflow: "literature-research" } : {}),
+        });
         return;
       }
       const params = new URLSearchParams({
@@ -132,10 +137,11 @@ export function LiteratureView({ onOpenTask }) {
       <section className="module-card literature-view">
         <div className="module-head">
           <div>
-            <h1>文献检索</h1>
-            <p className="module-phase">PubMed · Europe PMC</p>
+            <h1>文献研究</h1>
+            <p className="module-phase">围绕问题查找、阅读和比较证据，形成有来源的总结。</p>
           </div>
         </div>
+        <div className="literature-modes" role="group" aria-label="文献工作方式"><button className="secondary" aria-pressed={mode === 'research'} onClick={() => setMode('research')}>研究与综述</button><button className="secondary" aria-pressed={mode === 'search'} onClick={() => setMode('search')}>查找论文</button></div>
         {specialty && (
           <button
             className="secondary"
@@ -149,17 +155,18 @@ export function LiteratureView({ onOpenTask }) {
             }
             disabled={busy}
           >
-            查我领域最新文献：{specialty}
+            {mode === 'research' ? '研究我关注的领域：' : '查找最新论文：'}{specialty}
           </button>
         )}
-        <button className="secondary" disabled={busy} onClick={() => setQuery("hypertension home blood pressure monitoring randomized trial")}>填入示例检索词</button>
         <form className="literature-form" onSubmit={runSearch}>
-          <input
+          <textarea
+            rows={3}
             className="literature-query"
             value={query}
-            aria-label="文献检索主题" placeholder="英文关键词，或用中文描述论文主题"
+            aria-label="文献检索主题" placeholder={mode === "research" ? "描述你要解决的问题，例如：比较两种治疗方案的证据、适用人群和局限" : "论文主题、标题、PMID 或英文关键词"}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <details className="literature-options"><summary>检索范围</summary><div>
           <select aria-label="文献来源" value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="pubmed">PubMed</option>
             <option value="europepmc">Europe PMC</option>
@@ -178,12 +185,13 @@ export function LiteratureView({ onOpenTask }) {
             inputMode="numeric"
             onChange={(e) => setYearTo(e.target.value.replace(/\D/g, ""))}
           />
+          </div></details>
           <button type="submit" disabled={busy || !query.trim()}>
             {busy ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
-            {/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手规划检索" : "检索"}
+            {mode === "research" ? "进入研究对话" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
           </button>
         </form>
-        {/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) && <p className="muted">将打开任务并填入主题；发送后由助手转为英文、分组检索。</p>}
+
         {error && (
           <p className="form-error" role="alert">
             {error}

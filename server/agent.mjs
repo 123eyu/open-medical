@@ -1,3 +1,4 @@
+import { literatureRunEvidence } from "./medical/literature-research.mjs";
 import { habitMutation, habitRevision } from './medical/habit-concurrency.mjs';
 import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
@@ -532,6 +533,7 @@ export function createServer(options = {}) {
     imageShrink: options.imageShrink || null,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
+      readResearchEvidence: context => literatureRunEvidence(store.db, context),
       personalContext: (run, workspaceId) => {
         const service = new PersonalContext({ store, doctor, guidelines, cases: () => cases, extensions: () => extensions, provider: () => provider });
         const prefs = learningPrefs(store.db);

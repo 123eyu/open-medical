@@ -65,8 +65,8 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
   const field = key => ({ value: editor[key], onChange: event => setEditor({ ...editor, [key]: event.target.value }) });
   return <div className="treatment-workspace">
     <div className={`treatment-allergy ${allergies.length ? 'has-allergy' : ''}`}>
-      <ShieldAlert size={19}/><div><b>过敏与用药安全</b><span>{allergies.length ? allergies.map(a => typeof a === 'string' ? a : [a.substance, a.reaction].filter(Boolean).join('：')).join('；') : patient.allergyStatus === 'none_known' ? '无已知过敏' : '过敏史尚未核对'}</span></div>
-      <button className="text-button" onClick={onEditMedications}>核对过敏史 <ArrowUpRight size={14}/></button>
+      {!!allergies.length && <ShieldAlert size={19}/>}<div><b>过敏史</b><span>{allergies.length ? allergies.map(a => typeof a === 'string' ? a : [a.substance, a.reaction].filter(Boolean).join('：')).join('；') : patient.allergyStatus === 'none_known' ? '无已知过敏' : '未记录'}</span></div>
+      <button className="text-button" onClick={onEditMedications}>{allergies.length || patient.allergyStatus === 'none_known' ? '编辑过敏史' : '补充过敏史'} <ArrowUpRight size={14}/></button>
     </div>
     {notice && <p className="treatment-notice" role="status"><Check size={16}/>{notice}</p>}
     <div className="treatment-summary" aria-label="治疗概况">

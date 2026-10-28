@@ -583,24 +583,20 @@ export function PatientsView({
                     .join("、")}
                 </em>
               )}
-              {(detail.allergies || []).length === 0 && (
-                <span className="patient-allergy-status">
-                <em className="pill">
-                  {detail.allergyStatus === "none_known"
-                    ? "无已知过敏"
-                    : "过敏史尚未核对"}
-                </em>
-                {["overview", "medications"].includes(tab) && detail.allergyStatus !== "none_known" && <button type="button" className="text-button" disabled={detail.archived} onClick={() => openRecordTab("medications", { edit: true })}>核对过敏史</button>}
-                </span>
-              )}
             </div>
             <div className="toolbar-actions">
               <button
               className="primary"
               disabled={!session}
-              onClick={() => onOpenWorkspace(detail.sessionId)}
+              title="可先选中病历中的文字，再提问或要求修改"
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => {
+                const selection = window.getSelection();
+                const quote = selection && panelRoot.current?.contains(selection.anchorNode) && panelRoot.current?.contains(selection.focusNode) ? selection.toString().trim() : '';
+                onOpenWorkspace(detail.sessionId, quote ? { draft: `关于患者记录中的这段内容：\n${quote}\n\n` } : {});
+              }}
             >
-              <FolderOpen size={15} /> 打开问诊工作台
+              <FolderOpen size={15} /> 问 AI
             </button>
               <button className="secondary" onClick={() => setModal("edit-patient")}>编辑信息</button>
 

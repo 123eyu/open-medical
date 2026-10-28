@@ -1,3 +1,4 @@
+import { ModelConsent } from "./model-consent";
 import { DoctorAgenda } from "./doctor-agenda";
 import { CareInbox } from "./care-inbox";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
@@ -490,6 +491,7 @@ function App() {
     [draft, setDraftValue] = useState(""),
     [consent, setConsent] = useState(false);
   const [questionSelection, setQuestionSelection] = useState({});
+  const [readingOnly, setReadingOnly] = useState(false);
   const questionDrafts = useRef(new Map());
   const draftWorkflows = useRef(new Map());
   const rememberedQuestions = useRef(new Map());
@@ -844,14 +846,14 @@ function App() {
     setCurrentPatientId(id);
     localStorage.setItem("om.currentPatient", id || "");
   };
-  useLayoutEffect(() => { followOutput.current = true; lastScrollTop.current = 0; }, [activeId]);
+  useLayoutEffect(() => { followOutput.current = true; lastScrollTop.current = 0; setReadingOnly(false); }, [activeId, questionRunId]);
   useLayoutEffect(() => {
     const pane = endRef.current?.parentElement;
     if (pane && followOutput.current) {
       pane.scrollTop = !session?.messages.length && !activeRun?.busy ? 0 : pane.scrollHeight;
       lastScrollTop.current = pane.scrollTop;
     }
-  }, [activeId, session?.messages.length, activeRun?.partial, activeRun?.busy]);
+  }, [activeId, questionRunId, session?.messages.length, activeRun?.partial, activeRun?.busy]);
   useEffect(() => {
     if (!activeId) return;
     const timer = setInterval(() => {
@@ -965,8 +967,8 @@ function App() {
     if (!text || loading) return;
     const pendingWorkflow = override.workflow ?? pendingWorkflowRef.current;
     const modelEnabled = Boolean(config?.modelConfigured) && accessMode !== "local";
-    if (pendingWorkflow === "knowledge-answer" && !modelEnabled) {
-      setError("知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
+    if (["knowledge-answer", "literature-research"].includes(pendingWorkflow) && !modelEnabled) {
+      setError(pendingWorkflow === "literature-research" ? "文献研究需要模型进行阅读和综合。请先配置模型，或在文献页使用查找论文。问题已保留。" : "知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
       return;
     }
     // 执行中追加要求：统一内核会话（kind:"session"）走 steer 指令队列，与
@@ -1314,9 +1316,9 @@ function App() {
         setQuestionSelection({ sessionId: data.id, runId: null });
         activateDraft(draftKeyFor(data, null));
       }
-      if (options.workflow) {
-        pendingWorkflowRef.current = options.workflow;
-        draftWorkflows.current.set(draftContext.current.key, options.workflow);
+      if (options.draft || options.newQuestion) {
+        pendingWorkflowRef.current = options.workflow || "";
+        draftWorkflows.current.set(draftContext.current.key, options.workflow || "");
       }
       setTab(options.tab || "materials");
       setArtifactId(
@@ -1329,7 +1331,7 @@ function App() {
       setInspector(options.tab === "results" || options.tab === "materials");
       if (options.artifactId) setAcceptId(options.artifactId);
       if (options.draft) {
-        setNotice("已准备好任务要求。核对材料与问题后，点击发送开始；当前尚未执行。");
+        setNotice("");
         setDraft(options.draft);
         setConsent(false);
         setTimeout(() => inputRef.current?.focus(), 100);
@@ -1681,7 +1683,7 @@ function App() {
             />
           ) : (
             <div className={`shell ${inspector ? "with-inspector" : ""}`}>
-              <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""}`}>
+              <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""} ${readingOnly ? "reading-only" : ""}`}>
                 <div className="conversation-head">
                   <IconButton
                     title="显示会话列表"
@@ -1690,7 +1692,7 @@ function App() {
                     <Menu size={18} />
                   </IconButton>
                   <div className="heading-copy">
-                    <small>{session?.patientId ? taskPatientContext(session, patientsList) : "任务对话"}</small>
+                    <small>{session?.patientId ? "患者问答 · 已关联当前档案" : "任务对话"}</small>
                     <h1>{session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session && (
@@ -1743,6 +1745,7 @@ function App() {
                       </IconButton>
                     </div>
                   )}
+                  {!!session?.messages.length && (!session.patientId || questionRunId) && <button type="button" className="text-button reading-toggle" aria-pressed={readingOnly} onClick={() => { setReadingOnly(!readingOnly); setInspector(false); }}>{readingOnly ? '返回提问' : '专注阅读'}</button>}
                   <button
                     className="secondary inspector-toggle"
                     aria-expanded={inspector}
@@ -1830,7 +1833,7 @@ function App() {
                     }}
                   />
                 ) : (
-                  <div className="message-list"
+                  <div className="message-list" tabIndex={0} role="region" aria-label="对话内容"
                     onWheel={(e) => { if (e.deltaY < 0) followOutput.current = false; }}
                     onTouchMove={() => { followOutput.current = false; }}
                     onKeyDown={(e) => { if (['ArrowUp', 'PageUp', 'Home'].includes(e.key)) followOutput.current = false; }}
@@ -1843,7 +1846,7 @@ function App() {
                       lastScrollTop.current = pane.scrollTop;
                     }}>
                     {session?.patientId && patientDetail && (
-                      <PatientSummaryCard
+                      <details className="conversation-patient-details"><summary>查看患者资料{patientDetail.allergies?.length ? ` · 过敏：${patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}` : ''}</summary><PatientSummaryCard
                         detail={patientDetail}
                         session={session}
                         compact
@@ -1851,7 +1854,7 @@ function App() {
                           openPatient({ id: session.patientId })
                         }
                         onOpenLabs={() => openPatient({ id: session.patientId, tab: "labs" })}
-                      />
+                      /></details>
                     )}
                     {(!session?.messages.length || (session?.patientId && !questionRunId && !busy)) && (
                       <div className={session?.patientId ? "patient-task-preparation" : "welcome task-preparation"}>
@@ -1873,7 +1876,7 @@ function App() {
                           咨询、指标解读这类问题会直接回答；整理病历、写文书时助手会自动选择合适的技能模板，需要时再添加材料。
                         </p>
                         </>}
-                        <button
+                        {!session?.patientId && <button
                           className="secondary prepare-materials"
                           disabled={!config || uploading}
                           onClick={() => {
@@ -1889,7 +1892,7 @@ function App() {
                           {session?.files.length
                             ? `核对本次选中的 ${selectedFileIds.length} 份材料`
                             : "添加任务材料"}
-                        </button>
+                        </button>}
                         {!draft.trim() && (session?.patientId ? <details className="patient-task-options">
                           <summary>常用任务</summary>
                           <div className="workflow-grid">{WORKFLOWS.map(flow => <button key={flow.id} onClick={() => selectWorkflow(flow)}><flow.icon size={19}/><b>{flow.title}</b><span>{flow.desc}</span><ChevronRight size={15}/></button>)}</div>
@@ -1931,7 +1934,7 @@ function App() {
                             {m.role === "user" ? (
                               m.content
                             ) : (
-                              runOf(m.runId)?.artifacts?.some(a => a.type === "similar_cases") ? <><SimilarCases key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => a.type === "similar_cases").id)} artifact={runOf(m.runId).artifacts.find(a => a.type === "similar_cases")} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></> : <RichMessage text={m.content} />
+                              runOf(m.runId)?.artifacts?.some(a => a.type === "similar_cases") ? <><SimilarCases key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => a.type === "similar_cases").id)} artifact={runOf(m.runId).artifacts.find(a => a.type === "similar_cases")} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
                             )}
                           </div>
                           {m.role !== "user" && ["delivery_failed","unverified"].includes(m.outcome || runOf(m.runId)?.outcome) &&
@@ -2137,18 +2140,14 @@ function App() {
                     </div>
                   )}
                   {session?.patientId && <div className="patient-question-context" role="status">
-                    {busy ? "正在处理当前问题，可补充要求。" : canFollowQuestion ? <>继续追问 · {session.messages.find(m => m.role === "user" && m.runId === [...questionIds].at(-1))?.content}</> : "新问题 · 使用患者档案与所选资料；以前的聊天不会自动带入。"}
-                    {!busy && questionRunId && !canFollowQuestion && <span>这次问答未形成可追问的模型回答。再次发送会独立开始。</span>}
+                    {busy ? "正在处理，可补充要求" : canFollowQuestion ? "继续追问" : "新问题 · 已关联患者档案"}
+                    {!busy && questionRunId && !canFollowQuestion && <span>上次未完成，再次发送将开始新问题。</span>}
                   </div>}
-                  <section className="composer-materials" aria-label="本轮材料范围">
-                    {selectedFileIds.length ? <details><summary>本轮材料 · {selectedFileIds.length} 份</summary><ul>{selectedFileIds.map(id => <li key={id}>{session.files.find(file => file.id === id).name}</li>)}</ul></details> : <span>本轮未选择材料</span>}
-                    <button type="button" className="text-button" onClick={() => { setTab('materials'); setInspector(true); }}>核对材料范围</button>
-                  </section>
                   <form className="composer" onSubmit={send}>
                     <textarea
                       ref={inputRef}
                       aria-label="医疗工作需求"
-                      rows={3}
+                      rows={2}
                       placeholder={
                         canSteer
                           ? "任务执行中…输入补充要求可直接追加（Enter 发送）"
@@ -2247,6 +2246,7 @@ function App() {
                           {uploadProgressText(uploadProgress)}
                         </span>
                       )}
+                      <button type="button" className="attach-button" onClick={() => { setTab('materials'); setInspector(true); }}>资料{selectedFileIds.length ? ` · ${selectedFileIds.length}` : ''}</button>
                       <span className="tb-divider" />
                       <button
                         type="button"
@@ -2256,13 +2256,13 @@ function App() {
                       >
                         模型 <b>{config?.model || "未配置"}</b>
                       </button>
-                      <details className="composer-advanced"><summary>更多设置 · {accessMode === "auto" ? "会话自动" : "逐次确认"}</summary>
+                      <details className="composer-advanced"><summary>设置</summary>
                         <div className="composer-advanced-fields">
                       <label
                         className="tb-item"
-                        title="访问权限：逐次确认=每轮发送前勾选外发；会话自动=本会话内外发免勾选"
+                        title="选择每次发送前确认，或持续同意当前应用使用已配置的模型服务；关闭应用后失效"
                       >
-                        权限
+                        使用模型
                         <select
                           value={accessMode}
                           onChange={(e) => {
@@ -2272,8 +2272,8 @@ function App() {
                           }}
                           disabled={busy || loading}
                         >
-                          <option value="each">逐次确认</option>
-                          <option value="auto">会话自动</option>
+                          <option value="each">每次询问</option>
+                          <option value="auto">持续同意</option>
                         </select>
                       </label>
                       {config?.modelConfigured && (
@@ -2296,14 +2296,7 @@ function App() {
                       </details>
                       <div className="composer-submit">
                       {accessMode === "each" && config?.modelConfigured && !busy && (
-                        <label className="tb-check">
-                          <input
-                            type="checkbox"
-                            checked={consent}
-                            onChange={(e) => setConsent(e.target.checked)}
-                          />
-                          {config?.provider === "local" ? "本轮允许本机模型与已启用的联网工具" : "本轮允许外发"}
-                        </label>
+                        <ModelConsent config={config} patient={Boolean(session?.patientId || referencedPatients.length)} checked={consent} onChange={setConsent}/>
                       )}
                       {busy && (
                         <button

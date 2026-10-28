@@ -8,7 +8,7 @@ export function taskUpdatedLabel(value) {
 export function taskPatientContext(task, patients = []) {
   if (!task.patientId) return "";
   const patient = patients.find(item => item.id === task.patientId);
-  if (!patient) return `患者信息暂不可用 · 关联编号 ${task.patientId}`;
+  if (!patient) return "患者信息暂不可用";
   const defaultTitle = String(task.title || "").replace(/\s+/g, "") === `${patient.name}·病例`.replace(/\s+/g, "");
-  return [defaultTitle && "患者资料工作台", patient.name, patient.patientNumber ? `病历号 ${patient.patientNumber}` : `未编号 · 关联编号 ${patient.id}`].filter(Boolean).join(" · ");
+  return [defaultTitle && "患者资料工作台", patient.name, patient.patientNumber ? `病历号 ${patient.patientNumber}` : [patient.birthYear ? `${patient.birthYear}年生` : "未编号", patient.phone ? `电话尾号 ${patient.phone.slice(-4)}` : ""].filter(Boolean).join(" · ")].filter(Boolean).join(" · ");
 }
