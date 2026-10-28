@@ -156,7 +156,7 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
         </table></div> : <p className="muted">暂无参与对照的项目，可在检验详情中加入。</p>}
       </details>
     </div>}
-    {(!!groups.length || !!monitors.length) && <details className="labs-monitor-settings" open={monitorOpen} onToggle={event=>setMonitorOpen(event.currentTarget.open)}><summary>监测设置{monitors.length ? ` · ${monitors.length} 项` : ''}</summary>
+    {(!!monitors.length || !!monitorForm) && <details className="labs-monitor-settings" open={monitorOpen} onToggle={event=>setMonitorOpen(event.currentTarget.open)}><summary>监测设置{monitors.length ? ` · ${monitors.length} 项` : ''}</summary>
       <div className="chart-monitors" aria-label="个性化检验监测">
         {monitorForm && <form className="chart-monitor-form" onSubmit={submitMonitor}>
           <div className="chart-monitor-row"><b>{monitorForm.item}</b><label>条件<select value={monitorForm.op} onChange={e=>setMonitorForm({...monitorForm, op: e.target.value})}><option value="gt">高于</option><option value="lt">低于</option></select></label>
@@ -177,7 +177,6 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
             <span className="chart-monitor-actions"><button className="text-button" onClick={()=>toggleMonitor(m)}>{m.status === 'paused' ? '恢复' : '暂停'}</button><button className="text-button danger" onClick={()=>removeMonitor(m)}>删除</button></span>
           </li>;
         })}</ul>}
-        {!monitors.length && !monitorForm && <p className="muted">展开一项检验的详情，即可设置监测阈值或复查间隔。</p>}
 
       </div>
     </details>}
