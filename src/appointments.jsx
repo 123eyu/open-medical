@@ -91,13 +91,32 @@ export function AppointmentsPanel({ patient }) {
 // Lab values added since the doctor last marked them read.
 export function NewLabsNotice({ patientId, onOpenLabs }) {
   const [labs, setLabs] = useState(null), [keys, setKeys] = useState([]), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  const load = useCallback(() => api(`/api/patients/${patientId}/labs/new`).then((v) => { setLabs(v.labs); setKeys(v.keys || []); }).catch(() => setLabs([])), [patientId]);
-  useEffect(() => { load(); }, [load]);
-  if (!labs?.length) return null;
-  return <div className="new-labs" role="status" aria-label="待阅检验结果">
-    <div><b>待阅检验结果 {labs.length} 项</b><span>{labs.slice(0, 6).map((l) => `${l.item} ${l.value}${l.unit || ""}（${l.date}）`).join("、")}{labs.length > 6 ? " 等" : ""}</span></div>
+  const [loading, setLoading] = useState(true);
+  const generation = useRef(0), active = useRef(true);
+  const load = useCallback(async () => {
+    const request = ++generation.current;
+    setLoading(true); setError("");
+    try {
+      const value = await api(`/api/patients/${patientId}/labs/new`);
+      if (active.current && request === generation.current) { setLabs(value.labs); setKeys(value.keys || []); }
+    } catch (err) {
+      if (active.current && request === generation.current) setError(`待阅检验读取失败：${err.message}`);
+    } finally {
+      if (active.current && request === generation.current) setLoading(false);
+    }
+  }, [patientId]);
+  useEffect(() => { active.current = true; load(); return () => { active.current = false; generation.current++; }; }, [load]);
+  if (!loading && !error && !labs?.length) return null;
+  return <div className="new-labs" role="status" aria-label="待阅检验结果" aria-busy={loading || busy}>
+    <div><b>{labs?.length ? `待阅检验结果 ${labs.length} 项` : loading ? "正在读取待阅检验…" : "待阅检验状态未读取"}</b>{labs?.length > 0 && <span>{labs.slice(0, 6).map((l) => `${l.item} ${l.value}${l.unit || ""}（${l.date}）`).join("、")}{labs.length > 6 ? " 等" : ""}</span>}</div>
     {onOpenLabs && <button className="text-button" onClick={onOpenLabs}>看趋势</button>}
-    <button className="secondary" disabled={busy || !keys.length} onClick={async () => { setBusy(true); try { await api(`/api/patients/${patientId}/labs/reviewed`, "POST", { keys: keys.slice(0, 6) }); await load(); } catch (e) { setError(e.message); } finally { setBusy(false); } }}>{labs.length > 6 ? "标记以上 6 项已阅" : "标记已阅"}</button>
-    {error && <p className="error-text">{error}</p>}
+    {labs?.length > 0 && <button className="secondary" disabled={busy || loading || Boolean(error) || !keys.length} onClick={async () => {
+      if (busy) return;
+      setBusy(true); setError("");
+      try { await api(`/api/patients/${patientId}/labs/reviewed`, "POST", { keys: keys.slice(0, 6) }); if (active.current) await load(); }
+      catch (err) { if (active.current) setError(`标记已阅未确认，请重新读取后核对：${err.message}`); }
+      finally { if (active.current) setBusy(false); }
+    }}>{labs.length > 6 ? "标记以上 6 项已阅" : "标记已阅"}</button>}
+    {error && <p className="error-text" role="alert">{error}<button className="text-button" disabled={loading || busy} onClick={load}>重试读取待阅检验</button></p>}
   </div>;
 }
