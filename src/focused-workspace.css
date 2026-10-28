@@ -1,0 +1,71 @@
+/* Keep navigation and optional setup subordinate to the current task. */
+.home-activity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  margin: 8px 0 28px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.home-activity > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 5px 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  font-size: var(--meta-size, 14px);
+}
+.home-activity > button:hover { color: var(--accent-deep); }
+.home-activity .cockpit-number,
+.home-activity b { font-size: var(--body-size, 16px); font-variant-numeric: tabular-nums; }
+.home-urgent { color: var(--danger); font-size: var(--meta-size, 14px); }
+.home-activity > p { width: 100%; margin: 0; color: var(--danger); }
+.workspace-optional { margin: 18px 0; border-top: 1px solid var(--border); }
+.workspace-optional > summary,
+.attention-routine > summary,
+.patient-inbox > summary {
+  min-height: 44px;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  cursor: pointer;
+}
+.workspace-optional[open] > summary { color: var(--ink); }
+.workspace-optional > .hub-customize { margin-top: 0; }
+.workspace-optional :is(.setup-checklist, .backup-status) { margin: 12px 0; }
+.patient-list-activity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  text-align: left;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border: 0;
+  border-radius: 6px;
+}
+.patient-list-activity > span { margin-left: auto; color: var(--accent-deep); }
+.patient-inbox > summary svg { vertical-align: middle; margin-right: 6px; }
+.agenda-context { color: var(--muted); font-size: var(--meta-size, 14px); margin: 0 0 20px; }
+.patient-overview > .risk-list { margin: 0 0 16px; }
+.risk-history .risk-card { background: var(--surface, #fafbf9); border-color: var(--border); }
+.risk-history .r-head { color: var(--muted); }
+.patient-overview .patient-attention { border-left: 1px solid var(--border); background: transparent; }
+.patient-attention .attention-refresh { justify-content: flex-end; gap: 12px; }
+.attention-routine > summary { color: var(--ink); }
+.attention-routine > summary span { margin-left: 8px; font-variant-numeric: tabular-nums; }
+.attention-routine > summary small { margin-left: 16px; color: var(--muted); font-size: inherit; }
+.attention-urgent h3 { color: var(--danger); margin: 8px 0; font-size: var(--body-size, 16px); }
+:is(.home-activity button, .workspace-optional summary, .attention-routine summary, .patient-inbox summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .home-activity { gap: 8px 16px; margin-bottom: 20px; }
+  .home-urgent { flex-basis: 100%; order: 1; }
+  .attention-routine > summary small { display: block; margin: 4px 0 0 18px; }
+}

@@ -26,6 +26,7 @@ export function PatientOverview({
   onNavigate,
   onOpenWorkspace,
   onView,
+  riskPanel,
 }) {
   const diagnosisGroups = groupDiagnoses(patient.diagnoses);
   const diagnosisCount = diagnosisGroups.reduce(
@@ -52,6 +53,7 @@ export function PatientOverview({
 
   return (
     <div className="patient-overview">
+      {riskPanel}
       <PatientAttention
         patient={patient}
         onNavigate={onNavigate}
@@ -181,7 +183,7 @@ export function PatientOverview({
               {!plan && <p className="overview-meta">尚未建立治疗方案</p>}
             </div>
             <OverviewLink onClick={() => onNavigate("medications")}>
-              核对用药与资料来源
+              查看用药与资料来源
             </OverviewLink>
           </section>
         </div>

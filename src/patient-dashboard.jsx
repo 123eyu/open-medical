@@ -38,7 +38,7 @@ function LabPlot({ group, compact = false }) {
     {dates.length > 1 ? <><text x={left} y="182">{dates[0]}</text><text x={right} y="182" textAnchor="end">{dates.at(-1)}</text></> : <text x={width/2} y="182" textAnchor="middle">{dates[0]}</text>}
   </svg></div>;
 }
-export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", followups = [], focusFile = null, focusLab = null, editRequest, onEditRequestHandled, onChanged, onError }) {
+export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace, onView, view = "overview", followups = [], focusFile = null, focusLab = null, editRequest, onEditRequestHandled, onChanged, onError, riskPanel }) {
   const [editing, setEditing] = useState(() => focusLab?.patientId === patient.id ? false : hasClinicalDraft(patient.id, view));
   useEffect(() => {
     if (editRequest?.patientId !== patient.id || editRequest?.tab !== view) return;
@@ -135,7 +135,7 @@ export function PatientDashboard({ patient, session, onClinical, onOpenWorkspace
   return <section className="patient-dashboard" aria-label="患者资料面板">
     <header className="chart-heading"><div><h2>{titles[view]}</h2><p>档案更新于 {patient.updatedAt ? new Date(patient.updatedAt).toLocaleDateString('zh-CN') : '日期未记录'}</p></div>{view === 'labs' && <div className="toolbar-actions">{!editing && <button className="secondary" disabled={patient.archived} onClick={()=>setEditing(true)}>添加检验</button>}<button className="secondary" disabled={patient.archived} onClick={()=>onOpenWorkspace(session.id, {tab:'materials'})}>添加报告资料</button></div>}{!['overview','library'].includes(view) && <button className="secondary" onClick={()=>setEditing(!editing)}>{editing ? '返回记录' : view === 'medications' ? '编辑用药与过敏' : '编辑记录'} <ArrowUpRight size={15}/></button>}</header>
     {editing ? <ClinicalPanel detail={patient} section={view} onChanged={onChanged} onError={onError}/> : <>
-    {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView}/><HabitSuggestion key={patient.id} patientId={patient.id}/><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></>}
+    {view === 'overview' && <><PatientOverview patient={patient} session={session} groups={groups} onNavigate={onClinical} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={riskPanel}/><HabitSuggestion key={patient.id} patientId={patient.id}/><details className="workspace-optional"><summary>相似病例参考</summary><SimilarCaseCard key={`similar-${patient.id}`} patientId={patient.id}/></details></>}
     {view === 'diagnoses' && <PatientHistory patient={patient} files={files} onEdit={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged} citedFileName={citedFileName} onSummarize={()=>onOpenWorkspace(session.id, {draft: `请根据当前患者（ID：${patient.id}）已有档案及原始资料，重新整理并保存精简病史摘要，保留其他临床记录。${CLINICAL_SUMMARY_INSTRUCTION}`})}/>}
     <div>
       {view === 'medications' && <TreatmentPanel patient={patient} followups={followups} files={files} citedFileName={citedFileName} groups={groups} Plot={LabPlot} onEditMedications={()=>setEditing(true)} onNavigate={onClinical} onChanged={onChanged}/>}

@@ -13,7 +13,7 @@ const TRIAL_STEP = { shortlisted: "联系患者，说明研究", contacted: "登
 // computed before pagination. A row never doubles as a "complete" action.
 export class DoctorOverview {
   constructor(store, sessions, { schedule, extensions, contactMatches, trialWork } = {}) { this.store = store; this.sessions = sessions; this.schedule = schedule; this.extensions = extensions; this.contactMatches = contactMatches; this.trialWork = trialWork; }
-  read({ kind = "all", query = "", group = "", patientId = "", offset = 0, limit = 12, now = Date.now() } = {}) {
+  read({ kind = "all", query = "", group = "", patientId = "", excludeRiskAlerts = false, offset = 0, limit = 12, now = Date.now() } = {}) {
     check(AGENDA_KINDS.includes(kind), "INVALID_INPUT", "待办分类无效");
     check(typeof query === "string" && query.length <= 100, "INVALID_INPUT", "搜索词过长");
     check(typeof group === "string" && group.length <= 40, "INVALID_INPUT", "分组名过长");
@@ -141,12 +141,6 @@ export class DoctorOverview {
 
     // ---------- the doctor's own workflow ----------
     for (const row of db.prepare("SELECT id,patient_id,summary,created_at FROM pending_actions WHERE status='pending'").all()) {
-      // 催办：提案挂起超过 48 小时未处理，升级为患者事项（而不只在工作台事项里）。
-      if (now - time(row.created_at) > 2 * DAY) add({
-        id: `proposal-aging:${row.id}`, kind: "followup", patientId: row.patient_id, title: "提案挂起超 2 天，请尽快核对",
-        detail: `${row.summary}——确认或拒绝都行，别让它一直挂着。`, at: time(row.created_at), weight: 2,
-        action: row.patient_id ? { type: "patient", tab: "overview", label: "查看档案" } : { type: "patients", label: "打开患者列表" },
-      });
       addWork({ id: `proposal:${row.id}`, kind: "proposal", patientId: row.patient_id, title: row.summary,
         detail: "AI 提议，确认后才生效", at: row.created_at,
         action: { type: row.patient_id ? "patient" : "patients", tab: "overview", label: "确认提案" } });
@@ -167,14 +161,14 @@ export class DoctorOverview {
     if (matches) addWork({ id: "care-contacts", kind: "review", title: `${matches} 位微信客户待确认是哪位患者`, detail: "系统已按备注电话、编号推荐",
       at: 0, count: matches, fallbackName: "企业微信", action: { type: "view", view: "care", tab: "contacts", label: "去确认" } });
 
-    const visible = rows.filter(inGroup);
+    const visible = rows.filter(item => inGroup(item) && !(patientId && excludeRiskAlerts && item.id.startsWith("risk:")));
     const counts = Object.fromEntries(AGENDA_KINDS.map((key) => [key, key === "all" ? visible.length : visible.filter((item) => item.kind === key).length]));
     const needle = query.trim().toLowerCase();
     const matchesQuery = (item) => !needle || `${item.patientName} ${item.patientNumber} ${item.title} ${item.detail}`.toLowerCase().includes(needle);
     const filtered = visible.filter((item) => (kind === "all" || item.kind === kind) && matchesQuery(item))
       .sort((a, b) => a.weight - b.weight || a.at - b.at || a.id.localeCompare(b.id));
     const workItems = work.filter((item) => inGroup(item) && matchesQuery(item)).sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
-    return { counts, total: filtered.length, offset, limit, hasMore: offset + limit < filtered.length,
+    return { counts, criticalCount: filtered.filter(item => item.severity === "critical").length, total: filtered.length, offset, limit, hasMore: offset + limit < filtered.length,
       items: filtered.slice(offset, offset + limit), work: { total: workItems.length, items: workItems.slice(0, 30) },
       generatedAt: now, patientCount: [...people.values()].filter((p) => !p.archived && (!patientId || p.id === patientId)).length };
   }

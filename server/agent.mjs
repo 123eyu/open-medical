@@ -1566,6 +1566,7 @@ export function createServer(options = {}) {
           kind: url.searchParams.get("kind") || "all", query: url.searchParams.get("q") || "",
           group: url.searchParams.get("group") || "",
           patientId: url.searchParams.get("patientId") || "",
+          excludeRiskAlerts: Boolean(url.searchParams.get("patientId")) && url.searchParams.get("excludeRiskAlerts") === "1",
           offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 12),
         }));
       if (path === "/api/followup-plans" && req.method === "GET")

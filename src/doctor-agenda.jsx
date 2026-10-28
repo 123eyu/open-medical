@@ -1,4 +1,3 @@
-import { LearningMonth } from "./learning-loop";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, CheckCheck, Search, RotateCw, UserPlus } from "lucide-react";
 import { api } from "./agent-runtime";
@@ -99,8 +98,9 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
         <div><h1>今日待办 <span>{data?.counts.all ?? "—"}</span></h1></div>
         <button className="icon-button" title="刷新今日待办" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><RotateCw size={16} /></button>
       </div>
+      <p className="agenda-context">{data?.criticalCount > 0 ? `${data.criticalCount} 项高优先级事项排在最前。` : "按事项优先级排列。"}点击事项即可继续处理。</p>
       <div className="agenda-toolbar">
-        <div className="agenda-filters" aria-label="待办分类">{Object.entries(kinds).map(([key, label]) => <button key={key} aria-pressed={kind === key} data-zero={data && !data.counts[key] ? "" : undefined} className={kind === key ? "active" : ""} onClick={() => { setKind(key); setOffset(0); }}>{label}<span>{data?.counts[key] ?? "—"}</span></button>)}</div>
+        <div className="agenda-filters" aria-label="待办分类">{Object.entries(kinds).filter(([key]) => key === "all" || key === kind || !data || data.counts[key] > 0).map(([key, label]) => <button key={key} aria-pressed={kind === key} data-zero={data && !data.counts[key] ? "" : undefined} className={kind === key ? "active" : ""} onClick={() => { setKind(key); setOffset(0); }}>{label}<span>{data?.counts[key] ?? "—"}</span></button>)}</div>
         <label className="agenda-search"><Search size={14} /><input aria-label="搜索今日待办" placeholder="患者或事项" value={query} onChange={(e) => { setQuery(e.target.value); setOffset(0); }} /></label>
         {groups.length > 0 && <label className="agenda-search agenda-group-filter"><select aria-label="按分组筛选待办" value={group} onChange={(e) => { setGroup(e.target.value); setOffset(0); }}>
           <option value="">全部分组</option>
@@ -146,7 +146,6 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
           </button>)}</div>
         </details>;
       })()}
-      <LearningMonth />
       {data && (offset > 0 || data.hasMore) && <div className="agenda-pagination"><span>{offset + 1}–{Math.min(offset + data.items.length, data.total)} / {data.total} 项</span><button className="text-button" disabled={!offset || loading} onClick={() => setOffset(Math.max(0, offset - 6))}>上一页</button><button className="text-button" disabled={!data.hasMore || loading} onClick={() => setOffset(offset + 6)}>下一页</button></div>}
     </section>
   );

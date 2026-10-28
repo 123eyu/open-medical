@@ -1,3 +1,4 @@
+import "./focused-workspace.css";
 import { BackupStatus } from "./backup-panel";
 import { patientOptionLabel } from "./patient-labels";
 import { EXAMPLES as CUSTOMIZE_EXAMPLES, requestSettingsTab } from "./extension-center";
@@ -30,34 +31,9 @@ import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
 
-// 首页驾驶舱数字行：打开即回答「今天有什么在等我」。四个数字全部来自
-// 患者事项与提案各自的确定性聚合，可点击直达对应处理页；紧急项带红点。
-function CockpitCard({ value, label, hint, urgent, onClick }) {
-  return <button type="button" className={`cockpit-card ${urgent ? "urgent" : ""}`} onClick={onClick}>
-    <span className="cockpit-number">{value === null ? "—" : value}{urgent && value > 0 ? <i className="cockpit-dot" aria-label="有紧急项" /> : null}</span>
-    <span className="cockpit-label">{label}</span>
-    {hint && <small>{hint}</small>}
-  </button>;
-}
-// 首页驾驶舱：数字行 + 双栏主区。左栏今日名单（谁要处理、为什么、
-// 一句话要点），右栏待确认预览（最新 5 条，进入完整审核）。
-const PENDING_LABELS = { "care-message": "发送消息", "care-campaign": "随访计划", "care-bind": "关联微信", "care-group-message": "群发", "patient-grouping": "患者分组", "patient-group-suggest": "分组建议", "trial-batch": "批量初筛", "trial-enrollment": "试验入组", "ext-change": "工作台扩展" };
-function PendingRow({ action }) {
-  return <li className="dash-pending-row">
-    <div className="dash-pending-head">
-      <span className="care-tag">{PENDING_LABELS[action.type] || "提案"}</span>
-      <time>{new Date(action.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</time>
-    </div>
-    <p className="dash-pending-summary">{action.summary}</p>
-    <div className="dash-pending-actions">
-      <button type="button" onClick={() => requestPendingReview(action.id)}>核对提案</button>
-    </div>
-  </li>;
-}
-function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
+function HomeCockpit({ onView, reloadKey }) {
   const [overview, setOverview] = useState(null);
   const [overviewError, setOverviewError] = useState("");
-  const [pending, setPending] = useState([]);
   const [pendingCount, setPendingCount] = useState(null);
   const [pendingError, setPendingError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -71,12 +47,12 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
         api("/api/pending-actions?status=pending&limit=5"),
       ]).then(([a, b]) => {
         if (!alive || request !== generation) return;
-        if (a.status === "fulfilled") { setOverview(a.value); setOverviewError(""); onData?.(a.value); }
+        if (a.status === "fulfilled") { setOverview(a.value); setOverviewError(""); }
         else { setOverview(null); setOverviewError(a.reason.message); }
         if (b.status === "fulfilled") {
-          setPending(b.value.actions || []); setPendingCount(b.value.counts.pending); setPendingError("");
+          setPendingCount(b.value.counts.pending); setPendingError("");
         } else {
-          setPending([]); setPendingCount(null); setPendingError(b.reason.message);
+          setPendingCount(null); setPendingError(b.reason.message);
         }
       });
     };
@@ -84,44 +60,13 @@ function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey, onData }) {
     const timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
     window.addEventListener(PENDING_REFRESH_EVENT, load);
     return () => { alive = false; clearInterval(timer); window.removeEventListener(PENDING_REFRESH_EVENT, load); };
-  }, [reloadKey, onData, retry]);
-  const counts = overview?.counts || {};
-  const careTodoCount = (counts.visit || 0) + (counts.followup || 0);
-  const overviewHint = overview ? "" : overviewError ? "患者事项读取失败" : "正在读取患者事项…";
-  const openItem = item => {
-    const a = item.action || {};
-    if (a.type === "patient" && item.patientId) onPatient?.({ id: item.patientId, tab: a.tab });
-    else if (a.type === "task" && a.sessionId) onOpenTask?.(a.sessionId, { tab: a.tab });
-    else if (a.view) onView?.(a.view);
-  };
-  return <>
-    <section className="home-cockpit" aria-label="今日概览">
-      <CockpitCard value={overview ? careTodoCount : null} label="复诊与随访待办" hint={overviewHint || (careTodoCount ? "含提前提醒与逾期未登记事项" : "暂无复诊与随访待办")} onClick={() => onView?.("agenda")} />
-      <CockpitCard value={overview ? counts.risk || 0 : null} label="风险提醒" hint={overviewHint || ((counts.risk || 0) ? "有指标或随访预警" : "无活跃预警")} urgent={(counts.risk || 0) > 0} onClick={() => onView?.("agenda")} />
-      <CockpitCard value={pendingCount} label="待确认提案" hint={pendingError ? "暂时无法读取，打开队列可重试" : pendingCount === null ? "正在读取提案…" : pendingCount ? "核对写入内容后再确认" : "没有待确认提案"} onClick={() => requestPendingReview()} />
-      <CockpitCard value={overview ? counts.messages || 0 : null} label="患者消息" hint={overviewHint || ((counts.messages || 0) ? "有未处理消息" : "暂无新消息")} urgent={(counts.messages || 0) > 0} onClick={() => onView?.("care")} />
-    </section>
-    {pendingError && <p role="alert" className="care-error">待确认提案加载失败：{pendingError}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
-    {overviewError && <p role="alert" className="care-error">患者事项加载失败：{overviewError}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
-    {(overview?.items?.length || pending.length) ? <section className={`home-dashboard${pending.length ? "" : " home-dashboard-single"}`} aria-label="今日名单与待确认">
-      <div className="dash-today">
-        <header><h3>今天要处理的</h3>{overview?.total > overview?.items.length ? <button type="button" className="text-button" onClick={() => onView?.("agenda")}>全部 {overview.total} 项</button> : null}</header>
-        <ul>{overview?.items.map(item => <li key={item.id}>
-          <button type="button" onClick={() => openItem(item)}>
-            <b>{item.patientName}</b>
-            <span className="dash-today-title">{item.title}</span>
-            <small>{item.detail}</small>
-            <span className="dash-today-go">{item.action?.label || "打开"}</span>
-          </button>
-        </li>)}</ul>
-      </div>
-      {pending.length ? <div className="dash-pending">
-        <header><h3>待你确认</h3><button type="button" className="text-button" onClick={() => requestPendingReview()}>打开完整托盘</button></header>
-        <ul>{pending.map(action => <PendingRow key={action.id} action={action} />)}</ul>
-        <p className="muted">AI 只起草，你确认后才生效。</p>
-      </div> : null}
-    </section> : null}
-  </>;
+  }, [reloadKey, retry]);
+  return <section className="home-activity" aria-label="工作提醒">
+    <button type="button" onClick={() => onView?.("agenda")}><CalendarClock size={16}/><span>今日待办</span><b>{overview?.total ?? "—"}</b><ArrowUpRight size={14}/></button>
+    {overview?.criticalCount > 0 && <span className="home-urgent" role="status">其中 {overview.criticalCount} 项高优先级</span>}
+    <button type="button" onClick={() => requestPendingReview()}><ClipboardList size={16}/><span className="cockpit-label">待确认提案</span><b className="cockpit-number">{pendingCount ?? "—"}</b><ArrowUpRight size={14}/></button>
+    {(overviewError || pendingError) && <p role="alert">{overviewError ? `患者事项加载失败：${overviewError}` : `待确认提案加载失败：${pendingError}`}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
+  </section>;
 }
 
 const materialSize = (bytes) =>
@@ -583,8 +528,7 @@ export function WorkbenchHome({
       )}
       {isHome ? (
         <>
-      <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
-          <BackupStatus onManage={() => {requestSettingsTab("backup");onView?.("settings");}} />
+      <HomeCockpit onView={onView} reloadKey={reloadKey} />
           <form className="hub-composer" onSubmit={submit}>
             <div className="hub-composer-caption">
               <h1>{selectedFlow ? selectedFlow.title : "新任务"}</h1>
@@ -892,13 +836,16 @@ export function WorkbenchHome({
               <div className="agent-template-grid">{allFlows.filter(f => f.category === category).map(flow => <button key={flow.id} disabled={starting || uploading} aria-pressed={flow.id === flowId} onClick={() => chooseFlow(flow)}><flow.icon size={18}/><span><b>{flow.title}</b><small>{flow.desc}</small></span></button>)}</div>
             </div>}
           </section>
+          <details className="workspace-optional"><summary>模板、连接与工作台设置</summary>
           {medicalEnabled(config) && <section className="hub-customize" aria-label="定制我的工作台">
             <div><b>模板与提醒规则</b><span>{customFlows.length ? `已保存 ${customFlows.length} 个模板。` : ""}填写医院模板或提醒要求，核对后保存。</span></div>
             <div className="hub-customize-actions">{CUSTOMIZE_EXAMPLES.slice(0, 3).map(([label, text]) => <button key={label} disabled={starting || uploading} onClick={() => { setFlowId(""); setPrompt(text); inputRef.current?.focus(); }}>{label}</button>)}
               <button className="text-button" onClick={() => { requestSettingsTab("workbench"); onView?.("settings"); }}>管理自动化规则<ArrowRight size={13} /></button></div>
           </section>}
-          {!config?.modelConfigured && <div className="agent-setup-note"><span>连接模型后可使用 AI 完成任务；本地资料整理仍可使用。</span><button onClick={onModelSettings}>配置模型</button></div>}
+          <BackupStatus onManage={() => {requestSettingsTab("backup");onView?.("settings");}} />
           {config && <SetupChecklist modelConfigured={Boolean(config.modelConfigured)} onModelSettings={onModelSettings} onView={onView} />}
+          </details>
+          {!config?.modelConfigured && <div className="agent-setup-note"><span>连接模型后可使用 AI 完成任务；本地资料整理仍可使用。</span><button onClick={onModelSettings}>配置模型</button></div>}
         </>
       ) : (
         <section className="hub-history">

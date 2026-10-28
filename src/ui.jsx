@@ -475,11 +475,8 @@ export function RiskList({ alerts, onAck, onResolve, onDraft, busy }) {
   if (!alerts?.length) return null;
   const order = { critical: 0, warning: 1, info: 2 };
   const sorted = [...alerts].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
-  return (
-    <div className="risk-list">
-      {actionError && <p className="form-error" role="alert">{actionError}</p>}
-      {sorted.map((r) => (
-        <div className={`risk-card ${r.severity === "critical" ? "red" : ""}`} key={r.id}>
+  const card = (r) => (
+        <div className={`risk-card ${r.severity === "critical" && r.status === "active" ? "red" : ""}`} key={r.id}>
           <div className="r-head">
             {r.severity === "critical" ? "用药/检验风险 · 高" : r.severity === "warning" ? "风险提示" : "提示"}
             {r.status === "acknowledged" && <span className="badge ok">已确认</span>}
@@ -510,9 +507,14 @@ export function RiskList({ alerts, onAck, onResolve, onDraft, busy }) {
             )}
           </div>
         </div>
-      ))}
-    </div>
   );
+  const active = sorted.filter(r => r.status === "active");
+  const history = sorted.filter(r => r.status !== "active");
+  return <section className="risk-list" aria-label="风险提醒">
+    {actionError && <p className="form-error" role="alert">{actionError}</p>}
+    {active.map(card)}
+    {history.length > 0 && <details className="risk-history workspace-optional"><summary>已确认与已处理记录 · {history.length}</summary>{history.map(card)}</details>}
+  </section>;
 }
 
 /* ---------- 时间线 ---------- */

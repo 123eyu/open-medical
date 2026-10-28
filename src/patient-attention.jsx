@@ -29,7 +29,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
       let result;
       for (let page = 0; page < pages; page++) {
         result = await api(
-          `/api/doctor/overview?patientId=${encodeURIComponent(patient.id)}&offset=${page * 6}&limit=6`,
+          `/api/doctor/overview?patientId=${encodeURIComponent(patient.id)}&excludeRiskAlerts=1&offset=${page * 6}&limit=6`,
         );
         if (!live) return;
         items.push(...result.items);
@@ -78,109 +78,31 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
     }
   }
 
-  return (
-    <section
-      className="overview-card patient-attention"
-      aria-label="待处理事项"
-      aria-busy={loading}
-    >
-      <header className="overview-card-heading">
-        <h3>需要处理 {data ? `· ${data.total} 项` : ""}</h3>
-        <div className="attention-refresh">
-          {data && (
-            <span className="overview-meta">
-              读取于{" "}
-              <time dateTime={new Date(data.receivedAt).toISOString()}>
-                {new Date(data.receivedAt).toLocaleTimeString("zh-CN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </time>
-            </span>
-          )}
-          <button
-            type="button"
-            className="text-button"
-            disabled={loading}
-            onClick={() => setRefresh((value) => value + 1)}
-          >
-            刷新
-          </button>
-        </div>
-      </header>
-      {error && (
-        <p role="alert" className="form-error">
-          待处理事项读取失败：{error}
-          {data && <span>仍显示上次读取的内容，可能不是最新状态。</span>}
-          <button
-            type="button"
-            className="text-button"
-            disabled={loading}
-            onClick={() => setRefresh((value) => value + 1)}
-          >
-            重试
-          </button>
-        </p>
-      )}
-      {actionError && (
-        <p role="alert" className="form-error">
-          {actionError}，可重新打开。
-        </p>
-      )}
-      {loading && (
-        <p role="status">
-          {data ? "正在刷新，保留上次读取的内容…" : "正在读取待处理事项…"}
-        </p>
-      )}
-      {!loading && !error && data?.total === 0 && (
-        <p className="overview-empty">当前没有待处理的患者事项。</p>
-      )}
-      <div className="agenda-items">
-        {data?.items.map((item) => (
-          <button
-            type="button"
-            className={`agenda-item${item.severity === "critical" ? " attention-critical" : ""}`}
-            key={item.id}
-            disabled={Boolean(opening)}
-            onClick={() => open(item)}
-          >
-            <span className="agenda-content">
-              <b>
-                {item.severity === "critical" && (
-                  <span className="attention-priority">重要</span>
-                )}
-                {item.severity === "warning" && (
-                  <span className="attention-priority warning">提醒</span>
-                )}
-                {item.title}
-              </b>
-              <small>{item.detail}</small>
-            </span>
-            <span className="attention-action-group">
-              {item.at > 0 && (
-                <time>{new Date(item.at).toLocaleDateString("zh-CN")}</time>
-              )}
-              <span className="agenda-action">
-                {opening === item.id ? "打开中…" : item.action.label}
-                <ArrowUpRight size={14} aria-hidden="true" />
-              </span>
-            </span>
-          </button>
-        ))}
-      </div>
-      {data?.hasMore && (
-        <p className="overview-meta">
-          已展示 {data.items.length} / 共 {data.total} 项
-          <button
-            type="button"
-            className="text-button"
-            disabled={loading}
-            onClick={() => setPages((value) => value + 1)}
-          >
-            加载更多事项
-          </button>
-        </p>
-      )}
-    </section>
-  );
+  const critical = data?.items.filter(item => item.severity === "critical") || [];
+  const routine = data?.items.filter(item => item.severity !== "critical") || [];
+  const routineCount = data ? data.total - data.criticalCount : 0;
+  const row = item => <button
+    type="button"
+    className={`agenda-item${item.severity === "critical" ? " attention-critical" : ""}`}
+    key={item.id}
+    disabled={Boolean(opening) || loading}
+    onClick={() => open(item)}
+  >
+    <span className="agenda-content"><b>{item.title}</b><small>{item.detail}</small></span>
+    <span className="attention-action-group">
+      {item.at > 0 && <time>{new Date(item.at).toLocaleDateString("zh-CN")}</time>}
+      <span className="agenda-action">{opening === item.id ? "打开中…" : item.action.label}<ArrowUpRight size={14} aria-hidden="true" /></span>
+    </span>
+  </button>;
+  const more = data?.hasMore && <button type="button" className="text-button" disabled={loading} onClick={() => setPages(value => value + 1)}>加载更多事项 · 已显示 {data.items.length} / {data.total}</button>;
+
+  return <section className="overview-card patient-attention" aria-label="待处理事项" aria-busy={loading}>
+    {error && <p role="alert" className="form-error">待处理事项读取失败：{error}{data && <span>仍显示上次读取的内容，可能不是最新状态。</span>}<button type="button" className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>重试</button></p>}
+    {actionError && <p role="alert" className="form-error">{actionError}，可重新打开。</p>}
+    {loading && <p role="status">{data ? "正在刷新…" : "正在读取患者事项…"}</p>}
+    {data?.criticalCount > 0 && <div className="attention-urgent"><h3>优先查看 · {data.criticalCount} 项</h3><div className="agenda-items">{critical.map(row)}</div>{data.criticalCount > critical.length && more}</div>}
+    {routineCount > 0 && <details className="attention-routine"><summary>后续事项 <span>{routineCount}</span><small>随访、检验与消息</small></summary><div className="agenda-items">{routine.map(row)}</div>{more}</details>}
+    {!loading && !error && data?.total === 0 && <span className="overview-meta">暂无后续事项</span>}
+    {data && <div className="attention-refresh"><span className="overview-meta">更新于 <time dateTime={new Date(data.receivedAt).toISOString()}>{new Date(data.receivedAt).toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})}</time></span><button type="button" className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新</button></div>}
+  </section>;
 }

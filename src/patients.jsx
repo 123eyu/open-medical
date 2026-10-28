@@ -18,7 +18,6 @@ import {
   FolderOpen,
   Inbox,
   Loader2,
-  MessageSquare,
   Search,
   Stethoscope,
   UserPlus,
@@ -131,7 +130,6 @@ export function PatientsView({
   const [followupRefresh, setFollowupRefresh] = useState(0);
   const refreshFollowupPanels = () => setFollowupRefresh(value => value + 1);
   const [risks, setRisks] = useState([]);
-  const [proposals, setProposals] = useState([]);
   const [createProposals, setCreateProposals] = useState([]);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [reviewProposal, setReviewProposal] = useState(null);
@@ -150,7 +148,6 @@ export function PatientsView({
     element?.scrollIntoView({ block: "center" }); element?.focus({ preventScroll: true });
   }, [tab, followupFocus, followups]);
   const [patientPage, setPatientPage] = useState(0);
-  const [showAllReminders, setShowAllReminders] = useState(false);
   const [group, setGroup] = useState("");
   const [archiveFilter, setArchiveFilter] = useState("active");
   const [busy, setBusy] = useState(false);
@@ -213,12 +210,11 @@ export function PatientsView({
     setConsent(false);
     setPaste("");
     try {
-      const [one, msgs, jobs, risks, proposals] = await Promise.all([
+      const [one, msgs, jobs, risks] = await Promise.all([
         api(`/api/patients/${encodeURIComponent(id)}`),
         api(`/api/patients/${id}/messages`),
         api(`/api/patients/${id}/followups`),
         api(`/api/risk-alerts?patientId=${id}`),
-        api(`/api/pending-actions?patientId=${id}`),
       ]);
       const work = await api(`/api/sessions/${one.sessionId}`);
       if (version !== patientGeneration.current) return;
@@ -228,7 +224,6 @@ export function PatientsView({
       setMessages(msgs.messages);
       setFollowups(jobs.jobs);
       setRisks(risks.alerts);
-      setProposals(proposals.actions);
       setSession(work);
     } finally {
       if (version === patientGeneration.current) setPatientLoading(false);
@@ -486,33 +481,9 @@ export function PatientsView({
       )}
       {!detail && (
         <>
-          {reminders.length > 0 && (
-            <div className="todo-panel">
-              <b>
-                <Bell size={15} /> 待办提醒
-              </b>
-              {(showAllReminders ? reminders : reminders.slice(0, 3)).map((r) => (
-                <div className="todo-row" key={r.id}>
-                  <MessageSquare size={14} />
-                  <span>
-                    <b>{r.patientName}</b> · {r.title}
-                    <small>
-                      {r.detail} · {fmtDate(r.dueAt)}
-                    </small>
-                  </span>
-                  <button className="secondary" onClick={() => openPatient(r.patientId, "followups").catch((err) => setError(err.message))}>
-                    登记随访
-                  </button>
-                </div>
-              ))}
-              {reminders.length > 3 && <button className="text-button" onClick={() => setShowAllReminders(!showAllReminders)}>{showAllReminders ? "收起提醒" : `展开已加载的 ${reminders.length} 条提醒`}</button>}
-            </div>
-          )}
+          {reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
           {inbox.length > 0 && (
-            <div className="todo-panel">
-              <b>
-                <Inbox size={15} /> 待认领消息
-              </b>
+            <details className="todo-panel patient-inbox"><summary><Inbox size={15} /> 消息归属 · {inbox.length} 条</summary>
               {inbox.map((m) => (
                 <div className="todo-row" key={m.id}>
                   <span>
@@ -536,7 +507,7 @@ export function PatientsView({
                   </select>
                 </div>
               ))}
-            </div>
+            </details>
           )}
           <div className="patients-filter">
             <select aria-label="患者档案状态" title="切换显示在管患者或已归档患者" value={archiveFilter} onChange={(e) => { setArchiveFilter(e.target.value); setPatientPage(0); }}><option value="active">在管患者</option><option value="archived">已归档患者</option></select>
@@ -660,12 +631,8 @@ export function PatientsView({
           </nav>}
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
-          {["overview", "labs"].includes(tab) && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={tab === "labs" ? null : () => openRecordTab("labs")} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView}/></div>}
-          {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
-          {tab === "overview" && (
-            <div className="detail-panel">
-              <RiskList
+          {tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
+          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={<RiskList
                 alerts={[...risks].sort(
                   (a, b) =>
                     (a.status === "active" ? 0 : 1) -
@@ -691,81 +658,8 @@ export function PatientsView({
                   );
                   await refreshPatient();
                 }}
-              />
-              {proposals.length > 0 && (
-                <div className="patient-risk-list">
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    该患者有{" "}
-                    {proposals.length}{" "}
-                    条待确认提案（AI 不会直接改写档案）；请用顶栏「待确认」统一核对执行。
-                  </p>
-                </div>
-              )}
-              {tab === "assistance" && <>
-              <div className="pt-sec">
-                <div className="s-t">
-                  关键事件时间线
-                  <span className="s-m">材料 · 产物 · 随访</span>
-                </div>
-                <Timeline
-                  items={[
-                    // 无标题且无时间的条目是历史空壳（旧版技能正文快照），时间线上没有可读信息
-                    ...session.artifacts
-                      .filter(
-                        (a) =>
-                          (a.title || a.summary || a.payload) && a.createdAt,
-                      )
-                      .map((a) => ({
-                        sort: a.createdAt,
-                        date: fmtDate(a.createdAt),
-                        text: `${a.title || a.summary || a.type}（v${a.version || 1} · ${
-                          a.status === "draft"
-                            ? "草稿"
-                            : a.status === "approved"
-                              ? "已复核"
-                              : "需修订"
-                        }）`,
-                        action: (
-                          <button
-                            className="mini-btn plain"
-                            onClick={() =>
-                              onOpenWorkspace(session.id, {
-                                tab: "results",
-                                artifactId: a.id,
-                              })
-                            }
-                          >
-                            查看
-                          </button>
-                        ),
-                      })),
-                    ...followups.map((j) => ({
-                      sort: j.nextDue,
-                      date: fmtDate(j.nextDue),
-                      text: `随访：${j.name}（${
-                        j.intervalDays ? `每 ${j.intervalDays} 天` : "按需安排"
-                      }${j.status !== "active" ? ` · ${j.status === "paused" ? "已暂停" : j.status}` : ""}）`,
-                    })),
-                  ].sort((a, b) => new Date(b.sort) - new Date(a.sort))}
-                />
-              </div>
-              <div className="count-cards">
-                <div>
-                  <b>{session.files.length}</b>
-                  <span>份病例材料</span>
-                </div>
-                <div>
-                  <b>{session.artifacts.length}</b>
-                  <span>份产物</span>
-                </div>
-
-              </div>
-              <p className="boundary">
-                评估与摘要为参考草稿：内置用药与检验规则覆盖有限，不构成诊疗决定。
-              </p>
-              </>}
-            </div>
-          )}
+              />}/></div>}
+          {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} session={session} onNavigate={setTab} onOpenTask={onOpenWorkspace}/>}
           {tab === "messages" && (
             <div className="detail-panel">
               <WeComPanel key={detail.id} patientId={detail.id} />
