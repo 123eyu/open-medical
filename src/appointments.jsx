@@ -12,6 +12,7 @@ export function AppointmentsPanel({ patient }) {
   const [data, setData] = useState(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const [form, setForm] = useClinicalDraft(patient.id, "appointment", null);
   const inFlight = useRef(false);
+  const updateRequests = useRef(new Map());
   // Keep only an opaque submission key across reloads, never clinical text.
   const requestKey = `appointment-request:${patient.id}`;
   const clearRequest = () => { try { sessionStorage.removeItem(requestKey); } catch {} };
@@ -41,8 +42,12 @@ export function AppointmentsPanel({ patient }) {
       text: `您好，提醒您 ${a.date}${a.time ? ` ${a.time}` : ""} 复诊${a.place ? `（${a.place}）` : ""}${a.reason ? `，主要是${a.reason}` : ""}。如需改期请提前告诉我们。` });
     openDraft(reply);
   }, "已生成复诊提醒草稿，请在下方核对；尚未发送。");
-  const update = (a, changes, message) => act(() => api(`/api/appointments/${a.id}`, "PATCH", { expectedRevision: a.revision || 0, ...changes }), message);
-  const edit = a => setForm({ ...a, expectedRevision: a.revision || 0, correctionReason: "" });
+  const update = (a, changes, message) => act(() => {
+    const key = JSON.stringify([a.id, a.revision || 0, changes]);
+    if (!updateRequests.current.has(key)) updateRequests.current.set(key, crypto.randomUUID());
+    return api(`/api/appointments/${a.id}`, "PATCH", { expectedRevision: a.revision || 0, ...changes, requestId: updateRequests.current.get(key) });
+  }, message);
+  const edit = a => setForm({ ...a, requestId: crypto.randomUUID(), expectedRevision: a.revision || 0, correctionReason: "" });
   const history = a => a.history?.length > 0 && <details><summary>修改记录 · {a.history.length}</summary>{a.history.map((h, i) => <p key={i}>{new Date(h.at).toLocaleString("zh-CN")} · 修改前：{h.date} {h.time} · {STATUS[h.status]} · {h.place || "地点未记录"} · {h.reason}{h.correctionReason ? ` · 更正原因：${h.correctionReason}` : ""}</p>)}</details>;
 
 

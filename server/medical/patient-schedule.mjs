@@ -91,6 +91,18 @@ export class PatientSchedule {
   update(id, input = {}) {
     return sqliteTransaction(this.db, () => {
       const current = this.row(id);
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const fingerprint = createHash("sha256").update(JSON.stringify({
+        operation: "update", id: current.id,
+        ...Object.fromEntries(["expectedRevision", "date", "time", "reason", "place", "status", "note", "correctionReason"].filter(key => input[key] !== undefined).map(key => [key, input[key]])),
+      })).digest("hex");
+      if (requestId) {
+        const previous = this.db.prepare("SELECT * FROM appointment_requests WHERE patient_id=? AND request_id=?").get(current.patientId, requestId);
+        if (previous) {
+          check(previous.fingerprint === fingerprint && previous.appointment_id === current.id, "REQUEST_CONFLICT", "这次更正的内容已变化，请先核对已保存的预约，再重新更正", 409);
+          return current;
+        }
+      }
       check(!this.patients.row(current.patientId).archived, "PATIENT_ARCHIVED", "已归档患者不能修改复诊预约", 409);
       if (input.expectedRevision !== undefined) check(input.expectedRevision === (current.revision || 0), "REVISION_CONFLICT", "预约已变化，请重新打开后核对；当前输入已保留", 409);
       const status = input.status ?? current.status;
@@ -103,6 +115,7 @@ export class PatientSchedule {
       const item = { ...current, ...value, status, revision: (current.revision || 0) + 1, note: input.note !== undefined ? (input.note ? string(input.note, "备注", 500) : "") : current.note, updatedAt: at,
         history: [...current.history, { status: current.status, date: current.date, time: current.time, place: current.place, reason: current.reason, note: current.note, correctionReason: input.correctionReason ? string(input.correctionReason, "更正原因", 500) : "", at }] };
       this.db.prepare("UPDATE appointments SET date=?, status=?, data=? WHERE id=?").run(item.date, item.status, JSON.stringify(item), item.id);
+      if (requestId) this.db.prepare("INSERT INTO appointment_requests VALUES (?,?,?,?)").run(item.patientId, requestId, fingerprint, item.id);
       this.store.audit(null, "appointment.updated", { patientId: item.patientId, appointmentId: item.id, status: item.status });
       return item;
     });
