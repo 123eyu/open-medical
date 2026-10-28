@@ -749,12 +749,20 @@ export class FollowUpManager {
       check(row, "NOT_FOUND", "随访记录不存在", 404);
       const record = JSON.parse(row.data);
       check(record.outcome, "INVALID_INPUT", "请先登记联系结果");
+      const note = string(input.note, "补充或更正内容", 5000);
+      const requestId = input.requestId === undefined ? null : identifier(input.requestId);
+      const addenda = record.outcome.addenda || [];
+      if (requestId) {
+        const previous = addenda.find(entry => entry.requestId === requestId);
+        if (previous) {
+          check(previous.note === note && previous.expectedRevision === input.expectedRevision, "REQUEST_CONFLICT", "这次补充已保存且内容不同，请先核对记录，再另行补充", 409);
+          return record;
+        }
+      }
       check(!this.patientRow(record.patientId).archived, "PATIENT_ARCHIVED", "请先恢复患者档案", 409);
       check(input.expectedRevision === (record.outcome.revision || 0), "REVISION_CONFLICT", "随访记录已变化，请刷新后重新追加", 409);
-      const note = string(input.note, "补充或更正内容", 5000);
-      const addenda = record.outcome.addenda || [];
       check(addenda.length < 50, "LIMIT_REACHED", "单条联系记录最多追加 50 次，请另建联系记录");
-      record.outcome.addenda = [...addenda, { id: randomUUID(), note, recordedAt: new Date(this.now()).toISOString() }];
+      record.outcome.addenda = [...addenda, { id: randomUUID(), note, recordedAt: new Date(this.now()).toISOString(), ...(requestId ? { requestId, expectedRevision: input.expectedRevision } : {}) }];
       record.outcome.revision = (record.outcome.revision || 0) + 1;
       this.store.db.prepare("UPDATE reminders SET data=? WHERE id=?").run(JSON.stringify(record), id);
       this.store.audit(record.sessionId, "followup.addendum", { reminderId: id, revision: record.outcome.revision });

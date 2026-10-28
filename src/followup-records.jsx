@@ -27,14 +27,14 @@ export function FollowupRecords({
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [contactPatients, setContactPatients] = useState([]);
   const [records, setRecords] = useState(null);
-  const [history, setHistory] = useState(false);
   const [query, setQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const generation = useRef(0);
   const loadedView = useRef("");
-  const [addendum, setAddendum] = useState(null);
-  const [addendumNote, setAddendumNote] = useState("");
+  const [addendum, setAddendum] = useClinicalDraft(patientId || "global", "followupAddendum", null);
+  const [addendumNote, setAddendumNote] = useClinicalDraft(patientId || "global", "followupAddendumNote", "");
+  const [history, setHistory] = useState(Boolean(addendum));
   const [editing, setEditing] = useClinicalDraft(patientId || "global", "followupEditing", null);
   const [form, setForm] = useClinicalDraft(patientId || "global", "followupForm", {});
   const [busy, setBusy] = useState(false);
@@ -76,6 +76,7 @@ export function FollowupRecords({
     try {
       await api(`/api/reminders/${addendum.id}/addendum`, "POST", {
         expectedRevision: addendum.outcome.revision || 0,
+        requestId: addendum.requestId,
         note: addendumNote,
       });
       setAddendum(null);
@@ -368,7 +369,7 @@ export function FollowupRecords({
                   className="text-button"
                   disabled={busy || Boolean(editing) || Boolean(addendum)}
                   onClick={() => {
-                    setAddendum(record);
+                    setAddendum({ ...record, requestId: crypto.randomUUID() });
                     setAddendumNote("");
                     setError("");
                   }}
@@ -443,7 +444,8 @@ export function FollowupRecords({
       {(editing || addendum) && <aside className="followup-editor" aria-label="登记联系结果">
       {addendum && (
         <form className="followup-result-form" onSubmit={saveAddendum}>
-          <h3>补充或更正 · {addendum.title}</h3>
+          <h3>补充或更正 · {addendum.patientName} · {addendum.title}</h3>
+          <p className="followup-note">原记录：{addendum.outcome.note}</p>
           <fieldset disabled={busy}>
             <p className="muted">
               说明补充事实，或指出原记录哪一处有误及正确内容。原始记录会保留。
@@ -451,6 +453,7 @@ export function FollowupRecords({
             <label>
               补充或更正内容
               <textarea
+                aria-label="补充或更正内容"
                 autoFocus
                 required
                 maxLength={5000}
@@ -466,7 +469,7 @@ export function FollowupRecords({
               <button
                 className="secondary"
                 type="button"
-                onClick={() => setAddendum(null)}
+                onClick={() => { setAddendum(null); setAddendumNote(""); }}
               >
                 取消
               </button>
