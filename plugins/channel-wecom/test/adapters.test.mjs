@@ -3,12 +3,22 @@ import assert from "node:assert/strict";
 import { validateAdapter } from "../../channel/contract.mjs";
 import { createScriptedProvider } from "../../../tests/helpers/scripted-provider.mjs";
 import { startTestServer, waitFor } from "../../../tests/helpers/server.mjs";
+import { fileURLToPath } from "node:url";
 
+const PLUGIN_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const CHANNEL_FAKE = fileURLToPath(
+  new URL("../../../tests/fixtures/plugins/channel-fake", import.meta.url),
+);
 const start = (serverOptions = {}) =>
   startTestServer({
     provider: createScriptedProvider([]),
     seedDemoPack: false,
-    serverOptions,
+    // This suite asserts the WeCom-owned tools; followup must be active so its
+    // wecom_* proposal tools are registered alongside the adapter tools.
+    serverOptions: {
+      pluginDirs: [PLUGIN_ROOT, CHANNEL_FAKE],
+      ...serverOptions,
+    },
   });
 
 test("四个 WeCom adapter 通过 validateAdapter，能力矩阵与设计一致", async (t) => {

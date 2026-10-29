@@ -27,7 +27,7 @@ import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
 import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
-import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, usePluginEnabled, useSlot } from "./plugin-slots";
+import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useActiveSlot, usePluginActive, useSlot } from "./plugin-slots";
 
 const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
@@ -92,13 +92,13 @@ export function PatientsView({
   const [inbox, setInbox] = useState([]);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
-  const followupEnabled = usePluginEnabled("followup");
+  const followupActive = usePluginActive("followup");
   // Bootstrap status is available before the lazy UI module finishes loading,
   // so a direct ?tab=followups link is not mistaken for a disabled plugin.
   const followupReady =
-    followupEnabled ||
-    Boolean(config?.plugins?.some((plugin) => plugin.id === "followup" && plugin.status === "ready"));
-  const pluginTabs = useSlot("patient.tabs");
+    followupActive ||
+    Boolean(config?.plugins?.some((plugin) => plugin.id === "followup" && plugin.active === true));
+  const pluginTabs = useActiveSlot("patient.tabs");
   const pluginActions = useSlot("patient.actions");
   const activePluginTab = findPatientTab(pluginTabs, tab);
   const communicationTabs = mergePatientTabs(pluginTabs, {
@@ -195,10 +195,10 @@ export function PatientsView({
       // Reminders and unassigned messages belong to the followup plugin. When
       // it is disabled their routes are gone, so do not call them at all.
       const optional = (promise, fallback) => promise.catch(() => fallback);
-      const todoRequest = followupEnabled
+      const todoRequest = followupActive
         ? optional(api("/api/reminders"), { reminders: [] })
         : Promise.resolve({ reminders: [] });
-      const inboxRequest = followupEnabled
+      const inboxRequest = followupActive
         ? optional(api("/api/inbox"), { messages: [] })
         : Promise.resolve({ messages: [] });
       const [list, todo, box, pending] = await Promise.all([
@@ -297,27 +297,27 @@ export function PatientsView({
   // bumps optionalVersion; disabling the plugin clears the data without
   // touching the patient overview.
   useEffect(() => {
-    if (!detail || !followupEnabled) {
+    if (!detail || !followupActive) {
       setMessages([]);
       setFollowups([]);
       return;
     }
     let live = true;
-    loadPatientOptional(api, detail.id, { followupEnabled }).then((data) => {
+    loadPatientOptional(api, detail.id, { followupEnabled: followupActive }).then((data) => {
       if (!live) return;
       setMessages(data.messages);
       setFollowups(data.followups);
     });
     return () => { live = false; };
-  }, [detail?.id, optionalVersion, followupEnabled]);
+  }, [detail?.id, optionalVersion, followupActive]);
   // Bootstrap enables plugin UI after the first render. Reload the list-level
   // optional data when that status flips, without refetching on every render.
-  const lastFollowupEnabled = useRef(followupEnabled);
+  const lastFollowupEnabled = useRef(followupActive);
   useEffect(() => {
-    if (lastFollowupEnabled.current === followupEnabled) return;
-    lastFollowupEnabled.current = followupEnabled;
+    if (lastFollowupEnabled.current === followupActive) return;
+    lastFollowupEnabled.current = followupActive;
     let live = true;
-    if (!followupEnabled) {
+    if (!followupActive) {
       setReminders([]);
       setInbox([]);
       return () => { live = false; };
@@ -331,10 +331,10 @@ export function PatientsView({
       setInbox(nextInbox);
     });
     return () => { live = false; };
-  }, [followupEnabled]);
+  }, [followupActive]);
   useEffect(() => {
-    if (!followupEnabled && sortBy === "followup") setSortBy("updated");
-  }, [followupEnabled, sortBy]);
+    if (!followupActive && sortBy === "followup") setSortBy("updated");
+  }, [followupActive, sortBy]);
   const digest = async () => {
     if (busy) return;
     setBusy(true);
@@ -445,15 +445,15 @@ export function PatientsView({
             )}
           </span>
           <span className="patient-counts">
-            {followupEnabled && p.counts.dueFollowups > 0 && (
+            {followupActive && p.counts.dueFollowups > 0 && (
               <em className="pill warn">{p.counts.dueFollowups} 项随访到期</em>
             )}
-            {followupEnabled && p.counts.unprocessedMessages > 0 && (
+            {followupActive && p.counts.unprocessedMessages > 0 && (
               <em className="pill warn">
                 {p.counts.unprocessedMessages} 条新消息
               </em>
             )}
-            {followupEnabled && p.counts.pendingReminders > 0 && (
+            {followupActive && p.counts.pendingReminders > 0 && (
               <em className="pill">{p.counts.pendingReminders} 条提醒</em>
             )}
             {Boolean(p.archived) && <em className="pill">已归档</em>}
@@ -558,8 +558,8 @@ export function PatientsView({
       )}
       {!detail && (
         <>
-          {followupEnabled && reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
-          {followupEnabled && inbox.length > 0 && (
+          {followupActive && reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
+          {followupActive && inbox.length > 0 && (
             <details className="todo-panel patient-inbox"><summary><Inbox size={15} /> 消息归属 · {inbox.length} 条</summary>
               {inbox.map((m) => (
                 <div className="todo-row" key={m.id}>
@@ -591,7 +591,7 @@ export function PatientsView({
             <select aria-label="排序方式" title="患者列表排序" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPatientPage(0); }}>
               <option value="updated">最近更新</option>
               <option value="visit">最近就诊</option>
-              {followupEnabled && <option value="followup">随访到期优先</option>}
+              {followupActive && <option value="followup">随访到期优先</option>}
               <option value="name">按姓名</option>
             </select>
             <label className="search">

@@ -50,6 +50,7 @@ import {
   streamTurn,
   downloadSession,
   medicalEnabled,
+  PLUGIN_CONFIG_EVENT,
 } from "./agent-runtime";
 import { artifactLines, artifactTitle, INTENTS } from "../shared/medical.mjs";
 import { eventDateWarnings } from "../shared/timeline-display.mjs";
@@ -79,7 +80,7 @@ import { TrialScreeningView } from "./trial-screening";
 import { DrgView } from "./drg";
 import { ClinicalRefView } from "./clinical-ref";
 import { IconButton, Badge, Modal, STATUS } from "./components";
-import { ResultCard, SlotItem, registerUiPlugins, usePluginEnabled, useSlot } from "./plugin-slots";
+import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
 import { loadUiPluginModules } from "./plugin-registry";
 import { modelBoundary } from "../shared/model-boundary.mjs";
 import { ModelSettings } from "./model-settings";
@@ -489,7 +490,7 @@ function App() {
   const resultCards = useSlot("chat.resultCards");
   const legacyViews = useSlot("legacyViews");
   const similarCasesEnabled = usePluginEnabled("similar-cases");
-  const followupEnabled = usePluginEnabled("followup");
+  const followupActive = usePluginActive("followup");
   const cardForArtifact = (artifact) => resultCards.find((item) => item.type === artifact?.type) || null;
   const [config, setConfig] = useState(null),
     [sessions, setSessions] = useState([]),
@@ -818,16 +819,27 @@ function App() {
     loadUiPluginModules()
       .then((modules) => {
         if (!alive) return;
+        const ready = (config?.plugins || []).filter(
+          (plugin) => plugin.status === "ready",
+        );
         registerUiPlugins(
           modules,
-          (config?.plugins || [])
-            .filter((plugin) => plugin.status === "ready")
+          ready.map((plugin) => plugin.id),
+          ready
+            .filter((plugin) => plugin.active !== false)
             .map((plugin) => plugin.id),
         );
       })
       .catch((error) => console.error("插件 UI 加载失败:", error));
     return () => { alive = false; };
   }, [config]);
+  useEffect(() => {
+    const update = (event) => {
+      if (event?.detail) setConfig(event.detail);
+    };
+    window.addEventListener(PLUGIN_CONFIG_EVENT, update);
+    return () => window.removeEventListener(PLUGIN_CONFIG_EVENT, update);
+  }, []);
   useEffect(() => {
     const restore = () => {
       const route = readLocation();
@@ -2357,7 +2369,7 @@ function App() {
                   ))}
                 </div>
                 <div className="panel-scroll">
-                  {followupEnabled &&
+                  {followupActive &&
                     tab === "results" &&
                     session?.patientId &&
                     session.artifacts.length > 0 && (

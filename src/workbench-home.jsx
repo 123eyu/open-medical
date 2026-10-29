@@ -27,7 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { careSetupProgress, requestPluginIntent } from "./plugin-navigation";
-import { usePluginEnabled } from "./plugin-slots";
+import { usePluginActive } from "./plugin-slots";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
@@ -232,23 +232,28 @@ const dateLabel = (value) =>
 const SETUP_HIDDEN_KEY = "omw-setup-checklist-hidden";
 // 首次启动检查清单：各项独立探测，接口缺失或失败时显示「未检测」而不阻塞首页。
 function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
+  const followupActive = usePluginActive("followup");
   const [facts, setFacts] = useState({});
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(SETUP_HIDDEN_KEY) === "1"; } catch { return false; } });
   useEffect(() => {
     let alive = true;
     const probe = (key, path, read) => api(path).then((value) => read(value)).catch(() => null).then((value) => { if (alive) setFacts((f) => ({ ...f, [key]: value })); });
     probe("knowledge", "/api/knowledge", (v) => Array.isArray(v?.documents) ? v.documents.length > 0 : null);
-    probe("wecom", "/api/care/settings", (v) => Array.isArray(v?.channels?.list) ? careSetupProgress(v).essential : null);
-    probe("autoReply", "/api/care/settings", (v) => typeof v?.autoReply?.mode === "string" ? { mode: v.autoReply.mode, saved: Boolean(v.updatedAt) } : null);
+    if (followupActive) {
+      probe("wecom", "/api/care/settings", (v) => Array.isArray(v?.channels?.list) ? careSetupProgress(v).essential : null);
+      probe("autoReply", "/api/care/settings", (v) => typeof v?.autoReply?.mode === "string" ? { mode: v.autoReply.mode, saved: Boolean(v.updatedAt) } : null);
+    }
     return () => { alive = false; };
-  }, []);
+  }, [followupActive]);
   const modeLabel = { off: "已关闭", draft: "草稿模式", auto: "自动回复" };
   const items = [
     { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已填写连接" : "未填写连接", action: "去连接", open: onModelSettings },
     { id: "knowledge", label: "导入医生知识库", done: facts.knowledge === true, state: facts.knowledge == null ? "未检测" : facts.knowledge ? "已有资料" : "暂无资料", action: "导入资料", open: () => onView?.("knowledge") },
-    // 微信/企微接入有封号风险且非必需，不再出现在新手清单；仍可在 设置→高级 里配置。
-    ...(facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestPluginIntent("followup", "care-setup"); onView?.("care"); } }] : []),
-    ...(facts.autoReply?.saved ? [{ id: "autoReply", label: "自动回复边界", done: true, state: modeLabel[facts.autoReply.mode] || facts.autoReply.mode, action: "设置自动回复", open: () => onView?.("care") }] : []),
+    // 随访与患者消息休眠时只保留「连接微信/企业微信」这条入口；接入后
+    // 再显示企业微信接入进度与自动回复边界。
+    ...(!followupActive ? [{ id: "channel", label: "连接微信/企业微信", done: false, state: "未连接", action: "去设置", open: () => { requestSettingsTab("followup"); onView?.("settings"); } }] : []),
+    ...(followupActive && facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestPluginIntent("followup", "care-setup"); onView?.("care"); } }] : []),
+    ...(followupActive && facts.autoReply?.saved ? [{ id: "autoReply", label: "自动回复边界", done: true, state: modeLabel[facts.autoReply.mode] || facts.autoReply.mode, action: "设置自动回复", open: () => onView?.("care") }] : []),
   ];
   const remaining = items.filter((item) => !item.done).length;
   if (!remaining) return null;
@@ -292,7 +297,7 @@ export function WorkbenchHome({
   fileInputRef,
   onFilesPicked,
 }) {
-  const followupEnabled = usePluginEnabled("followup");
+  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [category, setCategory] = useState("clinical");
@@ -311,7 +316,7 @@ export function WorkbenchHome({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [pickedSkills, setPickedSkills] = useState(draftState.pickedSkills ?? []);
   useEffect(() => { onDraftChange?.({prompt, patientId, projectId, flowId, pickedSkills}); }, [prompt, patientId, projectId, flowId, pickedSkills]);
-  useEffect(() => { if (!followupEnabled && flowId === "followup") setFlowId(""); }, [followupEnabled, flowId]);
+  useEffect(() => { if (!followupActive && flowId === "followup") setFlowId(""); }, [followupActive, flowId]);
   const inputRef = useRef(null);
   // The doctor's own templates (extension center) and learned ordering.
   const [workbenchPrefs, setWorkbenchPrefs] = useState(null);
@@ -321,10 +326,10 @@ export function WorkbenchHome({
   }, [config]);
   const customFlows = (workbenchPrefs?.quickTasks || []).map((q) => ({ ...q, icon: ClipboardList, category: "mine", output: "按所选模板整理" }));
   const allFlows = [...customFlows, ...MEDICAL_WORKFLOWS]
-    .filter((flow) => flow.id !== "followup" || followupEnabled);
+    .filter((flow) => flow.id !== "followup" || followupActive);
   const starterFlows = (workbenchPrefs?.starters || []).map((id) => allFlows.find((f) => f.id === id)).filter(Boolean);
   const selectedFlow = allFlows.find((flow) => flow.id === flowId);
-  const isFollowup = flowId === "followup" && followupEnabled;
+  const isFollowup = flowId === "followup" && followupActive;
   const isHome = view === "home";
   const skillOptions = config?.skills || [];
   const mentionMatches = skillMention

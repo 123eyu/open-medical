@@ -14,7 +14,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { api, medicalEnabled } from "./agent-runtime";
-import { SlotItem, useSlot } from "./plugin-slots";
+import { SlotItem, useActiveSlot } from "./plugin-slots";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import "./task-context.css";
 
@@ -203,7 +203,7 @@ const CATALOG_ORDER = {
 export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings }) {
   const [filter, setFilter] = useState("全部"),
     [query, setQuery] = useState("");
-  const pluginTools = useSlot("tools.directory");
+  const pluginTools = useActiveSlot("tools.directory");
   const availability = id => id === "documents"
     ? config?.modelConfigured ? { action: "打开" } : { label: "需要配置模型", action: "配置模型", model: true }
     : { action: "打开" };

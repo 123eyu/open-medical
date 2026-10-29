@@ -4,6 +4,7 @@ import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
 import { requestTrial } from "./trial-screening";
 import { requestSettingsTab } from "./extension-center";
+import { usePluginActive } from "./plugin-slots";
 
 // The server returns the enabled agenda kinds (including "all") in display
 // order. Keep this fallback only for the first paint before that response.
@@ -28,6 +29,7 @@ const date = (value) => {
 };
 
 export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
+  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null);
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
@@ -38,10 +40,16 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!followupActive && ["followup", "messages"].includes(kind)) setKind("all");
+  }, [followupActive, kind]);
   const [hasUpdates, setHasUpdates] = useState(false);
   const displayed = useRef(null);
   const loadedScope = useRef("");
-  const kindOptions = data?.kinds?.length ? data.kinds : defaultKinds;
+  const allKinds = data?.kinds?.length ? data.kinds : defaultKinds;
+  const kindOptions = followupActive
+    ? allKinds
+    : allKinds.filter((item) => !["followup", "messages"].includes(item.kind));
   const kindLabels = Object.fromEntries(kindOptions.map((item) => [item.kind, item.label]));
   useEffect(() => {
     // 分组筛选项来自患者列表的在用分组（全局助手确认的分组会出现在这里）。

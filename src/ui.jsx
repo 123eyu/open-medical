@@ -1,5 +1,5 @@
 import { RememberedNotice } from './learning-loop';
-import { ResultCard, useSlot } from "./plugin-slots";
+import { ResultCard, usePluginActive, useSlot } from "./plugin-slots";
 import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -316,6 +316,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
 
 /* ---------- 患者速览卡 ---------- */
 export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onOpenWorkspace, onOpenLabs, compact }) {
+  const followupActive = usePluginActive("followup");
   if (!patient && !detail) return null;
   const p = detail || patient;
   const allergies = (p.allergies || []).map((a) => (typeof a === "string" ? a : a.substance || a.name || "")).filter(Boolean);
@@ -376,8 +377,8 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
         <div className="ps-col">
           <h5>待办与成果</h5>
           <ul className="tl">
-            {counts.unprocessedMessages > 0 && <li><i />{counts.unprocessedMessages} 条未处理消息</li>}
-            {counts.dueFollowups > 0 && <li><i />{counts.dueFollowups} 项随访到期</li>}
+            {followupActive && counts.unprocessedMessages > 0 && <li><i />{counts.unprocessedMessages} 条未处理消息</li>}
+            {followupActive && counts.dueFollowups > 0 && <li><i />{counts.dueFollowups} 项随访到期</li>}
             <li><i />{session ? `${session.files.length} 份材料 · ${session.artifacts.length} 份已保存结果` : `${p.counts?.artifacts ?? "—"} 份已保存结果`}</li>
           </ul>
         </div>
@@ -396,6 +397,7 @@ export function PatientSummaryCard({ patient, detail, session, onOpenDetail, onO
 
 /* ---------- 顶栏患者切换器 ---------- */
 export function PatientSwitcher({ patients, currentId, onSwitch, onManage }) {
+  const followupActive = usePluginActive("followup");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const ref = useRef(null);
@@ -441,7 +443,13 @@ export function PatientSwitcher({ patients, currentId, onSwitch, onManage }) {
             >
               {p.id === currentId ? "✓" : ""} {patientOptionLabel(p, patients)}
               <span className="sub">
-                {p.counts?.dueFollowups ? `${p.counts.dueFollowups} 项随访到期` : p.counts?.unprocessedMessages ? `${p.counts.unprocessedMessages} 条新消息` : ""}
+                {followupActive
+                  ? p.counts?.dueFollowups
+                    ? `${p.counts.dueFollowups} 项随访到期`
+                    : p.counts?.unprocessedMessages
+                      ? `${p.counts.unprocessedMessages} 条新消息`
+                      : ""
+                  : ""}
               </span>
             </button>
           ))}

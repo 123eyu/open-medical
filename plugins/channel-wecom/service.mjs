@@ -93,6 +93,25 @@ export function createWecomService({
     adapter(id) {
       return adapters.find((adapter) => adapter.id === id) || null;
     },
+    // Connection verdicts consumed by the followup plugin's activation hook.
+    // Customer-contact is ready when its API client is configured; WeCom KF is
+    // ready once corp id, KF secret and open KF id are all present.
+    followupChannels() {
+      const care = config();
+      const kfReady = Boolean(care.corpId && care.kfSecret && care.openKfId);
+      return [
+        {
+          id: "wecom-customer",
+          enabled: Boolean(connector.client),
+          state: connector.client ? "ready" : "unconfigured",
+        },
+        {
+          id: "wecom-kf",
+          enabled: kfReady,
+          state: kfReady ? "ready" : "unconfigured",
+        },
+      ];
+    },
     createAibotSocket(input) {
       return new AibotSocket(input);
     },

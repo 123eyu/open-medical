@@ -47,7 +47,9 @@ const registrations = new Map();
 const listeners = new Set();
 const EMPTY = Object.freeze([]);
 let enabledIds = new Set();
+let activeIds = new Set();
 let slotsByName = new Map();
+let activeSlotsByName = new Map();
 let version = 0;
 
 function rebuild() {
@@ -94,6 +96,13 @@ function rebuild() {
     next.set(name, Object.freeze(list));
   }
   slotsByName = next;
+  const activeNext = new Map();
+  for (const [name, list] of next)
+    activeNext.set(
+      name,
+      Object.freeze(list.filter((item) => activeIds.has(item.pluginId))),
+    );
+  activeSlotsByName = activeNext;
   version += 1;
   for (const listener of listeners) listener();
 }
@@ -316,9 +325,15 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
 // entries are eager, E2E fixture entries are materialized before this call).
 // Only plugins whose server status is "ready" are registered, so a disabled or
 // unavailable plugin never contributes DOM.
-export function registerUiPlugins(modules = {}, enabled = []) {
+export function registerUiPlugins(modules = {}, enabled = [], active = enabled) {
   enabledIds = new Set(
     Array.isArray(enabled) ? enabled : enabled instanceof Set ? enabled : [],
+  );
+  // `active` is the host's activation verdict (enabled && available &&
+  // connected when the plugin requires a channel). Older callers that only
+  // pass `enabled` keep the previous behavior.
+  activeIds = new Set(
+    Array.isArray(active) ? active : active instanceof Set ? active : activeIds,
   );
   registrations.clear();
   for (const key of Object.keys(modules).sort()) {
@@ -341,12 +356,27 @@ export function useSlot(name) {
   return slotsByName.get(name) || EMPTY;
 }
 
+// Contributions from dormant plugins stay registered (their settings/empty
+// state may still be needed) but business-facing slots can opt out.
+export function useActiveSlot(name) {
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return activeSlotsByName.get(name) || EMPTY;
+}
+
 // Fixed-shell entry points use this to show or hide affordances that start a
 // plugin workflow. Disabled plugins are absent from enabledIds immediately
 // after registration, without a page reload.
 export function usePluginEnabled(id) {
   useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return enabledIds.has(id);
+}
+
+// Same store, but reflects "enabled and activated". A plugin that requires a
+// connected channel is dormant until the host reports activation, without
+// disappearing from settings (connection panels stay renderable).
+export function usePluginActive(id) {
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return activeIds.has(id);
 }
 
 // Exported so the server-render regression test can exercise the fallback

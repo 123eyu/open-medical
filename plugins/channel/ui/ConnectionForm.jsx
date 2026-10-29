@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../../../src/agent-runtime';
+import { api, refreshPlugins } from '../../../src/agent-runtime';
 import { PluginSetup } from '../../../src/plugin-center';
 const when = value => value ? new Date(value).toLocaleString() : '尚未同步';
 export function SavedConnection({ initial, onSaved, wizard = false }) {
@@ -11,7 +11,7 @@ export function SavedConnection({ initial, onSaved, wizard = false }) {
     {!wizard && !saved.hasToken && !saved.accountId && <p>此服务暂未提供快捷授权。你可以使用微信历史导入向导，或直接导入聊天文件整理随访。</p>}
     {(saved.hasToken || saved.accountId) && <>
       <p role="status">{saved.status?.message || (saved.enabled ? '已启用' : '已停用')}</p>
-      <button disabled={busy} onClick={() => run(async () => { const status = await api(`/api/chat-followups/connections/${saved.channel}/test`, 'POST', {}); setSaved(v => ({ ...v, status })); })}>检查已有连接</button>
+      <button disabled={busy} onClick={() => run(async () => { const status = await api(`/api/chat-followups/connections/${saved.channel}/test`, 'POST', {}); setSaved(v => ({ ...v, status })); await refreshPlugins().catch(() => {}); })}>检查已有连接</button>
       <button disabled={busy} onClick={() => run(async () => accept(await api(`/api/chat-followups/connections/${saved.channel}${saved.enabled ? '' : '/connect'}`, 'POST', { ...saved, enabled: !saved.enabled, autoUntil: '', autoSummarize: false })))}>{saved.enabled ? '停用连接' : '启用已有连接'}</button>
       {saved.enabled && <><a href="/?view=followups&followupTab=chat">选择患者会话 →</a><AutomaticSettings key={saved.revision} initial={saved} onSaved={accept} /></>}
     </>}

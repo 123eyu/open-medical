@@ -3,7 +3,7 @@ import { LearningSettings } from "./learning-loop";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
-import { SlotItem, findSettingsPanel, useSlot } from "./plugin-slots";
+import { SlotItem, findSettingsPanel, usePluginActive, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
@@ -159,6 +159,7 @@ function PluginSettings({ onPluginsChanged }) {
 export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange, onPluginsChanged }) {
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
   const pluginPanels = useSlot("settings.panels");
+  const followupActive = usePluginActive("followup");
   const legacyPanels = pluginPanels.filter((panel) => panel.legacyTab);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
   const [section, updateSection] = useState(() => {
@@ -221,6 +222,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} />}
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
+          {!followupActive && <p className="settings-channel-hint muted">连接微信或企业微信后启用随访与患者消息</p>}
           {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : null}
         </>}
         {group === "personal" && <>

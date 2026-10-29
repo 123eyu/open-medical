@@ -38,6 +38,7 @@ export function definePlugin(spec = {}) {
     provides,
     status,
     capabilities,
+    activation,
   } = spec;
 
   check(
@@ -359,6 +360,24 @@ export function definePlugin(spec = {}) {
     normalizedLifecycle = Object.freeze(hooks);
   }
 
+  let normalizedActivation;
+  if (activation !== undefined) {
+    check(
+      isObject(activation),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 activation 必须是对象`,
+    );
+    check(
+      activation.requiresConnection === undefined ||
+        typeof activation.requiresConnection === "boolean",
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 activation.requiresConnection 必须是布尔值`,
+    );
+    normalizedActivation = Object.freeze({
+      requiresConnection: activation.requiresConnection === true,
+    });
+  }
+
   let normalizedProvides;
   if (provides !== undefined) {
     check(
@@ -428,6 +447,7 @@ export function definePlugin(spec = {}) {
     legacyApiPaths: Object.freeze(normalizedApiPaths),
     lifecycle: normalizedLifecycle,
     provides: normalizedProvides,
+    activation: normalizedActivation,
     status,
     capabilities: normalizedCapabilities,
   });

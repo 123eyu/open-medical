@@ -9,11 +9,28 @@ const REPLY = (send, status, value) => {
   return true;
 };
 
+// Connection management stays available while followup is dormant: the doctor
+// must be able to connect a channel (and hence activate the plugin) from the
+// same settings panel. Every other followup route answers 409.
+export function isFollowupConnectionRoute(path, method) {
+  if (method === "GET" && path === "/api/chat-followups/settings") return true;
+  if (method === "POST" && path === "/api/chat-followups/plugins") return true;
+  if (method === "DELETE" && /^\/api\/chat-followups\/plugins\/[^/]+$/.test(path))
+    return true;
+  return (
+    method === "POST" &&
+    /^\/api\/chat-followups\/connections\/[^/]+(?:\/(?:connect|test|cancel|rescan))?$/.test(
+      path,
+    )
+  );
+}
+
 // All followup-private legacy routes. Paths, status codes and response bodies
 // are unchanged; /api/reminders (the shared reminder bus) remains fixed.
 export function createFollowupApi(ctx) {
   const service = () => ctx.plugins.followup.service;
-  return async function followupApi(req, url, io) {
+  const active = () => ctx.services.followupHost?.isActive?.() !== false;
+  async function handle(req, url, io) {
     const send = io.send;
     const body = io.body;
     const path = url.pathname;
@@ -22,6 +39,13 @@ export function createFollowupApi(ctx) {
     const followups = svc.followups;
     const surveys = svc.surveys;
     const risks = ctx.services.risks || null;
+
+    if (!active() && !isFollowupConnectionRoute(path, req.method)) {
+      return REPLY(send, 409, {
+        error: "随访与患者消息尚未启用，请先连接微信或企业微信",
+        code: "FOLLOWUP_INACTIVE",
+      });
+    }
 
     if (path === "/api/followup-plans" && req.method === "GET")
       return REPLY(send, 200, { plans: followups.listPlans() });
@@ -157,6 +181,21 @@ export function createFollowupApi(ctx) {
     if (path.startsWith("/api/chat-aibot/"))
       return chatAibotApi(svc.aibot, req, url, { body, send });
     return false;
+  }
+  return async function followupApi(req, url, io) {
+    try {
+      return await handle(req, url, io);
+    } finally {
+      // Connect/disconnect/test/save can change activation even when the
+      // handler returns an error after writing the new config.
+      if (isFollowupConnectionRoute(url.pathname, req.method)) {
+        try {
+          await ctx.services.followupHost?.syncActivation?.();
+        } catch (error) {
+          console.error("随访渠道状态更新失败:", error);
+        }
+      }
+    }
   };
 }
 

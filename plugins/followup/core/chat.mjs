@@ -80,6 +80,17 @@ export class ChatFollowups {
   publicConfig(channel) { const c = this.config(channel); return { ...c, plugin: this.registry.describe(channel), hasToken: Boolean(this.secret(c).token), status: this.probes.get(channel) || { ready: false, message: c.enabled ? '配置已保存，尚未测试连接' : '连接未启用' }, availableBindings: channel === 'wechat' ? this.db.prepare('SELECT data FROM chat_bindings WHERE channel=? AND account=?').all(channel,this.account(c)).map(json).filter(b=>!b.disabled && b.calibration).map(b=>({id:b.id,title:b.title,patientName:this.patients.get(b.patientId).name})) : [], running: this.active.has(channel), platform: process.platform }; }
   modelIdentity() { const p = this.provider(); return p ? hash([p.constructor?.name,p.baseUrl,p.model,p.apiKey]) : ''; }
   settings() { return { connections: this.registry.ids().map(c => this.publicConfig(c)) }; }
+  // Activation summary for the host: a channel only counts when it is both
+  // enabled and its last probe reported ready. The probe is persisted in the
+  // connection row so a restart does not resurrect a disconnected channel.
+  connectionStates() {
+    return this.registry.ids().map(channel => {
+      let c; try { c = this.config(channel); } catch { return null; }
+      const probe = this.probes.get(channel) || c.lastProbe || null;
+      const ready = Boolean(c.enabled && probe && probe.ready === true);
+      return { id: channel, enabled: c.enabled === true, state: ready ? 'ready' : (c.enabled ? 'configured' : 'unconfigured') };
+    }).filter(Boolean);
+  }
   save(channel, input) {
     const previous = this.config(channel);
     check(input.revision === previous.revision, 'REVISION_CONFLICT', '连接配置已变化，请刷新', 409);
@@ -130,7 +141,15 @@ export class ChatFollowups {
     const c = this.config(channel); let result;
     try { result = await this.connector(channel).status(this.secret(c)); }
     catch (e) { result = { ready: false, message: e instanceof AppError ? e.message : '连接检查失败，请检查客户端与权限' }; }
-    if (this.config(channel).revision === c.revision) this.probes.set(channel, { ...result, checkedAt: now() });
+    const latest = this.config(channel);
+    if (latest.revision === c.revision) {
+      const checkedAt = now();
+      this.probes.set(channel, { ...result, checkedAt });
+      // Persist only the connection verdict, never the secret. Public config
+      // keeps this out of the connection object it returns to the UI.
+      const next = { ...latest, lastProbe: { ready: result.ready === true, message: String(result.message || ''), checkedAt } };
+      this.write(next);
+    }
     return result;
   }
   async connect(channel,input) {

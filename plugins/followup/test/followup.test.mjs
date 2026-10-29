@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createScriptedProvider } from "../../../tests/helpers/scripted-provider.mjs";
 import { startTestServer, waitFor } from "../../../tests/helpers/server.mjs";
 
@@ -28,10 +29,22 @@ const SNAPSHOT = JSON.parse(
 );
 const byId = (plugins) =>
   Object.fromEntries(plugins.map((plugin) => [plugin.id, plugin]));
+const PLUGIN_ROOT = fileURLToPath(new URL("../../../plugins", import.meta.url));
+const CHANNEL_FAKE = fileURLToPath(
+  new URL("../../../tests/fixtures/plugins/channel-fake", import.meta.url),
+);
+const followupDirs = [PLUGIN_ROOT, CHANNEL_FAKE];
+// Followup is dormant without a connected channel; these tests exercise the
+// active plugin, so every server starts with the test-only channel adapter.
+const startServer = (options = {}) =>
+  startTestServer({
+    ...options,
+    serverOptions: { ...options.serverOptions, pluginDirs: followupDirs },
+  });
 const tempRoot = () => mkdtempSync(join(process.cwd(), ".followup-test-"));
 
 test("随访私有路由迁移后与迁移前快照一致", async (t) => {
-  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  const app = await startServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
 
   for (const [route, expected] of Object.entries(SNAPSHOT)) {
@@ -46,7 +59,7 @@ test("随访私有路由迁移后与迁移前快照一致", async (t) => {
 });
 
 test("随访联系记录 POST 仍返回 201", async (t) => {
-  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  const app = await startServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
   const patientId = (await app.request("/api/patients")).body.patients[0].id;
   const response = await app.request(
@@ -62,7 +75,7 @@ test("随访联系记录 POST 仍返回 201", async (t) => {
 });
 
 test("运行时停用 followup：路由 404、后台轮询停止、待办来源消失", async (t) => {
-  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  const app = await startServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
 
   const service = app.server.pluginHost.pluginServices.followup;
@@ -112,7 +125,7 @@ test("从已停用数据库启动：随访工具不注册、没有后台轮询�
   const database = join(root, "medical.sqlite");
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const first = await startTestServer({
+  const first = await startServer({
     provider: createScriptedProvider([]),
     seedDemoPack: false,
     serverOptions: { database },
@@ -124,7 +137,7 @@ test("从已停用数据库启动：随访工具不注册、没有后台轮询�
   assert.equal(disabled.status, 200);
   await first.close();
 
-  const second = await startTestServer({
+  const second = await startServer({
     provider: createScriptedProvider([]),
     seedDemoPack: false,
     serverOptions: { database },
@@ -156,7 +169,7 @@ test("同时停用两个渠道插件后 followup 变为 unavailable，服务仍�
   const database = join(root, "medical.sqlite");
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const first = await startTestServer({
+  const first = await startServer({
     provider: createScriptedProvider([]),
     seedDemoPack: false,
     serverOptions: { database },
@@ -170,7 +183,7 @@ test("同时停用两个渠道插件后 followup 变为 unavailable，服务仍�
   }
   await first.close();
 
-  const second = await startTestServer({
+  const second = await startServer({
     provider: createScriptedProvider([]),
     seedDemoPack: false,
     serverOptions: { database },
@@ -188,7 +201,7 @@ test("同时停用两个渠道插件后 followup 变为 unavailable，服务仍�
 });
 
 test("care 历史提案由插件 legacyProposalTypes 委派，确认后生效且 type 不变", async (t) => {
-  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  const app = await startServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
 
   const service = app.server.pluginHost.pluginServices.followup;

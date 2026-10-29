@@ -9,7 +9,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const dataDir = join(root, "test-results", "e2e-data");
@@ -41,8 +41,15 @@ const env = {
   MEDICAL_DATABASE: join(dataDir, "medical.sqlite"),
   TMPDIR: tempDir,
   MEDICAL_TEST_TMP: tempDir,
-  // Only the hello fixture is enabled for E2E; the bad fixtures stay excluded.
-  MEDICAL_PLUGIN_DIRS: join(root, "tests/fixtures/plugins/hello"),
+  // Only the hello fixture is enabled by default; the bad fixtures stay
+  // excluded. Opt-in connected runs add the fake channel adapter so followup
+  // activates without a real WeChat/WeCom account.
+  MEDICAL_PLUGIN_DIRS: [
+    join(root, "tests/fixtures/plugins/hello"),
+    ...(process.env.MEDICAL_E2E_CONNECTED === "1"
+      ? [join(root, "tests/fixtures/plugins/channel-fake")]
+      : []),
+  ].join(delimiter),
 };
 
 const child = spawn(

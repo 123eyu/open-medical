@@ -3,7 +3,7 @@ import { WechatConnection } from '../../channel-wechat/ui/WechatConnection.jsx';
 import { AibotConnectionForm } from '../../channel-wecom/ui/ConnectionForm.jsx';
 import { SavedConnection, ServiceConnectionForm } from '../../channel/ui/ConnectionForm.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../../../src/agent-runtime';
+import { api, refreshPlugins } from '../../../src/agent-runtime';
 import { patientOptionLabel } from '../../../src/patient-labels';
 import './chat-followups.css';
 
@@ -27,6 +27,9 @@ export function ChatConnectionSettings() {
  useEffect(()=>{let alive=true;api('/api/chat-followups/settings').then(v=>{if(alive){setConnections(v.connections);setError('');}}).catch(e=>{if(alive)setError(e.message);});return()=>{alive=false;};},[version]);
  useEffect(()=>{if(connections?.length&&!connections.some(c=>c.channel===channel))setChannel(connections[0].channel);},[connections]);
  const selected=connections?.find(c=>c.channel===channel);
+ // Connect/disconnect changes plugin activation. Refresh bootstrap so the
+ // patient tabs, directory cards and agenda sources update without restarting.
+ const accept=value=>{setConnections(old=>old.map(v=>v.channel===value.channel?value:v));refreshPlugins().catch(()=>{});};
  // 静态两组之外(第三方插件装的渠道)兜底收进"已安装的连接插件",保证任何渠道都有 tab。
  const groups=connections?(()=>{const known=new Set(CHANNEL_GROUPS.flatMap(g=>g.channels));const extra=connections.filter(c=>!known.has(c.channel));return extra.length?[...CHANNEL_GROUPS,{label:'已安装的连接插件',hint:'管理已安装的连接，或使用聊天记录导入向导。',channels:extra.map(c=>c.channel)}]:CHANNEL_GROUPS;})():CHANNEL_GROUPS;
  return <section className="chat-settings"><h2>患者随访</h2>
@@ -41,7 +44,7 @@ export function ChatConnectionSettings() {
     <nav className="chat-tabs" aria-label={group.label}>{items.map(({channel:id,plugin})=><button key={id} aria-pressed={channel===id} onClick={()=>setChannel(id)}>{connections.find(c=>c.channel===id)?.enabled&&<span className="chat-tab-dot" aria-hidden="true"/>}{plugin?.name||names[id]||id}</button>)}</nav>
    </div>;})}
 
-  {selected&&(['wechat','wecom'].includes(channel)?<ConnectionForm key={channel} initial={selected} onSaved={c=>setConnections(old=>old.map(v=>v.channel===c.channel?c:v))}/>:channel==='wecom-aibot'?<AibotConnectionForm key={channel} initial={selected} onSaved={c=>setConnections(old=>old.map(v=>v.channel===c.channel?c:v))}/>:<ServiceConnectionForm key={channel} initial={selected} onSaved={c=>setConnections(old=>old.map(v=>v.channel===c.channel?c:v))}/>)}
+  {selected&&(['wechat','wecom'].includes(channel)?<ConnectionForm key={channel} initial={selected} onSaved={accept}/>:channel==='wecom-aibot'?<AibotConnectionForm key={channel} initial={selected} onSaved={accept}/>:<ServiceConnectionForm key={channel} initial={selected} onSaved={accept}/>)}
  </section>;
 }
 export function ChatFollowupsPanel({patients,onSettings,initialPatientId}) {

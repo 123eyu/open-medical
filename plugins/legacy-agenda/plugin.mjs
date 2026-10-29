@@ -24,7 +24,7 @@ const risk = {
         at: row.updated_at, weight: row.severity === "critical" ? 0 : 4, severity: row.severity,
         action: { type: "patient", tab: "overview", label: "核对风险" } });
     }
-    if (hasTable(db, "care_alerts")) for (const row of db.prepare("SELECT id,patient_id,level,reason,created_at FROM care_alerts WHERE status='open'").all()) {
+    if (ctx.services.followupHost?.isActive?.() !== false && hasTable(db, "care_alerts")) for (const row of db.prepare("SELECT id,patient_id,level,reason,created_at FROM care_alerts WHERE status='open'").all()) {
       if (row.level !== "urgent") continue;
       items.push({ id: `care-alert:${row.id}`, kind: "risk", patientId: row.patient_id,
         title: "患者消息提示紧急情况", detail: row.reason, at: row.created_at,

@@ -11,6 +11,9 @@ const PRODUCTION_PLUGINS = fileURLToPath(new URL("../..", import.meta.url));
 const THROWING_PLUGIN = fileURLToPath(
   new URL("../../../tests/fixtures/plugins/throwing-agenda", import.meta.url),
 );
+const CHANNEL_FAKE = fileURLToPath(
+  new URL("../../../tests/fixtures/plugins/channel-fake", import.meta.url),
+);
 const SNAPSHOT = JSON.parse(
   readFileSync(
     new URL(
@@ -52,6 +55,7 @@ function snapshotShape(overview) {
 test("停用 legacy-agenda 后只剩复诊与 followup 插件来源；重新启用后恢复快照", async (t) => {
   const app = await startTestServer({
     provider: createScriptedProvider([]),
+    serverOptions: { pluginDirs: [PRODUCTION_PLUGINS, CHANNEL_FAKE] },
   });
   t.after(() => app.close());
 

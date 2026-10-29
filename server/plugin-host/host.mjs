@@ -790,7 +790,7 @@ export class PluginHost {
 
   registerTools(registry, workspace, run = null) {
     for (const record of this.ordered) {
-      if (!record.available || !record.enabled || !record.spec?.tools) continue;
+      if (!this._isActive(record) || !record.spec?.tools) continue;
       try {
         const result = record.spec.tools(this.contextFor(record), {
           registry,
@@ -815,7 +815,7 @@ export class PluginHost {
     const plugins = [];
     const names = new Set();
     for (const record of this.ordered) {
-      if (!record.available || !record.enabled || !record.spec?.tools) continue;
+      if (!this._isActive(record) || !record.spec?.tools) continue;
       const registry = {
         register: (plugin) => {
           check(
@@ -853,8 +853,7 @@ export class PluginHost {
   promptFragments() {
     return this.ordered
       .filter(
-        (record) =>
-          record.available && record.enabled && record.promptText.trim(),
+        (record) => this._isActive(record) && record.promptText.trim(),
       )
       .map((record) => record.promptText.trim())
       .join("\n\n");
@@ -863,8 +862,7 @@ export class PluginHost {
   skillDirs() {
     return this.ordered
       .filter(
-        (record) =>
-          record.available && record.enabled && record.spec?.skills,
+        (record) => this._isActive(record) && record.spec?.skills,
       )
       .map((record) => resolve(record.dir, record.spec.skills))
       .filter((dir) => existsSync(dir) && statSync(dir).isDirectory());
@@ -962,7 +960,7 @@ export class PluginHost {
   agendaSources() {
     const sources = [];
     for (const record of this.ordered) {
-      if (!record.available || !record.enabled || !record.spec) continue;
+      if (!this._isActive(record) || !record.spec) continue;
       for (const source of record.spec.agendaSources)
         sources.push({
           pluginId: record.id,
@@ -986,7 +984,7 @@ export class PluginHost {
   } = {}) {
     const items = [];
     for (const record of this.ordered) {
-      if (!record.available || !record.enabled || !record.spec) continue;
+      if (!this._isActive(record) || !record.spec) continue;
       for (const source of record.spec.agendaSources) {
         try {
           const result = source.read(this.contextFor(record), {
@@ -1097,9 +1095,12 @@ export class PluginHost {
   }
 
   async startAll() {
+    // Activation can depend on a status hook (for example a connected
+    // messaging channel), so resolve it before deciding which loops to start.
+    await this.listWithStatus();
     const results = [];
     for (const record of this.ordered) {
-      if (!record.available || !record.enabled || !record.spec?.lifecycle)
+      if (!this._isActive(record) || !record.spec?.lifecycle)
         continue;
       const state = this.lifecycleStates.get(record.id);
       if (state === "started" || state === "starting") continue;
@@ -1226,6 +1227,9 @@ export class PluginHost {
       record.spec?.lifecycle &&
       ["stopped", "failed"].includes(this.lifecycleStates.get(id))
     ) {
+      if (record.spec.activation?.requiresConnection)
+        await this.listWithStatus();
+      if (!this._isActive(record)) return this.list().find((item) => item.id === id);
       this.lifecycleStates.set(id, "starting");
       this.startedPlugins.add(id);
       this.drainedPlugins.delete(id);
@@ -1244,6 +1248,98 @@ export class PluginHost {
     return this.list().find((item) => item.id === id);
   }
 
+  // A plugin that declares activation.requiresConnection stays dormant until
+  // its status hook reports a live connection. Status hooks are usually
+  // async; the synchronous value is still honored so startup-time decisions
+  // (tool registration, agenda sources) see a connected channel immediately.
+  _connectedValue(value) {
+    if (typeof value === "boolean") return value;
+    if (value && typeof value === "object") {
+      if (typeof value.connected === "boolean") return value.connected;
+      if (typeof value.state === "string") return value.state === "ready";
+    }
+    return null;
+  }
+
+  _isActive(record) {
+    if (!record.available || !record.enabled) return false;
+    if (record.spec?.activation?.requiresConnection !== true) return true;
+    const cached = this.statusCache.get(record.id);
+    if (cached && typeof cached.connected === "boolean")
+      return cached.connected === true;
+    if (!record.spec.status) return false;
+    try {
+      const value = record.spec.status(this.contextFor(record));
+      if (value && typeof value.then === "function") return false;
+      return this._connectedValue(value) === true;
+    } catch (error) {
+      this.lifecycleErrors.set(
+        record.id,
+        `状态检查失败：${errorMessage(error)}`,
+      );
+      return false;
+    }
+  }
+
+  isActive(id) {
+    const record = this.byId.get(id);
+    return record ? this._isActive(record) : false;
+  }
+
+  // Recompute activation after a connection change: start newly active
+  // plugins and stop ones that went dormant. Order follows the dependency
+  // graph so channel plugins are ready before followup starts.
+  async syncActivation() {
+    await this.listWithStatus();
+    const results = [];
+    for (const record of this.ordered) {
+      if (!record.spec?.lifecycle) continue;
+      const active = this._isActive(record);
+      const state = this.lifecycleStates.get(record.id);
+      const started = this.startedPlugins.has(record.id);
+      if (active && (!started || state === "stopped" || state === "failed")) {
+        this.lifecycleStates.set(record.id, "starting");
+        this.startedPlugins.add(record.id);
+        this.drainedPlugins.delete(record.id);
+        try {
+          if (record.spec.lifecycle.start)
+            await record.spec.lifecycle.start(this.contextFor(record));
+          this.lifecycleStates.set(record.id, "started");
+          this.lifecycleErrors.delete(record.id);
+          results.push({ id: record.id, ok: true, active: true });
+        } catch (error) {
+          this.lifecycleStates.set(record.id, "failed");
+          this.lifecycleErrors.set(record.id, errorMessage(error));
+          console.error(`插件 ${record.id} 启动失败:`, error);
+          results.push({
+            id: record.id,
+            ok: false,
+            active: true,
+            error: errorMessage(error),
+          });
+        }
+      } else if (!active && started && state !== "stopped") {
+        try {
+          if (record.spec.lifecycle.stop)
+            await record.spec.lifecycle.stop(this.contextFor(record));
+          this.lifecycleStates.set(record.id, "stopped");
+          this.lifecycleErrors.delete(record.id);
+          results.push({ id: record.id, ok: true, active: false });
+        } catch (error) {
+          this.lifecycleErrors.set(record.id, `停止失败：${errorMessage(error)}`);
+          console.error(`插件 ${record.id} 停止失败:`, error);
+          results.push({
+            id: record.id,
+            ok: false,
+            active: false,
+            error: errorMessage(error),
+          });
+        }
+      }
+    }
+    return results;
+  }
+
   _describe(record) {
     const spec = record.spec;
     const cached = this.statusCache.get(record.id);
@@ -1254,6 +1350,7 @@ export class PluginHost {
       version: spec?.version || "0.0.0",
       enabled: record.enabled,
       available: record.available,
+      active: this._isActive(record),
       connected: cached ? cached.connected : null,
       capabilities:
         cached && cached.capabilities !== undefined

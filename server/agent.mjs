@@ -675,14 +675,19 @@ export function createServer(options = {}) {
   // setup runs after these constructors, and reads happen after startup.
   const pluginService = (id) => pluginHost.pluginServices[id] || null;
   const followupService = () => pluginService("followup");
-  const pluginActive = (id) => {
-    const record = pluginHost.list().find((plugin) => plugin.id === id);
-    return Boolean(record?.enabled && record.available && record.status === "ready");
-  };
+  const pluginActive = (id) => pluginHost.isActive(id);
   const currentWecom = () =>
     pluginActive("channel-wecom")
       ? pluginService("channel-wecom")?.connector || null
       : null;
+  const requireFollowupActive = () => {
+    if (!pluginActive("followup"))
+      throw new AppError(
+        "FOLLOWUP_INACTIVE",
+        "随访与患者消息尚未启用，请先连接微信或企业微信",
+        409,
+      );
+  };
   const requireFollowupService = () => {
     const service = followupService();
     check(service, "PLUGIN_SERVICE_UNAVAILABLE", "随访插件未启用", 503);
@@ -839,6 +844,8 @@ export function createServer(options = {}) {
         care: options.care,
         chatAibot: options.chatAibot,
       },
+      isActive: (id = "followup") => pluginHost.isActive(id),
+      syncActivation: () => pluginHost.syncActivation(),
     },
     risks,
     // Dependencies for the generic channel plugin. They are fixed-region
@@ -1117,9 +1124,11 @@ export function createServer(options = {}) {
           if (!res.writableEnded) controller.abort(new AppError("REQUEST_ABORTED", "请求已断开", 499));
         };
         res.once("close", disconnected);
-        try { return send(res, 200, {
+        try {
+          await pluginHost.syncActivation();
+          return send(res, 200, {
           token: secret,
-          plugins: await pluginHost.listWithStatus(),
+          plugins: pluginHost.list(),
           demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
           // 应用，显式声明医疗能力可用（前端 medicalEnabled 优先读
@@ -2107,14 +2116,17 @@ export function createServer(options = {}) {
         });
         return send(res, 201, action);
       }
-      if (path === "/api/inbox" && req.method === "GET")
+      if (path === "/api/inbox" && req.method === "GET") {
+        requireFollowupActive();
         return send(res, 200, { messages: patients.unassigned() });
+      }
       if (
         parts[0] === "api" &&
         parts[1] === "inbox" &&
         parts[3] === "assign" &&
         req.method === "POST"
       ) {
+        requireFollowupActive();
         const b = await body(req);
         return send(
           res,

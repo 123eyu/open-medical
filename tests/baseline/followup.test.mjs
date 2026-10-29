@@ -6,10 +6,21 @@ import {
   toolCall,
 } from "../helpers/scripted-provider.mjs";
 import { startTestServer, waitFor } from "../helpers/server.mjs";
+import { fileURLToPath } from "node:url";
+
+const PLUGIN_ROOT = fileURLToPath(new URL("../../plugins", import.meta.url));
+const CHANNEL_FAKE = fileURLToPath(
+  new URL("../fixtures/plugins/channel-fake", import.meta.url),
+);
 
 test("随访提案确认后，今日待办出现对应随访事项", async (t) => {
   const provider = createScriptedProvider([]);
-  const app = await startTestServer({ provider });
+  // The followup plugin is dormant without a connected channel. This test is
+  // about followup behaviour, so inject the test-only connected channel.
+  const app = await startTestServer({
+    provider,
+    serverOptions: { pluginDirs: [PLUGIN_ROOT, CHANNEL_FAKE] },
+  });
   t.after(() => app.close());
 
   const patients = await app.patients();

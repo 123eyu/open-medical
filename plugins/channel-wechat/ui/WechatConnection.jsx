@@ -1,13 +1,13 @@
 import { MacPermissionHelp } from '../../../src/mac-permission-help';
 import { AutomaticSettings } from '../../channel/ui/ConnectionForm.jsx';
 import { useEffect, useState } from 'react';
-import { api } from '../../../src/agent-runtime';
+import { api, refreshPlugins } from '../../../src/agent-runtime';
 const when = value => value ? new Date(value).toLocaleString() : '尚未同步';
 export function WechatConnection({ initial, onSaved }) {
   const [saved, setSaved] = useState(initial), [account, setAccount] = useState(initial.accountId || ''), [confirmed, setConfirmed] = useState(false), [status, setStatus] = useState(initial.status), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const accept = value => { setSaved(value); setStatus(value.status); onSaved(value); };
   async function run(fn) { setBusy(true); setError(''); try { await fn(); } catch(e) { setError(e.message); } finally { setBusy(false); } }
-  const check = () => run(async () => setStatus(await api('/api/chat-followups/connections/wechat/test', 'POST', {})));
+  const check = () => run(async () => { setStatus(await api('/api/chat-followups/connections/wechat/test', 'POST', {})); await refreshPlugins().catch(() => {}); });
   useEffect(() => { check(); }, []);
   return <section className="chat-setup"><h3>本机微信</h3><p>在微信桌面版扫码登录后，工作台可以读取你授权的患者会话。</p>
     <p role="status">{status?.message || '正在检查微信…'}</p>
