@@ -1,3 +1,4 @@
+import { PatientQuestionStarters } from "./patient-question-starters";
 import { ModelConsent } from "./model-consent";
 import { DoctorAgenda } from "./doctor-agenda";
 import { CareInbox } from "./care-inbox";
@@ -18,6 +19,7 @@ import { createRoot } from "react-dom/client";
 import {
   Activity,
   ArrowUp,
+  ArrowLeft,
   Bot,
   BookOpen,
   ChevronRight,
@@ -1316,7 +1318,7 @@ function App() {
         setQuestionSelection({ sessionId: data.id, runId: null });
         activateDraft(draftKeyFor(data, null));
       }
-      if (options.draft || options.newQuestion) {
+      if (options.draft || options.workflow) {
         pendingWorkflowRef.current = options.workflow || "";
         draftWorkflows.current.set(draftContext.current.key, options.workflow || "");
       }
@@ -1330,6 +1332,10 @@ function App() {
       );
       setInspector(options.tab === "results" || options.tab === "materials");
       if (options.artifactId) setAcceptId(options.artifactId);
+      if (options.newQuestion) {
+        setReadingOnly(false);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
       if (options.draft) {
         setNotice("");
         setDraft(options.draft);
@@ -1580,7 +1586,6 @@ function App() {
         </aside>
         <div className="product-content" id="main-content" tabIndex={-1}>
           {view !== "tools" && TOOL_VIEWS.includes(view) && <nav className="page-trail" aria-label="当前位置"><button onClick={() => navigate("tools")}>资料与工具</button><ChevronRight size={14}/><span>{VIEW_LABELS[view]}</span></nav>}
-          {view === "workbench" && session?.patientId && <nav className="page-trail" aria-label="当前患者"><button onClick={() => openPatient({id:session.patientId})}><Stethoscope size={15}/>返回患者档案</button></nav>}
           {listError && <div className="navigation-notice" role="alert"><span>{listError}</span><button className="secondary" onClick={() => refreshList()}>重新加载列表</button></div>}
           {!config ? (<main id="main" className="workbench-hub">
                 {error ? <div className="connection-recovery" role="alert">
@@ -1691,19 +1696,34 @@ function App() {
                   >
                     <Menu size={18} />
                   </IconButton>
+                  {session?.patientId && <button type="button" className="patient-chat-back text-button" aria-label="返回患者档案" title="返回患者档案" onClick={() => openPatient({ id: session.patientId })}><ArrowLeft size={18}/></button>}
                   <div className="heading-copy">
-                    <small>{session?.patientId ? "患者问答 · 已关联当前档案" : "任务对话"}</small>
-                    <h1>{session?.title || "今天，需要处理什么材料？"}</h1>
+                    {!session?.patientId && <small>任务对话</small>}
+                    <h1>{session?.patientId ? `${patientDetail?.name || taskPatientContext(session, patientsList) || session.title} · 问答` : session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
+                  {session?.patientId && !!patientDetail?.allergies?.length && <span className="patient-chat-allergy" title={patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}>过敏：{patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}</span>}
+                  {session?.patientId && !loading && !acceptArtifact && <PatientConversationNav session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
+                  {!!session?.messages.length && (!session.patientId || questionRunId) && <button type="button" className="text-button reading-toggle" aria-pressed={readingOnly} onClick={() => { setReadingOnly(!readingOnly); setInspector(false); }}>{readingOnly ? '返回提问' : '专注阅读'}</button>}
+                  <button
+                    className="secondary inspector-toggle"
+                    aria-expanded={inspector}
+                    aria-controls="task-reference-panel"
+                    onClick={() => setInspector(!inspector)}
+                  >
+                    <FolderOpen size={16} />
+                    {inspector ? "收起资料" : session?.patientId ? "患者资料" : "查看资料"}
+                  </button>
                   {session && (
-                    <div className="head-actions">
+                    <details className="conversation-actions">
+                      <summary aria-label="更多对话操作">更多</summary>
+                      <div className="head-actions" onClick={event => { if (event.target.closest('button')) event.currentTarget.closest('details').open = false; }}>
                       <button type="button" className="text-button"
                         title="重命名会话"
                         onClick={() => setModal("rename")}
                       >
                         <PencilLine size={16} />重命名
                       </button>
-                      <IconButton
+                      <button type="button" className="text-button"
                         title="复制选中材料到新会话"
                         disabled={busy || loading || !selectedFileIds.length}
                         onClick={async () => {
@@ -1728,33 +1748,24 @@ function App() {
                           }
                         }}
                       >
-                        <Copy size={16} />
-                      </IconButton>
-                      <IconButton
+                        <Copy size={16} />复制材料到新会话
+                      </button>
+                      <button type="button" className="text-button"
                         title="导出会话"
                         onClick={() => setModal("export")}
                       >
-                        <Download size={16} />
-                      </IconButton>
-                      <IconButton
+                        <Download size={16} />导出会话
+                      </button>
+                      {!session.patientId && <button type="button" className="text-button"
                         title="删除会话"
                         disabled={busy || loading || Boolean(session.patientId)}
                         onClick={() => setModal("delete")}
                       >
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </div>
+                        <Trash2 size={16} />删除会话
+                      </button>}
+                      </div>
+                    </details>
                   )}
-                  {!!session?.messages.length && (!session.patientId || questionRunId) && <button type="button" className="text-button reading-toggle" aria-pressed={readingOnly} onClick={() => { setReadingOnly(!readingOnly); setInspector(false); }}>{readingOnly ? '返回提问' : '专注阅读'}</button>}
-                  <button
-                    className="secondary inspector-toggle"
-                    aria-expanded={inspector}
-                    aria-controls="task-reference-panel"
-                    onClick={() => setInspector(!inspector)}
-                  >
-                    <FolderOpen size={16} />
-                    {inspector ? "收起资料" : "查看资料"}
-                  </button>
                 </div>
                 {session && !session.patientId && (
                   <div className="task-context-bar">
@@ -1807,7 +1818,6 @@ function App() {
                     </IconButton>
                   </div>
                 )}
-                {session?.patientId && !loading && !acceptArtifact && <PatientConversationNav session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
                 {loading ? (
                   <div className="loading-state">
                     <Loader2 className="spin" />
@@ -1845,17 +1855,6 @@ function App() {
                       else if (movement > 1 && bottom) followOutput.current = true;
                       lastScrollTop.current = pane.scrollTop;
                     }}>
-                    {session?.patientId && patientDetail && (
-                      <details className="conversation-patient-details"><summary>查看患者资料{patientDetail.allergies?.length ? ` · 过敏：${patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}` : ''}</summary><PatientSummaryCard
-                        detail={patientDetail}
-                        session={session}
-                        compact
-                        onOpenDetail={() =>
-                          openPatient({ id: session.patientId })
-                        }
-                        onOpenLabs={() => openPatient({ id: session.patientId, tab: "labs" })}
-                      /></details>
-                    )}
                     {(!session?.messages.length || (session?.patientId && !questionRunId && !busy)) && (
                       <div className={session?.patientId ? "patient-task-preparation" : "welcome task-preparation"}>
                         {!session?.patientId && <>
@@ -1893,10 +1892,13 @@ function App() {
                             ? `核对本次选中的 ${selectedFileIds.length} 份材料`
                             : "添加任务材料"}
                         </button>}
-                        {!draft.trim() && (session?.patientId ? <details className="patient-task-options">
-                          <summary>常用任务</summary>
-                          <div className="workflow-grid">{WORKFLOWS.map(flow => <button key={flow.id} onClick={() => selectWorkflow(flow)}><flow.icon size={19}/><b>{flow.title}</b><span>{flow.desc}</span><ChevronRight size={15}/></button>)}</div>
-                        </details> : (
+                        {!draft.trim() && (session?.patientId ? <PatientQuestionStarters onChoose={({ prompt, workflow = '' }) => {
+                          setDraft(prompt);
+                          pendingWorkflowRef.current = workflow;
+                          draftWorkflows.current.set(draftContext.current.key, workflow);
+                          setConsent(false);
+                          inputRef.current?.focus();
+                        }}/> : (
                           <div className="workflow-grid">
                             {WORKFLOWS.map((flow) => (
                               <button
@@ -2139,8 +2141,8 @@ function App() {
                       <small>本轮固定技能，发送后清除</small>
                     </div>
                   )}
-                  {session?.patientId && <div className="patient-question-context" role="status">
-                    {busy ? "正在处理，可补充要求" : canFollowQuestion ? "继续追问" : "新问题 · 已关联患者档案"}
+                  {session?.patientId && (busy || questionRunId) && <div className="patient-question-context" role="status">
+                    {busy ? "正在处理，可补充要求" : canFollowQuestion ? "继续追问" : ""}
                     {!busy && questionRunId && !canFollowQuestion && <span>上次未完成，再次发送将开始新问题。</span>}
                   </div>}
                   <form className="composer" onSubmit={send}>
@@ -2397,6 +2399,7 @@ function App() {
                     )}
                   {tab === "materials" && (
                     <>
+                      {session?.patientId && patientDetail && <PatientSummaryCard detail={patientDetail} session={session} compact onOpenDetail={() => openPatient({ id: session.patientId })} onOpenLabs={() => openPatient({ id: session.patientId, tab: 'labs' })}/>}
                       {citation && (
                         <div className="source-preview">
                           <button
