@@ -5,10 +5,11 @@ import {
 } from "./runtime-dependencies.mjs";
 import { packager } from "@electron/packager";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve, relative, sep } from "node:path";
+import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { argument, reserveCandidateOutput, prohibited, captureSource, sourceManifestName, inventory, sealCandidate } from "./desktop-candidate.mjs";
+import { argument, reserveCandidateOutput, captureSource, sourceManifestName, inventory, sealCandidate } from "./desktop-candidate.mjs";
+import { stageRuntime } from "./runtime-stage.mjs";
 import { execFileSync } from "node:child_process";
 import { pruneAfterDesktopBuild } from "./prune-desktop-backups.mjs";
 
@@ -34,23 +35,9 @@ try {
   });
   // Explicit allowlist: never copy patient databases, .env, screenshots or tests.
   const source = customOut === undefined ? null : await captureSource(root);
-  const safeSource = (path) => {
-    const name = relative(root, path).split(sep).join("/");
-    return !prohibited(name) && name !== "server/data" && !name.startsWith("server/data/");
-  };
-  for (const entry of ["dist", "desktop", "shared", "skills", "integrations", "examples", "build/icons"])
-    await cp(join(root, entry), join(stage, entry), { recursive: true, filter: safeSource });
-  await cp(join(root, "server"), join(stage, "server"), {
-    recursive: true,
-    filter: safeSource,
-  });
-  await cp(join(root, ".env.example"), join(stage, ".env.example"));
-  await mkdir(join(stage, "scripts"));
-  await cp(
-    join(root, "scripts/workspace-cli.mjs"),
-    join(stage, "scripts/workspace-cli.mjs"),
-  );
-  for (const script of ["agent-daemon.mjs", "daemon-supervisor.mjs", "backup.mjs", "local-transcription.py"]) await cp(join(root,"scripts",script),join(stage,"scripts",script));
+  // stageRuntime adds plugins/ (minus tests/fixtures/secrets) next to server/,
+  // which is where server/agent.mjs resolves the default plugin directory.
+  await stageRuntime({ root, target: stage });
   await mkdir(join(stage, "node_modules"), { recursive: true });
   await bundleRuntimeDependencies(root, stage);
   const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));

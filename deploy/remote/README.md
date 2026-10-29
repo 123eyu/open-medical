@@ -4,7 +4,7 @@
 
 ## 启动
 
-需要 Node.js 22.13+、本项目依赖。Worker 还需要 Docker 和 `npm run build:runtime` 生成的 `open-medical-runtime:0.8-full` 镜像。先在受信任的服务器上保存项目并运行 `npm ci`。
+需要 Node.js 22.13+、本项目依赖。Worker 还需要 Docker 和 `npm run build:runtime` 生成的 `open-medical-runtime:0.8-full` 镜像。先在受信任的服务器上保存项目并运行 `npm ci`。部署目录必须保留完整的 `server/` 与 `plugins/`，不要把插件目录排除在发布目录之外；桌面和医疗运行时按同级目录解析插件。
 
 生成两个不同的随机令牌，分别配置在进程管理器的私有环境文件中，不要提交到仓库：
 

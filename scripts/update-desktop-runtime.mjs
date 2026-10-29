@@ -13,7 +13,6 @@ import {
   access,
   readFile,
   writeFile,
-  mkdir,
   mkdtemp,
   rm,
   rename,
@@ -22,6 +21,11 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve, dirname } from "node:path";
 import { pruneAfterDesktopBuild } from "./prune-desktop-backups.mjs";
+import {
+  stageRuntime,
+  updateRuntimeEntries,
+  updateRuntimeScripts,
+} from "./runtime-stage.mjs";
 
 const signing =
   process.platform === "darwin"
@@ -48,33 +52,15 @@ let committed = false;
 try {
   await cp(app, stagedApp, { recursive: true, verbatimSymlinks: true });
   const target = join(stagedApp, "Contents/Resources/app");
-  for (const entry of [
-    "dist",
-    "desktop",
-    "shared",
-    "skills",
-    "integrations",
-    "examples",
-  ]) {
-    await rm(join(target, entry), { recursive: true, force: true });
-    await cp(join(root, entry), join(target, entry), { recursive: true });
-  }
-  await rm(join(target, "server"), { recursive: true, force: true });
-  await cp(join(root, "server"), join(target, "server"), {
-    recursive: true,
-    filter: (source) => !source.startsWith(join(root, "server/data")),
+  // Keep the update allowlist in sync with package-desktop: plugins/ must be
+  // refreshed beside server/ or updated installs lose every domain plugin.
+  await stageRuntime({
+    root,
+    target,
+    entries: updateRuntimeEntries,
+    scripts: updateRuntimeScripts,
+    clean: true,
   });
-  await mkdir(join(target, "scripts"), { recursive: true });
-  for (const script of [
-    "workspace-cli.mjs",
-    "backup.mjs",
-    "agent-daemon.mjs",
-    "daemon-supervisor.mjs",
-    "remote-coordinator.mjs",
-    "remote-worker.mjs",
-    "local-transcription.py",
-  ])
-    await cp(join(root, "scripts", script), join(target, "scripts", script));
   const sourcePackage = JSON.parse(
     await readFile(join(root, "package.json"), "utf8"),
   );

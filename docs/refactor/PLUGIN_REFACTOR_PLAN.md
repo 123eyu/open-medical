@@ -480,3 +480,4 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 6. **插件模板是最小示例**：没有内置 CSS、分页、权限细分和截图测试；复杂插件应以现有 `followup`/`trials` 为参考。
 7. **文档语言**：`docs/PLUGIN_GUIDE.md` 为中文；README_EN 的导航指向同一中文指南，符合仓库“详细指南暂以中文为主”的现状。
 8. **插件数量口径**：计划早期写“16 个插件”，包含过渡插件 `legacy-agenda`；T11c 清理后实际可加载 15 个，本文和架构文档已按“15 活跃 + 1 已撤销”说明。
+9. **打包必须包含插件目录**：插件目录必须包含在所有运行时组装脚本中；新增顶层运行时目录时同步更新打包白名单，并由 `tests/packaging` 守护。

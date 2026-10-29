@@ -659,6 +659,12 @@ component: () => import("./Tab.jsx").then((m) => ({ default: m.PainScoreTab })),
 
 > **坑**：直接改 `001_init.sql` 在开发机看不出问题，已有数据库不会重跑，升级后缺列。升级兼容测试会对比旧库启动后的表结构。
 
+### 5.11 打包必须包含插件目录
+
+插件目录必须包含在所有运行时组装脚本中；新增顶层运行时目录时同步更新打包白名单，并由 `tests/packaging` 守护。
+
+> **坑**：`package-desktop.mjs` 曾用显式白名单逐项复制运行时（dist、desktop、server 等）却漏了 `plugins/`。从源码跑 `npm test` 和 E2E 一切正常，但安装包里所有领域插件都会消失。现在打包与增量更新共用 `scripts/runtime-stage.mjs`，stage 测试会在临时目录组装并启动打包后的 `server/agent.mjs` 验证插件列表。
+
 ---
 
 ## 6. 测试要求
