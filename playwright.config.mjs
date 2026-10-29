@@ -17,7 +17,8 @@ export default defineConfig({
     toHaveScreenshot: {
       animations: "disabled",
       caret: "hide",
-      maxDiffPixelRatio: 0.01,
+      threshold: 0.02,
+      maxDiffPixels: 0,
     },
   },
   reporter: [["list"]],

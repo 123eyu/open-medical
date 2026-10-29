@@ -70,7 +70,8 @@ async function capture(page, name, { scroll, mask = [] } = {}) {
     fullPage: true,
     animations: "disabled",
     caret: "hide",
-    maxDiffPixelRatio: 0.01,
+    threshold: 0.02,
+    maxDiffPixels: 0,
     mask,
   });
 }

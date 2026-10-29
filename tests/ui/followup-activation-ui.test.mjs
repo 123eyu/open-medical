@@ -14,6 +14,7 @@ async function load() {
     vite,
     slots: await vite.ssrLoadModule("/src/plugin-slots.jsx"),
     plugin: (await vite.ssrLoadModule("/plugins/followup/ui/index.jsx")).default,
+    settings: await vite.ssrLoadModule("/src/app-settings.jsx"),
   };
 }
 
@@ -36,7 +37,7 @@ function harness(slots) {
     );
   }
   function Settings() {
-    const panels = slots.useSlot("settings.panels");
+    const panels = slots.useActiveSlot("settings.panels");
     return createElement(
       "div",
       null,
@@ -62,6 +63,34 @@ test("patient tabs：followup 未激活时不渲染消息/随访 tab，但保留
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(keys, ["appointments", "tracking"]);
   assert.match(html, /data-panel="followup"/, "连接渠道的设置面板必须保留");
+});
+
+test("dormant：settingsTab=followup 仍解析到患者随访连接面板", async (t) => {
+  const { vite, slots, plugin, settings } = await load();
+  t.after(() => vite.close());
+
+  slots.registerUiPlugins({ followup: plugin }, ["followup"], []);
+  let panels = [];
+  function CapturePanels() {
+    panels = slots.useActiveSlot("settings.panels");
+    return null;
+  }
+  renderToStaticMarkup(createElement(CapturePanels));
+
+  assert.equal(
+    settings.resolveSettingsSection("followup", panels, { medical: true }),
+    "followup",
+  );
+  assert.equal(
+    slots.findSettingsPanel(panels, "followup")?.id,
+    "followup",
+  );
+  // Before the lazy panel arrives the same request falls back to 模型与运行;
+  // keeping the raw request lets the next render resolve it once registered.
+  assert.equal(
+    settings.resolveSettingsSection("followup", [], { medical: true }),
+    "general",
+  );
 });
 
 test("patient tabs：followup 激活后消息/随访 tab 恢复", async (t) => {

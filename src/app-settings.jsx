@@ -3,7 +3,7 @@ import { LearningSettings } from "./learning-loop";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
-import { SlotItem, findSettingsPanel, usePluginActive, useSlot } from "./plugin-slots";
+import { SlotItem, findSettingsPanel, usePluginActive, useActiveSlot, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
@@ -28,6 +28,32 @@ function settingsGroup(section, legacyPanels = []) {
   if (CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
   return section;
+}
+
+const SETTINGS_GROUPS = [
+  "general",
+  "desktop",
+  "connections",
+  "channels",
+  "personal",
+  "backup",
+  "plugins",
+];
+
+// Resolve a settingsTab from the URL (or a deferred request) against the
+// currently registered panels. Plugin UI loads asynchronously, so a deep link
+// such as settingsTab=followup may arrive before its panel; keeping the raw
+// request in state lets the same computation succeed on the next render.
+export function resolveSettingsSection(
+  requested,
+  legacyPanels = [],
+  { medical = true, desktop = false } = {},
+) {
+  const normalized = requested === "personal" ? "skills" : requested;
+  const group = settingsGroup(normalized, legacyPanels);
+  if (["channels", "personal"].includes(group) && !medical) return "general";
+  if (normalized === "desktop" && !desktop) return "general";
+  return SETTINGS_GROUPS.includes(group) ? normalized : "general";
 }
 
 function SettingsSubnav({ label, items, section, onSelect }) {
@@ -158,17 +184,16 @@ function PluginSettings({ onPluginsChanged }) {
 
 export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange, onPluginsChanged }) {
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
-  const pluginPanels = useSlot("settings.panels");
+  const pluginPanels = useActiveSlot("settings.panels");
   const followupActive = usePluginActive("followup");
   const legacyPanels = pluginPanels.filter((panel) => panel.legacyTab);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
-  const [section, updateSection] = useState(() => {
-    const initial = takeSettingsTab() || param || "general";
-    const requested = initial === "personal" ? "skills" : initial;
-    const group = settingsGroup(requested, legacyPanels);
-    if (["channels", "personal"].includes(group) && !medicalEnabled(config)) return "general";
-    if (requested === "desktop" && !window.omwDesktop) return "general";
-    return ["general", "desktop", "connections", "channels", "personal", "backup", "plugins"].includes(group) ? requested : "general";
+  const [requestedSection, updateSection] = useState(
+    () => takeSettingsTab() || param || "general",
+  );
+  const section = resolveSettingsSection(requestedSection, legacyPanels, {
+    medical: medicalEnabled(config),
+    desktop: Boolean(window.omwDesktop),
   });
   const group = settingsGroup(section, legacyPanels);
   const legacyPanel = findSettingsPanel(pluginPanels, section);

@@ -32,6 +32,7 @@ export default defineUiPlugin({
         label: "患者随访",
         order: 40,
         legacyTab: "followup",
+        availableWhenDormant: true,
         component: () => import("./ChatConnectionSettings.jsx"),
       },
     ],

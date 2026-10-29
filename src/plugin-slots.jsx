@@ -100,7 +100,13 @@ function rebuild() {
   for (const [name, list] of next)
     activeNext.set(
       name,
-      Object.freeze(list.filter((item) => activeIds.has(item.pluginId))),
+      Object.freeze(
+        list.filter(
+          (item) =>
+            activeIds.has(item.pluginId) ||
+            item.availableWhenDormant === true,
+        ),
+      ),
     );
   activeSlotsByName = activeNext;
   version += 1;
@@ -311,7 +317,12 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
                 replacesBuiltin: item.replacesBuiltin === true || Boolean(legacyTab),
               }
             : name === "settings.panels"
-              ? { legacyTab }
+              ? {
+                  legacyTab,
+                  // Connection panels must stay reachable while the business
+                  // plugin is dormant; otherwise the doctor cannot reconnect.
+                  availableWhenDormant: item.availableWhenDormant === true,
+                }
               : {}),
           component: lazy(item.component),
         });
