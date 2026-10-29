@@ -1,4 +1,4 @@
-import { check } from "../errors.mjs";
+import { check } from "../../../server/errors.mjs";
 
 // Built-in quick lookup for frequently used ICD-9-CM-3 procedure codes.
 // Not an exhaustive coding library — hospitals should treat their own

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
+import { api } from "../../../src/agent-runtime";
+import "./clinical-ref.css";
 import { Loader2, Search, Calculator, FlaskConical, FileCode2, ShieldAlert } from "lucide-react";
 
 // Clinical quick-reference: scale calculators, lab item interpretations,

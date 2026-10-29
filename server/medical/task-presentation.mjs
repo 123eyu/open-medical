@@ -1,5 +1,4 @@
 import {check} from '../errors.mjs';
-import {listScales} from './scales.mjs';
 export function configureTaskPresentation(registry,kind,save) {
  const evidence=[];
  for(const [name,tool] of registry.tools){
@@ -9,8 +8,10 @@ export function configureTaskPresentation(registry,kind,save) {
    if(['read_patient_brief','read_source'].includes(name)&&!output?.error)evidence.push(JSON.stringify(output));
    if(!output?.error && kind==='literature' && ['literature_search','literature_fetch'].includes(name))save({kind:'literature',key:name+JSON.stringify(args),tool:name,...output});
    if(!output?.error && kind==='calculator' && name==='medical_scale_calculate'){
-    const scale=listScales().find(s=>s.id===args.scaleId);
-    save({kind:'calculator',key:name+JSON.stringify(args),...output,formula:scale?.desc,inputs:(scale?.items||[]).map(i=>({label:i.label,value:args.answers[i.key]}))});
+    // The clinical-ref plugin owns the scale catalogue and returns formula/
+    // inputs with the tool result; the fixed presentation layer stays
+    // plugin-agnostic.
+    save({kind:'calculator',key:name+JSON.stringify(args),...output});
    }
    return output;
   };

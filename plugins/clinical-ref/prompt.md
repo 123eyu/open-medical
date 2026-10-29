@@ -1,0 +1,1 @@
+- 临床速查：需要量表评分或计算器时先用 medical_scale_list 选量表，再用 medical_scale_calculate 按条目 key 计算；药物不良反应筛查用 assess_adverse_reaction；检验指标意义继续用固定区的 lab_knowledge_search。结果均为确定性提示或待复核草稿，需医生结合患者整体情况判断，不构成诊断、处方或因果结论。

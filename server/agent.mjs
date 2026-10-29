@@ -64,12 +64,9 @@ import { cohortProfileTool } from "./medical/cohort-profile.mjs";
 import { DrgService, drgTools } from "./medical/drg.mjs";
 import {
   evaluateMedicationSafety,
-  assessAdverseReaction,
   specialPopulationCautions,
 } from "./medical/med-safety.mjs";
-import { calculateScale, listScales, scaleTools } from "./medical/scales.mjs";
 import { searchLabKnowledge } from "./medical/lab-knowledge.mjs";
-import { searchIcd9 } from "./medical/icd9.mjs";
 import {
   PendingActions,
   pendingActionTools,
@@ -452,27 +449,6 @@ export function createServer(options = {}) {
       },
       execute: (args) => medicationSafetyCheck(args),
     },
-    {
-      definition: {
-        type: "function",
-        function: {
-          name: "assess_adverse_reaction",
-          description:
-            "把当前用药清单与临床表现做匹配，筛查可能的药物不良反应（内置常见药组知识表）。提示性筛查，非因果判定。",
-          parameters: {
-            type: "object",
-            properties: {
-              medications: { type: "array", items: { type: "string" } },
-              findings: { type: "string" },
-            },
-            required: ["medications", "findings"],
-            additionalProperties: false,
-          },
-        },
-      },
-      execute: (args) => assessAdverseReaction(args),
-    },
-    ...scaleTools(),
     {
       definition: {
         type: "function",
@@ -1228,7 +1204,10 @@ export function createServer(options = {}) {
           },
           riskAlerts: risks.counts(),
           medSafety: { enabled: true },
-          scales: { enabled: true, count: listScales().length },
+          scales: {
+            enabled: pluginActive("clinical-ref"),
+            count: pluginService("clinical-ref")?.scales.list().length || 0,
+          },
           labKnowledge: { enabled: true, count: "常见指标内置" },
           drg: { enabled: true, ...drg.settings() },
           cases: cases.counts(),
@@ -1808,8 +1787,6 @@ export function createServer(options = {}) {
       }
       if (path === "/api/med-safety" && req.method === "POST")
         return send(res, 200, medicationSafetyCheck(await body(req)));
-      if (path === "/api/adr-assess" && req.method === "POST")
-        return send(res, 200, assessAdverseReaction(await body(req)));
       if (path === '/api/learning/regression') {
         if (req.method === 'GET') return send(res, 200, personalRegression.get());
         if (req.method === 'POST') return send(res, 202, personalRegression.start(await body(req)));
@@ -2003,18 +1980,6 @@ export function createServer(options = {}) {
           ocrSettings.save({ clearService: true });
         return send(res, 200, paddleLocal.status());
       }
-      if (path === "/api/scales" && req.method === "GET")
-        return send(res, 200, { scales: listScales() });
-      if (
-        parts[0] === "api" &&
-        parts[1] === "scales" &&
-        parts.length === 4 &&
-        parts[3] === "calculate" &&
-        req.method === "POST"
-      ) {
-        const b = await body(req);
-        return send(res, 200, calculateScale(parts[2], b.answers || {}));
-      }
       if (path === "/api/lab-knowledge" && req.method === "GET")
         return send(
           res,
@@ -2026,14 +1991,6 @@ export function createServer(options = {}) {
               : undefined,
           }),
         );
-      if (path === "/api/icd9" && req.method === "GET")
-        return send(res, 200, {
-          codes: searchIcd9(url.searchParams.get("q"), {
-            limit: url.searchParams.get("limit")
-              ? Number(url.searchParams.get("limit"))
-              : undefined,
-          }),
-        });
       if (parts[0] === "api" && parts[1] === "drg") {
         await drg.load();
         if (parts[2] === "group" && req.method === "POST")

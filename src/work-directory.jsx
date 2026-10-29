@@ -7,7 +7,6 @@ import {
   Pin,
   Plus,
   Search,
-  Stethoscope,
   Globe,
   MessageSquare,
   Terminal,
@@ -159,14 +158,6 @@ const catalog = [
   ],
   ["research", "临床试验", "管理试验方案，按入排标准开展患者初筛。", "科研工具", BookOpen, "试验初筛"],
   [
-    "clinical-ref",
-    "临床速查",
-    "量表、检验、编码与 ADR 查询。",
-    "医疗工具",
-    Stethoscope,
-    "本地工具",
-  ],
-  [
     "cases",
     "病例库",
     "整理已保存的病例，查找相似病例。",
@@ -213,7 +204,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       .filter(
         (x) =>
           (medical ||
-            !["research", "clinical-ref", "cases", "drg"].includes(
+            !["research", "cases", "drg"].includes(
               x[0],
             )) &&
           matches(
@@ -221,7 +212,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
             x[1],
             x[2],
             x[3],
-            {"clinical-ref":"评分 计算器 不良反应 药物", "research":"试验 入组 入排", "documents":"Word Excel 报告"}[x[0]] || "",
+            {"research":"试验 入组 入排", "documents":"Word Excel 报告"}[x[0]] || "",
           ),
       )
       .map((row) => ({ kind: "fixed", id: row[0], order: CATALOG_ORDER[row[0]] ?? 100, row })),

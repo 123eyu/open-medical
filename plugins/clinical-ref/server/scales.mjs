@@ -1,4 +1,4 @@
-import { AppError, check } from "../errors.mjs";
+import { AppError, check } from "../../../server/errors.mjs";
 
 // Deterministic medical scales and calculators. Every result is a tool
 // output for clinician review — the scales support decisions, they never
@@ -569,7 +569,18 @@ export function scaleTools() {
         },
         ["scaleId", "answers"],
       ),
-      execute: (args) => calculateScale(args.scaleId, args.answers),
+      execute: (args) => {
+        const result = calculateScale(args.scaleId, args.answers);
+        const scale = scaleById(args.scaleId);
+        return {
+          ...result,
+          formula: scale.desc,
+          inputs: scale.items.map((item) => ({
+            label: item.label,
+            value: args.answers[item.key],
+          })),
+        };
+      },
     },
   ];
 }

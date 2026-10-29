@@ -76,7 +76,6 @@ import { KnowledgeSourcePanel } from "./knowledge-source-panel";
 import { CasesView } from "./cases";
 import { TrialScreeningView } from "./trial-screening";
 import { DrgView } from "./drg";
-import { ClinicalRefView } from "./clinical-ref";
 import { IconButton, Badge, Modal, STATUS } from "./components";
 import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
 import { loadUiPluginModules } from "./plugin-registry";
@@ -1658,8 +1657,6 @@ function App() {
             />
           ) : view === "knowledge" ? (
             <KnowledgeLibraries onOpenTask={openTask} />
-          ) : view === "clinical-ref" ? (
-            <ClinicalRefView />
           ) : view === "cases" ? (
             <CasesView />
           ) : view === "research" && medical ? (

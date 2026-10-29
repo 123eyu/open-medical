@@ -4255,32 +4255,6 @@ blockquote p {
   background: #cfe0cc;
 }
 
-/* ---- clinical quick-reference view ---- */
-.clinical-ref-view {
-  width: min(860px, 100%);
-}
-.scale-form {
-  display: grid;
-  gap: 10px;
-  margin: 10px 0 14px;
-}
-.scale-item {
-  display: grid;
-  gap: 4px;
-  font-size: 12.5px;
-  color: #3c4a3e;
-}
-.scale-item span {
-  color: #4d5c50;
-}
-.scale-item select,
-.scale-item input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-  background: white;
-}
 
 /* ---- mermaid decision flowcharts ---- */
 .wb-mermaid {
