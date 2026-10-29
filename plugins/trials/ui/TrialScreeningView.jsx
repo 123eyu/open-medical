@@ -6,7 +6,6 @@ import { api } from "../../../src/agent-runtime";
 import { importKnowledge } from "../../../src/import-knowledge";
 import { patientOptionLabel } from "../../../src/patient-labels";
 import { takePluginIntent } from "../../../src/plugin-navigation";
-import "../../../src/medical-modules.css";
 const blank = {
   title: "",
   registration: "",

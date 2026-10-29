@@ -1,3 +1,4 @@
+import "./medical-modules.css";
 import { PatientQuestionStarters } from "./patient-question-starters";
 import { DoctorAgenda } from "./doctor-agenda";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";

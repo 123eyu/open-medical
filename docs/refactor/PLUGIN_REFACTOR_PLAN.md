@@ -218,6 +218,7 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 - 收集插件 UI：`import.meta.glob("../plugins/*/ui/index.jsx", { eager: true })`（入口模块可以 eager，组件本身用 `lazy`）。
 - 启用列表取 `/api/bootstrap` 返回的 `plugins`。
 - 插件 UI 只能引用 `src/components.jsx`、`src/plugin-kit/*`（T4 中把共享组件 re-export 到这里），以及插件自己的文件。
+- **CSS 迁移规则**：只移动选择器仅被插件组件使用的规则；被固定区页面或插件/固定区共享布局使用的规则必须留在固定区原文件，并由固定区静态入口按原顺序导入。插件 CSS 会增加异步 chunk 和层叠顺序，不能依赖它提供基础布局。迁移前用 `grep` 检查选择器在 `src/` 的 className 使用情况，迁移后对比构建产物 CSS 规则顺序。
 
 ### 4.5 固定区要挂的插槽（T4）
 
