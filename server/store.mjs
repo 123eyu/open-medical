@@ -89,8 +89,6 @@ export class Store {
       CREATE INDEX IF NOT EXISTS follow_ups_due ON follow_ups(status,next_due);
       CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, kind TEXT NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS reminders_due ON reminders(status,due_at);
-      CREATE TABLE IF NOT EXISTS care_tasks (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, status TEXT NOT NULL, due_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS care_tasks_patient ON care_tasks(patient_id,status,due_at);
       CREATE TABLE IF NOT EXISTS doctor_profile (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS doctor_memories (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, status TEXT NOT NULL, pinned INTEGER NOT NULL DEFAULT 0, count INTEGER NOT NULL DEFAULT 1, topic TEXT NOT NULL DEFAULT '', content TEXT NOT NULL, source TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS doctor_memories_kind ON doctor_memories(kind,status);

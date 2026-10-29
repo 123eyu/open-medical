@@ -23,10 +23,7 @@ function harness(slots) {
     const tabs = slots.useActiveSlot("patient.tabs");
     const communication = slots.mergePatientTabs(tabs, {
       area: "communication",
-      builtin: [
-        ["appointments", "复诊预约", 20],
-        ["tracking", "检查与转诊", 40],
-      ],
+      builtin: [["appointments", "复诊预约", 20]],
     });
     return createElement(
       "div",
@@ -59,9 +56,8 @@ test("patient tabs：followup 未激活时不渲染消息/随访 tab，但保留
   assert.doesNotMatch(html, /data-key="messages"/);
   assert.doesNotMatch(html, /data-key="followups"/);
   assert.match(html, /data-key="appointments"/);
-  assert.match(html, /data-key="tracking"/);
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(keys, ["appointments", "tracking"]);
+  assert.deepEqual(keys, ["appointments"]);
   assert.match(html, /data-panel="followup"/, "连接渠道的设置面板必须保留");
 });
 
@@ -101,5 +97,5 @@ test("patient tabs：followup 激活后消息/随访 tab 恢复", async (t) => {
   const html = renderToStaticMarkup(harness(slots));
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(keys, ["messages", "appointments", "followups", "tracking"]);
+  assert.deepEqual(keys, ["messages", "appointments", "followups"]);
 });

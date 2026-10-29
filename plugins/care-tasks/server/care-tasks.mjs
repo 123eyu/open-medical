@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
-import { check, identifier, string } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
+import { check, identifier, string } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
 
 export const CARE_STATES = { waiting_result: "等待结果", awaiting_review: "待医生核对", awaiting_communication: "待告知患者", completed: "已闭环", cancelled: "已取消" };
 const required = (value, label, length = 2000) => {
@@ -83,8 +83,11 @@ export class CareTasks {
         if (input.action === "complete") {
           check(["communicated", "not_required"].includes(input.communication), "INVALID_INPUT", "请选择告知情况");
           task.communication = input.communication;
-          if (input.nextDueAt) nextJob = this.followups.create(patientId, { name: input.nextName || task.title,
+          if (input.nextDueAt) {
+            check(this.followups, "FOLLOWUP_UNAVAILABLE", "随访功能未启用，无法创建下次随访", 503);
+            nextJob = this.followups.create(patientId, { name: input.nextName || task.title,
             once: true, firstDueAt: input.nextDueAt, checklist: [], externalConsent: false });
+          }
           task.nextFollowUpId = nextJob?.id || null;
           task.nextDueAt = nextJob?.nextDue || null;
         }

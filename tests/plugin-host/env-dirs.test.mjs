@@ -51,6 +51,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.equal(byId["clinical-ref"].status, "ready");
   assert.equal(byId.drg.status, "ready");
   assert.equal(byId["similar-cases"].status, "ready");
+  assert.equal(byId["care-tasks"].status, "ready");
   assert.equal(byId.trials.status, "ready");
 
   const list = await app.request("/api/plugins");
@@ -58,6 +59,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.deepEqual(
     list.body.plugins.map((plugin) => plugin.id),
     [
+      "care-tasks",
       "channel",
       "channel-wechat",
       "channel-wecom",

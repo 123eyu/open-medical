@@ -1,5 +1,4 @@
 import { definePlugin } from "../../server/plugin-host/define.mjs";
-import { isCalendarDate } from "../../shared/calendar-date.mjs";
 
 // Transitional agenda sources. The collection code below is lifted verbatim
 // from DoctorOverview.read; only where the data comes from changed (db and
@@ -34,34 +33,6 @@ const risk = {
   },
 };
 
-const tracking = {
-  kind: "tracking",
-  label: "检查检验",
-  order: 40,
-  read(ctx, { now } = {}) {
-    const db = ctx.db;
-    const current = moment(now);
-    const schedule = ctx.services.schedule;
-    const items = [];
-    for (const row of db.prepare("SELECT id,patient_id,status,due_at,data FROM care_tasks WHERE status IN ('awaiting_review','awaiting_communication') OR (status='waiting_result' AND due_at<=?)").all(current)) {
-      const task = JSON.parse(row.data);
-      const label = { waiting_result: "结果尚未收到，跟进时间已到", awaiting_review: "结果已收到，等待医生核对", awaiting_communication: "医生已核对，需告知患者" }[row.status];
-      items.push({ id: `tracking:${row.id}`, kind: "tracking", patientId: row.patient_id, title: task.title, detail: label,
-        at: row.due_at, weight: row.status === "awaiting_review" ? 3 : 5,
-        action: { type: "patient", tab: "tracking", label: "继续跟进" } });
-    }
-    // Lab values added to the chart since the doctor last marked them read.
-    for (const { patientId, labs } of schedule?.allNewLabs() || []) {
-      const shown = labs.slice(0, 3).map((l) => `${l.item} ${l.value}${l.unit || ""}`).join("、");
-      const date = isCalendarDate(labs[0].date) ? labs[0].date : "";
-      const undated = labs.filter(lab => !isCalendarDate(lab.date)).length;
-      items.push({ id: `labs:${patientId}`, kind: "tracking", patientId, title: `待阅检验结果 ${labs.length} 项`, detail: `${shown}${labs.length > 3 ? " 等" : ""}（${date ? `最近日期 ${date}` : "日期待核对"}${date && undated ? `；另有 ${undated} 条日期待核对` : ""}），查看后点「标记已阅」`,
-        at: date, weight: 4, count: labs.length, action: { type: "patient", tab: "labs", label: "查看结果" } });
-    }
-    return items;
-  },
-};
-
 const custom = {
   kind: "custom",
   label: "我的规则",
@@ -90,5 +61,5 @@ export default definePlugin({
   version: "1.0.0",
   title: "今日待办旧来源（过渡）",
   enabledByDefault: true,
-  agendaSources: [risk, tracking, custom],
+  agendaSources: [risk, custom],
 });

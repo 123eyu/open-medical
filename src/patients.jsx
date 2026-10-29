@@ -25,7 +25,6 @@ import { PatientProposalModal } from "./patient-proposal";
 import { PatientIntakeModal } from "./patient-intake";
 import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
-import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
 import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useActiveSlot, usePluginActive, useSlot } from "./plugin-slots";
 
@@ -103,10 +102,7 @@ export function PatientsView({
   const activePluginTab = findPatientTab(pluginTabs, tab);
   const communicationTabs = mergePatientTabs(pluginTabs, {
     area: "communication",
-    builtin: [
-      ["appointments", "复诊预约", 20],
-      ["tracking", "检查与转诊", 40],
-    ],
+    builtin: [["appointments", "复诊预约", 20]],
   });
   const firstCommunicationTab = communicationTabs[0]?.key || "appointments";
   const [clinicalEditRequest, setClinicalEditRequest] = useState(null);
@@ -727,6 +723,10 @@ export function PatientsView({
             onRefreshPanels={refreshFollowupPanels}
             onChanged={refreshPatient}
             onNavigate={openRecordTab}
+            files={session?.files || []}
+            onSession={(value) => {
+              if (value.id === detail.sessionId) setSession(value);
+            }}
             onOpenWorkspace={onOpenWorkspace}
             onSetError={setError}
             onNotice={setNotice}
@@ -737,7 +737,6 @@ export function PatientsView({
             surveyFocus={surveyFocus}
             setSurveyFocus={setSurveyFocus}
           />}
-          {!activePluginTab && tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
           {!activePluginTab && tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {!activePluginTab && tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
           {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={<RiskList

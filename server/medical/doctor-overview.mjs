@@ -1,4 +1,5 @@
 import { check } from "../errors.mjs";
+import { isCalendarDate } from "../../shared/calendar-date.mjs";
 
 // The shell owns "all", "visit" and the merge/sort/page/count pipeline. Every
 // other kind comes from an enabled plugin agendaSource, so moving a scenario
@@ -6,6 +7,10 @@ import { check } from "../errors.mjs";
 export const AGENDA_KINDS = ["all", "visit"];
 const ALL_KIND = { kind: "all", label: "全部", order: 0 };
 const VISIT_KIND = { kind: "visit", label: "复诊", order: 20 };
+// Lab results awaiting review are part of the fixed patient chart. They keep
+// the historical tracking kind so the agenda UI is unchanged after care
+// tracking moved to a plugin.
+const LABS_KIND = { kind: "tracking", label: "检查检验", order: 40 };
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 
 // Read model only: work remains owned by its original patient/session/domain.
@@ -36,9 +41,38 @@ export class DoctorOverview {
     return items;
   }
 
+  // New lab values added to the chart since the doctor last marked them read.
+  // The patient labs page owns the read state; this is only the agenda view.
+  _labItems() {
+    const items = [];
+    for (const { patientId, labs } of this.schedule?.allNewLabs() || []) {
+      const shown = labs
+        .slice(0, 3)
+        .map((lab) => `${lab.item} ${lab.value}${lab.unit || ""}`)
+        .join("、");
+      const date = isCalendarDate(labs[0].date) ? labs[0].date : "";
+      const undated = labs.filter((lab) => !isCalendarDate(lab.date)).length;
+      items.push({
+        id: `labs:${patientId}`,
+        kind: "tracking",
+        patientId,
+        title: `待阅检验结果 ${labs.length} 项`,
+        detail: `${shown}${labs.length > 3 ? " 等" : ""}（${date ? `最近日期 ${date}` : "日期待核对"}${date && undated ? `；另有 ${undated} 条日期待核对` : ""}），查看后点「标记已阅」`,
+        at: date,
+        weight: 4,
+        count: labs.length,
+        action: { type: "patient", tab: "labs", label: "查看结果" },
+      });
+    }
+    return items;
+  }
+
   read({ kind = "all", query = "", group = "", patientId = "", excludeRiskAlerts = false, offset = 0, limit = 12, now = Date.now() } = {}) {
     const current = typeof now === "number" ? now : Date.parse(now) || Date.now();
-    const sourceKinds = new Map([[VISIT_KIND.kind, VISIT_KIND]]);
+    const sourceKinds = new Map([
+      [VISIT_KIND.kind, VISIT_KIND],
+      [LABS_KIND.kind, LABS_KIND],
+    ]);
     for (const source of this.agendaSources?.() || [])
       if (!sourceKinds.has(source.kind))
         sourceKinds.set(source.kind, { kind: source.kind, label: source.label, order: source.order });
@@ -70,8 +104,9 @@ export class DoctorOverview {
     const add = place(rows), addWork = place(work);
     const errors = [];
 
-    // ---------- fixed region: return visits ----------
+    // ---------- fixed region: return visits and new lab results ----------
     for (const item of this._visitItems()) add(item);
+    for (const item of this._labItems()) add(item);
 
     // ---------- plugin sources: everything else ----------
     const pluginItems = this.agendaItems?.({

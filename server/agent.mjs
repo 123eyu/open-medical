@@ -44,7 +44,6 @@ import { PatientImporter } from "./medical/patient-import.mjs";
 import { LabImporter } from "./medical/lab-import.mjs";
 import { Backups } from "./medical/backups.mjs";
 import { DemoPack } from "./medical/demo-pack.mjs";
-import { CareTasks } from "./medical/care-tasks.mjs";
 import { FeishuKnowledgeBot } from "./medical/feishu-knowledge-bot.mjs";
 import { DoctorNotifications } from "./medical/doctor-notifications.mjs";
 import { PatientSchedule } from "./medical/patient-schedule.mjs";
@@ -705,15 +704,6 @@ export function createServer(options = {}) {
     },
   });
   const patientBrief = new PatientBrief(store, patients);
-  const careTasks = new CareTasks(store, patients, followups, {
-    resolvePatientFile: (patientId, fileId) => {
-      const { sessionId } = patients.row(patientId);
-      const session = sessionBridge.isSessionWorkspace(sessionId) ? sessionBridge.get(sessionId) : store.get(sessionId);
-      const file = session.files.find(file => file.id === fileId);
-      check(file, "NOT_FOUND", "结果资料不存在或不属于当前患者，请重新选择", 404);
-      return { sessionId, fileId: file.id, name: file.name };
-    },
-  });
   const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, {
     getProvider: () => providerConfigured(provider) ? provider : null,
     // The registration implementation belongs to the channel plugin; resolve
@@ -797,6 +787,22 @@ export function createServer(options = {}) {
       bridge: sessionBridge,
       workspaces,
       registryOptions: options.trialRegistryOptions,
+    },
+    careTasksHost: {
+      resolvePatientFile: (patientId, fileId) => {
+        const { sessionId } = patients.row(patientId);
+        const session = sessionBridge.isSessionWorkspace(sessionId)
+          ? sessionBridge.get(sessionId)
+          : store.get(sessionId);
+        const file = session.files.find((item) => item.id === fileId);
+        check(
+          file,
+          "NOT_FOUND",
+          "结果资料不存在或不属于当前患者，请重新选择",
+          404,
+        );
+        return { sessionId, fileId: file.id, name: file.name };
+      },
     },
     skills,
     guidelines,
@@ -903,13 +909,16 @@ export function createServer(options = {}) {
   if (followup)
     risks.surveyAlertsProvider = (patient) => followup.surveys.alerts(patient);
   const trialService = pluginActive("trials") ? pluginService("trials") : null;
+  const careTasksService = pluginActive("care-tasks")
+    ? pluginService("care-tasks")
+    : null;
   const demoPack = new DemoPack(patients, followup?.followups || null, store, {
     sessions: sessionBridge,
     cases,
     trials: trialService?.screening || null,
     guidelines,
     schedule,
-    careTasks,
+    careTasks: careTasksService,
     care: () => followup?.care || null,
   });
   // The followup plugin owns its tools; the legacy MedicalRuntime gets the
@@ -2131,13 +2140,6 @@ export function createServer(options = {}) {
             risks.evaluatePatient(pid);
             return send(res, 200, { ok: true });
           }
-        }
-        if (parts[3] === "care-tasks") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, careTasks.list(pid, {
-            status: url.searchParams.get("status") || "active", offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 20),
-          }));
-          if (parts.length === 4 && req.method === "POST") return send(res, 201, careTasks.create(pid, await body(req)));
-          if (parts.length === 5 && req.method === "PATCH") return send(res, 200, careTasks.update(pid, identifier(parts[4]), await body(req)));
         }
         if (parts.length === 4 && parts[3] === "brief" && req.method === "GET")
           return send(res, 200, patientBrief.read(pid));

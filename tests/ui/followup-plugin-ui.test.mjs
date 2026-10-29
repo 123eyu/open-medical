@@ -23,10 +23,7 @@ function tabsHarness(slots) {
     const contributions = slots.useSlot("patient.tabs");
     const tabs = slots.mergePatientTabs(contributions, {
       area: "communication",
-      builtin: [
-        ["appointments", "复诊预约", 20],
-        ["tracking", "检查与转诊", 40],
-      ],
+      builtin: [["appointments", "复诊预约", 20]],
     });
     return createElement(
       "div",
@@ -50,10 +47,7 @@ function fallbackHarness(slots) {
     const contributions = slots.useSlot("patient.tabs");
     const tabs = slots.mergePatientTabs(contributions, {
       area: "communication",
-      builtin: [
-        ["appointments", "复诊预约", 20],
-        ["tracking", "检查与转诊", 40],
-      ],
+      builtin: [["appointments", "复诊预约", 20]],
     });
     return createElement("span", {
       "data-first-message": resolveCommunicationTab(tabs, "messages"),
@@ -72,10 +66,9 @@ test("followup 启用时贡献消息/随访 tab，legacyTab 保持旧 URL id", a
   assert.match(html, /data-key="messages"[^>]*>消息记录 · 3 待整理</);
   assert.match(html, /data-key="appointments"[^>]*>复诊预约</);
   assert.match(html, /data-key="followups"[^>]*>随访计划</);
-  assert.match(html, /data-key="tracking"[^>]*>检查与转诊</);
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(keys, ["messages", "appointments", "followups", "tracking"]);
+  assert.deepEqual(keys, ["messages", "appointments", "followups"]);
 
   const fallback = renderToStaticMarkup(createElement(fallbackHarness(slots)));
   assert.match(fallback, /data-first-message="messages"/);
@@ -105,10 +98,8 @@ test("followup 停用时消息/随访 tab 与设置面板都不出现", async (t
   assert.doesNotMatch(html, /data-key="messages"/);
   assert.doesNotMatch(html, /data-key="followups"/);
   assert.match(html, /data-key="appointments"/);
-  assert.match(html, /data-key="tracking"/);
-
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(keys, ["appointments", "tracking"]);
+  assert.deepEqual(keys, ["appointments"]);
 
   const fallback = renderToStaticMarkup(createElement(fallbackHarness(slots)));
   assert.match(fallback, /data-first-message="appointments"/);

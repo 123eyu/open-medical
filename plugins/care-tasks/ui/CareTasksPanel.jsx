@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, RotateCw, ArrowRight } from "lucide-react";
-import { api } from "./agent-runtime";
-import { Modal } from "./components";
-import { useClinicalDraft } from "./clinical-drafts";
+import { api } from "../../../src/agent-runtime";
+import { Modal } from "../../../src/plugin-kit/index.js";
+import { useClinicalDraft } from "../../../src/clinical-drafts";
 
 const states = { waiting_result: "等待结果", awaiting_review: "待医生核对", awaiting_communication: "待告知患者", completed: "已闭环", cancelled: "已取消" };
 const kinds = { test: "检查复查", referral: "转诊", other: "其他" };
