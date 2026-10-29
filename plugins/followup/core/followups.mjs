@@ -1,15 +1,15 @@
-import { isCalendarDate } from "../shared/calendar-date.mjs";
-import { messageProvenance } from "../shared/message-provenance.mjs";
-import { providerConfigured } from "./core/provider-status.mjs";
+import { isCalendarDate } from "../../../shared/calendar-date.mjs";
+import { messageProvenance } from "../../../shared/message-provenance.mjs";
+import { providerConfigured } from "../../../server/core/provider-status.mjs";
 import { randomUUID, createHash } from "node:crypto";
-import { AppError, check, identifier, string } from "./errors.mjs";
-import { sqliteTransaction } from "./sqlite-transaction.mjs";
-import { normalizeQuestionnaire } from "./followup-surveys.mjs";
+import { AppError, check, identifier, string } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
+import { normalizeQuestionnaire } from "./surveys.mjs";
 import {
   composeDigest,
   selectDigestMessages,
   markDigestProcessed,
-} from "./patients.mjs";
+} from "../../../server/patients.mjs";
 
 // Durable per-patient follow-up queue. Same semantics as MedicalScheduler:
 // synchronous claim on the single database owner, missed intervals advance,
@@ -23,8 +23,8 @@ export class FollowUpManager {
     { now = () => Date.now(), pollMs = 1000, autoStart = true } = {},
   ) {
     Object.assign(this, { store, runtime, now, pollMs, autoStart });
-    store.db.exec('CREATE TABLE IF NOT EXISTS followup_applications(request_id TEXT PRIMARY KEY,patient_id TEXT NOT NULL,fingerprint TEXT NOT NULL,jobs TEXT NOT NULL)');
-    store.db.exec('CREATE TABLE IF NOT EXISTS followup_creation_requests(request_id TEXT PRIMARY KEY,patient_id TEXT NOT NULL,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
+    // followup_applications/followup_creation_requests are created by the
+    // plugin migrations before setup; the constructor only owns runtime state.
     this.inFlight = new Set();
     this.stopped = false;
     for (const row of store.db
@@ -469,13 +469,17 @@ export class FollowUpManager {
     return job;
   }
   start() {
-    if (!this.autoStart || this.timer || this.stopped) return;
+    // A plugin lifecycle may stop and later restart the same instance (for
+    // example when the doctor re-enables it), so starting clears the stop flag.
+    this.stopped = false;
+    if (!this.autoStart || this.timer) return;
     this.timer = setInterval(() => this.tick().catch(() => {}), this.pollMs);
     this.timer.unref();
   }
   stop() {
     this.stopped = true;
     clearInterval(this.timer);
+    this.timer = null;
   }
   async drain() {
     await Promise.allSettled([...this.inFlight]);

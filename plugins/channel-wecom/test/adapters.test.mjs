@@ -84,8 +84,12 @@ test("四个 WeCom adapter 通过 validateAdapter，能力矩阵与设计一致"
     { kind: "session" },
     null,
   );
-  assert.deepEqual(tools.sort(), [
+  // Other enabled plugins contribute their own tools to the same registry;
+  // this assertion covers the WeCom adapter tool surface.
+  assert.deepEqual(tools.filter((name) => name.startsWith("wecom_")).sort(), [
+    "wecom_bind_propose",
     "wecom_customers",
+    "wecom_group_message_propose",
     "wecom_groups",
     "wecom_patient_contacts",
     "wecom_sync",

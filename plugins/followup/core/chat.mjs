@@ -1,10 +1,10 @@
-import { visibleDelta } from './chat-connectors/visible-delta.mjs';
+import { visibleDelta } from '../../../server/chat-connectors/visible-delta.mjs';
 import { randomUUID, createHash } from 'node:crypto';
-import { CredentialVault } from './core/oauth.mjs';
-import { check, string, identifier, AppError } from './errors.mjs';
-import { sqliteTransaction } from './sqlite-transaction.mjs';
-import { collectorUrl } from './chat-connectors/archive-endpoint.mjs';
-import { ChatConnectorRegistry } from './chat-connectors/registry.mjs';
+import { CredentialVault } from '../../../server/core/oauth.mjs';
+import { check, string, identifier, AppError } from '../../../server/errors.mjs';
+import { sqliteTransaction } from '../../../server/sqlite-transaction.mjs';
+import { collectorUrl } from '../../../server/chat-connectors/archive-endpoint.mjs';
+import { ChatConnectorRegistry } from '../../../server/chat-connectors/registry.mjs';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const json = row => row ? JSON.parse(row.data) : null;
@@ -41,15 +41,7 @@ export class ChatFollowups {
     this.pendingAI = new Map(); this.stopped = false; this.ticking = false; this.active = new Map(); this.probes = new Map(); this.imports = new Map(); this.previews = new Map(); this.timer = null;
     // 监听模式的会话列表行指纹(上轮状态)与连续失败计数:仅内存,重启后首轮全量重扫可见行。
     this.watchState = new Map(); this.watchFails = new Map();
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS chat_connector_plugins (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS chat_connections (channel TEXT PRIMARY KEY, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS chat_bindings (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, channel TEXT NOT NULL, account TEXT NOT NULL, conversation TEXT NOT NULL, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, channel TEXT NOT NULL, account TEXT NOT NULL, conversation TEXT NOT NULL, source_id TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(channel,account,source_id));
-      CREATE TABLE IF NOT EXISTS chat_drafts (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, binding_id TEXT NOT NULL REFERENCES chat_bindings(id) ON DELETE CASCADE, data TEXT NOT NULL);
-      CREATE TRIGGER IF NOT EXISTS chat_patient_cleanup AFTER DELETE ON chat_bindings BEGIN DELETE FROM chat_messages WHERE channel=OLD.channel AND account=OLD.account AND conversation=OLD.conversation AND NOT EXISTS (SELECT 1 FROM chat_bindings b WHERE b.channel=OLD.channel AND b.account=OLD.account AND b.conversation=OLD.conversation); END;
-      CREATE TABLE IF NOT EXISTS chat_allocations (binding_id TEXT NOT NULL REFERENCES chat_bindings(id) ON DELETE CASCADE, message_id TEXT NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE, draft_id TEXT NOT NULL REFERENCES chat_drafts(id) ON DELETE CASCADE, PRIMARY KEY(binding_id,message_id));
-    `);
+    // chat_* tables are created by the plugin migrations before setup.
     for (const row of this.db.prepare('SELECT data FROM chat_connector_plugins ORDER BY rowid').all()) this.registry.install(JSON.parse(row.data));
   }
   channel(value) { this.registry.get(value); return value; }
@@ -672,5 +664,5 @@ export class ChatFollowups {
     }
     return { visited, changed: changed.length, errors };
   }
-  async stop() { this.stopped = true; clearInterval(this.timer); for (const c of this.registry.ids()) this.cancel(c); await Promise.allSettled([...this.active.values(),...this.pendingAI.values()].map(j => j.promise)); this.previews.clear(); this.imports.clear(); }
+  async stop() { this.stopped = true; clearInterval(this.timer); this.timer = null; for (const c of this.registry.ids()) this.cancel(c); await Promise.allSettled([...this.active.values(),...this.pendingAI.values()].map(j => j.promise)); this.previews.clear(); this.imports.clear(); }
 }

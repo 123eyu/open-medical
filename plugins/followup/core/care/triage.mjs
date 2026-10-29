@@ -1,5 +1,5 @@
-import { messageSpeakerLabel, messageTimeLabel } from "../../shared/message-provenance.mjs";
-import { AppError, check } from "../errors.mjs";
+import { messageSpeakerLabel, messageTimeLabel } from "../../../../shared/message-provenance.mjs";
+import { AppError, check } from "../../../../server/errors.mjs";
 
 export const CATEGORIES = Object.freeze([
   "emergency", "clinical", "medication", "report", "education", "admin", "followup_reply", "chitchat", "other",

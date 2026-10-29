@@ -118,7 +118,7 @@ export class DemoPack {
           if (!this.sessions.get(patient.sessionId).files.some(f => f.name === source.name)) this.sessions.addMaterial(patient.sessionId, source);
         }
       }
-      if (index === 1 && !this.followups.list(id).some(job => job.questionnaire)) {
+      if (this.followups && index === 1 && !this.followups.list(id).some(job => job.questionnaire)) {
         const job = this.followups.create(id, { name: "示例·血糖控制季度随访", once: false, intervalDays: 90, firstDueAt: new Date(Date.now() + 60000).toISOString(), checklist: ["近期血糖记录", "用药依从性"], questionnaire: {
           title: "示例·复诊资料回收", questions: [{ id: "q1", type: "single", text: "是否已准备近期测量记录？", options: [{label:"已准备"},{label:"尚未准备"}] }, { id: "q2", type: "text", text: "这次希望医生帮助核对什么？" }],
         } });
@@ -152,8 +152,8 @@ export class DemoPack {
       }
     }
     const patient = this.status().patients.find(p => p.index === 1 && !p.archived);
-    if (this.care && patient) {
-      const care = this.care();
+    const care = this.care?.();
+    if (care && patient) {
       const message = care.ingest({ patientId: patient.id, text: "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？", channel: "manual", externalId: `demo:${patient.id}:message`, historical: true });
       this.own("reply", "reply", () => care.createReply({ patientId: patient.id, messageId: message.id, channel: "manual", mode: "manual", text: "【示例草稿】复诊前请准备上次就诊记录、近期检验报告和当前用药清单；测量记录请保留日期、数值和单位。", reason: "内置虚构草稿，供编辑和复核体验" }));
       this.own("alert", "alert", () => care.createAlert({ patientId: patient.id, messageId: message.id, level: "attention", reason: "示例·复诊资料需要医生核对", localOnly: true }));

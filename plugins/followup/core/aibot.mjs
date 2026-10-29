@@ -8,9 +8,9 @@
 // 红旗命中直接自动回安全话术;其余按群知识库范围与技能起草,出站筛查通过才
 // 自动发送,未通过或未授权自动发送时回落群审核列表。每群每小时限频,全程留痕。
 import { randomUUID } from "node:crypto";
-import { check, AppError, identifier, string } from "./errors.mjs";
+import { check, AppError, identifier, string } from "../../../server/errors.mjs";
 import { detectRedFlags, SAFETY_REPLY, AI_DISCLAIMER, screenOutbound } from "./care/red-flags.mjs";
-import { EDUCATION_COLLECTION } from "./medical/guidelines.mjs";
+import { EDUCATION_COLLECTION } from "../../../server/medical/guidelines.mjs";
 
 export const AIBOT_CHANNEL = "wecom-aibot";
 const SEEN_LIMIT = 200;
@@ -35,30 +35,9 @@ export class WecomAibotChannel {
   }
   attach(followups) {
     this.followups = followups;
-    followups.db.exec(`
-      CREATE TABLE IF NOT EXISTS chat_aibot_replies (
-        id TEXT PRIMARY KEY,
-        patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-        binding_id TEXT NOT NULL REFERENCES chat_bindings(id) ON DELETE CASCADE,
-        channel TEXT NOT NULL DEFAULT 'wecom-aibot',
-        data TEXT NOT NULL
-      );
-    `);
-    // 0.9.73 前建的表没有 channel 列,补上(旧行默认归企微通道)。
+    // chat_aibot_* tables are created by the plugin migrations; the ALTER
+    // below only upgrades databases created before the channel column existed.
     try { followups.db.exec("ALTER TABLE chat_aibot_replies ADD COLUMN channel TEXT NOT NULL DEFAULT 'wecom-aibot'"); } catch { /* 列已存在 */ }
-    // 群聊自动回复:配置与留痕独立于患者绑定表(群提问不属于单一患者,不进
-    // chat_aibot_replies,避免外键约束与审核队列混淆)。
-    followups.db.exec(`
-      CREATE TABLE IF NOT EXISTS chat_aibot_groups (
-        conversation TEXT PRIMARY KEY,
-        data TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS chat_aibot_group_log (
-        id TEXT PRIMARY KEY,
-        conversation TEXT NOT NULL,
-        data TEXT NOT NULL
-      );
-    `);
   }
   get endpoint() {
     return this.url;

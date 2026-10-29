@@ -1,4 +1,4 @@
-import { check } from "../errors.mjs";
+import { check } from "../../../../server/errors.mjs";
 import { AUTO_CATEGORIES } from "./triage.mjs";
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -10,20 +10,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
 export const REPLY_STATUSES = Object.freeze(["draft", "queued", "sending", "sent", "awaiting_member", "failed", "unknown", "discarded"]);
 export const MESSAGE_STATUSES = Object.freeze(["pending", "unassigned", "auto_replied", "drafted", "alerted", "recorded", "handled", "skipped", "failed"]);
 const MODES = ["off", "draft", "auto"];
-
-export function createCareSchema(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS care_settings (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS care_patient_settings (patient_id TEXT PRIMARY KEY REFERENCES patients(id) ON DELETE CASCADE, data TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS care_message_state (message_id INTEGER PRIMARY KEY REFERENCES patient_messages(id) ON DELETE CASCADE, patient_id TEXT, status TEXT NOT NULL, level TEXT NOT NULL, category TEXT, reasons TEXT NOT NULL, reply_id TEXT, alert_id TEXT, updated_at TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS care_message_state_status ON care_message_state(status, message_id);
-    CREATE TABLE IF NOT EXISTS care_replies (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, message_id INTEGER, channel TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL, text TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS care_replies_status ON care_replies(status, created_at);
-    CREATE TABLE IF NOT EXISTS care_alerts (id TEXT PRIMARY KEY, patient_id TEXT REFERENCES patients(id) ON DELETE CASCADE, message_id INTEGER, level TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-    CREATE INDEX IF NOT EXISTS care_alerts_status ON care_alerts(status, created_at);
-    CREATE TABLE IF NOT EXISTS care_campaigns (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, name TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-  `);
-}
 
 export function validateSettings(input, current) {
   const next = structuredClone(current);

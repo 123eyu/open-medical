@@ -1,4 +1,4 @@
-import { messageProvenance } from "../../shared/message-provenance.mjs";
+import { messageProvenance } from "../../../../shared/message-provenance.mjs";
 import { AUTO_CATEGORIES } from "./triage.mjs";
 
 // Chat tools for patient care. Reads and low-risk bookkeeping run

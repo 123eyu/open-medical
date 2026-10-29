@@ -1,6 +1,6 @@
 // HTTP surface of the care engine; mirrors the chat tools so the UI and
 // the agent share the same deterministic services.
-import { check } from "../errors.mjs";
+import { check } from "../../../server/errors.mjs";
 
 export async function careApi(care, req, url, { body, send, pending = null }) {
   const p = url.pathname.split("/").filter(Boolean);

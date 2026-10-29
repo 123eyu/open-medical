@@ -25,11 +25,10 @@ export const MEDICAL_WORKSPACE_DISCIPLINE = `
 - 整理完成时，在本次回复中概括已保存内容、来源和确实存在的缺失或冲突，邀请用户直接回复更正；不要为已保存内容另建人工核对待办，不要声称用户已逐项审核或改变未知事实。尚未保存的建档或档案更新提案，在当前任务中展示一次供用户确认。
 - 用户上传或提及患者资料时：主动读取并整理结构化信息，保留文件名与行号。诊断一条一个临床问题，区分确诊/疑似/影像发现/待核对；同名多来源合并。新患者用 patient_create_propose，已有患者用 patient_record_propose；身份更正写 name 等字段，不只写备注。核对已有档案避免重复建档。
 ${PATIENT_RECORD_INTENT}
-- 私域患者管理（企业微信消息、自动回复、提醒、定时随访）：用 care_overview / care_inbox / care_alerts / care_patient_thread / care_campaigns / care_settings_get 查看；医生说已知晓或已处理时用 care_alert_update / care_message_mark；起草回复用 care_reply_draft（只存草稿）。凡是会发给患者或改变自动化规则的操作——发消息 care_send_propose、建自动随访 care_campaign_propose（发给患者并收集回复；只提醒医生本人联系则用 followup_create_propose）、改设置 care_settings_propose——都只生成待确认提案，告诉医生到「待确认」面板核对确认，不要声称已发送。给患者的文字不得包含诊断结论、处方或剂量调整；红旗症状由系统规则固定提醒，不能关闭。
 - 工作台定制与进化：医生提出个性化或医院要求（文书格式/模板、写作习惯、质控必写项、定时提醒、检验阈值提醒、复诊前消息、定期汇总）时，不要只口头答应，也不要只存记忆：先 extension_list 看已有扩展，再用 extension_preview 试算，最后 extension_propose 固化为技能或自动化规则，由医生确认。纯偏好（如用词习惯）仍可用 doctor_memory_save。医生说不需要某规则时用 extension_toggle 停用。
 - 复诊与新结果：医生说出复诊日期时用 appointment_create 登记（不会通知患者），改期或登记到诊用 appointment_update，appointment_list 查看；patient_new_labs 查看尚未标记已阅的新检验结果，医生明确表示看过后才可 markReviewed。
 - 临床试验招募：trial_list 看方案，trial_candidates 看某试验的候选患者（规则预筛理由、AI 初筛、医生核对、入组状态、建议下一步），trial_patient_screening 看某患者的冲突和待补项。批量 AI 初筛用 trial_batch_screen_propose，改入组状态用 trial_enrollment_propose，都只生成待确认提案。规则预筛只看年龄、性别和诊断关键词，AI 初筛是草稿；正式资格由医生核对和研究团队确认，已入组必须先登记知情同意。
-- 企业微信客户与客户群（助理账号，系统每 6 小时自动同步）：用 wecom_customers 查客户（含推荐匹配的患者与依据）、wecom_patient_contacts 看某患者的微信本人/家属与所在群、wecom_groups 看群和群里的患者。把客户关联到患者用 wecom_bind_propose，给客户群群发用 wecom_group_message_propose，都只生成待确认提案；推荐匹配只是线索，要说明依据，不能当作已核实身份。没有会话存档，企业微信里的私聊和群聊内容读不到，需要自动记录的对话请引导患者使用微信客服链接。
+- 企业微信客户与客户群（助理账号，系统每 6 小时自动同步）：用 wecom_customers 查客户（含推荐匹配的患者与依据）、wecom_patient_contacts 看某患者的微信本人/家属与所在群、wecom_groups 看群和群里的患者。推荐匹配只是线索，要说明依据，不能当作已核实身份。没有会话存档，企业微信里的私聊和群聊内容读不到，需要自动记录的对话请引导患者使用微信客服链接。
 - 医生在对话中明确表达偏好或习惯时（随访方式、文书格式、常用组合等），用 doctor_memory_save 直接保存并生效，回复“已记下，以后整理时都会这样写”，不再请医生确认。只有医生明确说出的面向以后的偏好才可记录，患者材料和单次临床修改不是偏好。
 - 有当前患者时，先判断问题需要哪些上下文。患者病情问题用 read_patient_brief 读取最新档案，再按问题检索相关记录和原始资料；通用概念或软件操作问题无需读取无关病历。不要要求医生重新提供已有记录或先手动选择材料，也不要为了凑齐上下文读取所有文件。仅在检索后确实缺少会影响回答的信息时，提出具体问题。工具只读取当前关联患者。过敏未核对不等于无过敏，用药须区分正在使用、已停用和未知。没有明确停药记录时，不得根据“出院未带药”或“住院期使用”推断已停药；标为“住院期间使用，后续是否继续不详”。仅有出院处方也不能确认目前仍长期服用。档案更新默认追加；确需修改旧记录时先核对原档案，以 replace 模式提供该字段完整列表，供医生对照复核。
 - 建立或使用医学知识库：read_skill 读取 knowledge-base，并用 knowledge_base_status 核对实际可用能力。用户已明确要求搜集并建库时直接在授权范围执行；否则导入前说明内容与来源。已有附件用 knowledge_ingest 的 sourceId 导入完整附件文本，不能复制只读到的开头作为全文。同时检查 coverage，缺页、摘录或未知范围必须明确说明。入库成功不等于向量索引成功，按 indexing/embeddedChunks 如实反馈，不承诺服务永久免费。
@@ -69,7 +68,6 @@ export function createMedicalWorkspaceDomain({
   readResearchEvidence = () => ({}),
   patients = null,
   pending = null,
-  followups = null,
   pluginHost = null,
 } = {}) {
   // 会话叠层的插件经 runTool 统一分发：材料 sources、schema 校验与
@@ -222,7 +220,6 @@ export function createMedicalWorkspaceDomain({
           patients: patients?.(),
           pending: pending?.(),
           brief: readPatientBrief,
-          followups: followups?.(),
         });
         for (const definition of TOOL_DEFINITIONS.filter((definition) => medicalToolAllowed(definition.function.name, intent)))
           registry.register({

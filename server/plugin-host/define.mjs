@@ -93,16 +93,25 @@ export function definePlugin(spec = {}) {
     "PLUGIN_SPEC",
     `插件 ${id} 的 migrations 必须是相对路径`,
   );
+  // A plugin may own several historical table families (for example the
+  // followup plugin owns followup_*, chat_* and care_*). Accept a single
+  // prefix for existing plugins, or a non-empty array of prefixes when the
+  // migration creates more than one family.
+  const prefixes = Array.isArray(tablePrefix) ? tablePrefix : [tablePrefix];
+  const validPrefixes =
+    prefixes.length > 0 &&
+    prefixes.every(
+      (prefix) => typeof prefix === "string" && TABLE_PREFIX.test(prefix),
+    );
   if (migrations) {
     check(
-      typeof tablePrefix === "string" && TABLE_PREFIX.test(tablePrefix),
+      validPrefixes,
       "PLUGIN_SPEC",
       `插件 ${id} 有 migrations 时必须提供合法的 tablePrefix`,
     );
   } else {
     check(
-      tablePrefix === undefined ||
-        (typeof tablePrefix === "string" && TABLE_PREFIX.test(tablePrefix)),
+      tablePrefix === undefined || validPrefixes,
       "PLUGIN_SPEC",
       `插件 ${id} 的 tablePrefix 无效`,
     );

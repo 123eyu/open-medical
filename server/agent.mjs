@@ -4,11 +4,6 @@ import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
 import { PersonalRegression } from './medical/personal-regression.mjs';
 import { PersonalContext, learningPrefs, saveLearningPrefs } from "./medical/personal-context.mjs";
-import { ChatFollowups } from "./chat-followups.mjs";
-import { WecomAibotChannel, chatAibotApi } from "./chat-aibot.mjs";
-import { chatFollowupsApi } from "./chat-followups-api.mjs";
-import { WechatAutoFollow } from "./chat-autofollow.mjs";
-import { chatAutoFollowApi } from "./chat-autofollow-api.mjs";
 import { KnowledgeOrganizer } from "./medical/knowledge-organizer.mjs";
 import { graphSlice } from "../shared/knowledge-graph-search.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
@@ -43,13 +38,8 @@ import {
   composeDigest,
   selectDigestMessages,
 } from "./patients.mjs";
-import { FollowUpManager } from "./followups.mjs";
-import { FollowUpSurveys } from "./followup-surveys.mjs";
-import { CareEngine } from "./care/engine.mjs";
-import { careTools } from "./care/tools.mjs";
 import { trialTools } from "./medical/trial-tools.mjs";
 import { scheduleTools } from "./medical/schedule-tools.mjs";
-import { careApi } from "./care/api.mjs";
 import { DoctorProfile } from "./medical/doctor-profile.mjs";
 import { LiteratureService, literatureTools } from "./medical/literature.mjs";
 import { createKnowledgeQueryExpander } from "./medical/knowledge-query.mjs";
@@ -290,7 +280,7 @@ export function createServer(options = {}) {
     patients: () => patients,
     followups: () => followups,
     cases: () => cases,
-    care: () => care,
+    care: () => careService(),
     trials: () => trialCandidates,
     extensions: () => extensions,
     doctor: () => doctor,
@@ -570,11 +560,9 @@ export function createServer(options = {}) {
       // 全局助手工具面的依赖（访问器延迟解析：注册表在下方才创建）。
       patients: () => patients,
       pending: () => pending,
-      followups: () => followups,
       plugins: [
         ...knowledgeToolPlugins,
         ...localPlugins(pendingActionTools(pending, doctor)),
-        ...localPlugins(careTools(() => care, pending)),
       ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
@@ -586,7 +574,6 @@ export function createServer(options = {}) {
         ...knowledgeToolPlugins,
         ...localPlugins(researchToolPlugins(research)),
         ...localPlugins(pendingActionTools(pending, doctor)),
-        ...localPlugins(careTools(() => care, pending)),
       ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
@@ -620,7 +607,6 @@ export function createServer(options = {}) {
       ...knowledgeToolPlugins,
       ...localPlugins(researchToolPlugins(research)),
       ...localPlugins(pendingActionTools(pending, doctor)),
-      ...localPlugins(careTools(() => care, pending)),
       ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
@@ -686,16 +672,38 @@ export function createServer(options = {}) {
       else store.delete(sessionId);
     },
   });
-  const followups = new FollowUpManager(
-    store,
-    agentRuntime,
-    options.followupOptions,
+  // The followup plugin owns FollowUpManager/CareEngine/chat services. Fixed
+  // modules receive stable proxies that resolve the provided service lazily:
+  // setup runs after these constructors, and reads happen after startup.
+  const followupService = () => pluginHost.pluginServices.followup || null;
+  const pluginActive = (id) => {
+    const record = pluginHost.list().find((plugin) => plugin.id === id);
+    return Boolean(record?.enabled && record.available && record.status === "ready");
+  };
+  const currentWecom = () =>
+    pluginActive("channel-wecom")
+      ? pluginHost.pluginServices["channel-wecom"]?.connector || null
+      : null;
+  const requireFollowupService = () => {
+    const service = followupService();
+    check(service, "PLUGIN_SERVICE_UNAVAILABLE", "随访插件未启用", 503);
+    return service;
+  };
+  const followups = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const service = requireFollowupService();
+        const value = service.followups[property];
+        return typeof value === "function"
+          ? value.bind(service.followups)
+          : value;
+      },
+    },
   );
+  const careService = () => requireFollowupService().care;
   const risks = new RiskEngine(store, followups);
   const schedule = new PatientSchedule(store, patients);
-  // Assigned only while channel-wecom is enabled and started. Fixed modules
-  // read the plugin service through this reference, never by importing it.
-  let wecom = null;
   const doctorOverview = new DoctorOverview(store, sessionBridge, {
     schedule,
     // Plugin agenda sources are resolved lazily: setup runs once the fixed
@@ -703,7 +711,13 @@ export function createServer(options = {}) {
     agendaSources: () => pluginHost.agendaSources(),
     agendaItems: (opts) => pluginHost.agendaItems(opts),
     // Read lazily: the channel-wecom plugin owns the connector.
-    contactMatches: () => wecom?.client ? wecom.directory.contacts({ status: "suggested", limit: 1 }).counts.suggested : 0,
+    contactMatches: () => {
+      const connector = currentWecom();
+      return connector?.client
+        ? connector.directory.contacts({ status: "suggested", limit: 1 })
+            .counts.suggested
+        : 0;
+    },
     trialWork: () => trialScreening.list().map((t) => {
       const { counts } = trialCandidates.candidates(t.id);
       return { id: t.id, title: t.title.slice(0, 40), awaitingReview: counts.awaitingReview };
@@ -739,8 +753,6 @@ export function createServer(options = {}) {
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
   const backups = new Backups(databasePath);
-  const demoPack = new DemoPack(patients, followups, store, { sessions: sessionBridge, cases, trials: trialScreening, guidelines, schedule, careTasks, care: () => care });
-  runtime.registerPlugins([...pendingActionTools(pending, doctor), ...careTools(() => care, pending), ...trialTools(() => trialCandidates, pending), ...scheduleTools(() => schedule), ...labDisplayTools(() => patients), ...extensionTools(() => extensions, pending)]);
   const swapProvider = (next) => {
     provider = next;
     runtime.provider = provider;
@@ -749,28 +761,8 @@ export function createServer(options = {}) {
     workspaces.provider = provider;
     workspaces.agent.provider = provider;
   };
-  const care = new CareEngine({
-    store, patients, followups, wecom: null, guidelines, patientBrief,
-    vault: models.vault,
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
-    ...options.care,
-    // The channel-wecom plugin lifecycle owns directory due/refresh timing.
-    directorySync: false,
-  });
-  const attachWecom = (service) => {
-    wecom = service.connector;
-    care.channels.wecom = service.connector;
-    care.channels.WecomApi = service.WecomApi;
-    care.channels.clients?.clear();
-    service.connector.onEvent = (event) => care.track(care.handleWecomEvent(event));
-  };
-  const detachWecom = () => {
-    wecom = null;
-    care.channels.wecom = null;
-    care.channels.clients?.clear();
-  };
   const extensions = new Extensions({
-    store, patients, schedule, skillsDir: userSkillsDir, care: () => care, sessions: sessionBridge,
+    store, patients, schedule, skillsDir: userSkillsDir, care: () => careService(), sessions: sessionBridge,
     // Imported skill packs must not shadow existing skills; the shared
     // registry is the authority on what is already installed.
     skillExists: (id) => { try { skills.get(id); return true; } catch { return false; } },
@@ -779,9 +771,7 @@ export function createServer(options = {}) {
   });
   sessionBridge.evolution = extensions;
   // channel-wechat owns the WeChat desktop reader, wx-cli client, exporter and
-  // retired bridge. The fixed shell constructs the legacy ChatFollowups
-  // pipeline from this service rather than importing plugin files.
-  let chatFollowups = null;
+  // retired bridge; the followup plugin constructs ChatFollowups from it.
   const wechatBridgeOptions = {
     patients,
     enabled: ["1", "on", "true"].includes(
@@ -799,13 +789,28 @@ export function createServer(options = {}) {
   const channelWechatOptions = options.channelWechat || {};
   // 固定区服务已全部就绪：迁移后依次执行插件 setup。插件只能通过 ctx.services
   // 调用这些对象，不直接改写固定区实现。
+  // channel-wecom owns connector start/stop; care follows it through the
+  // followup service rather than holding a fixed-region reference.
+  const attachWecomCare = (service) => {
+    const care = followupService()?.care;
+    if (!care) return;
+    care.channels.wecom = service.connector;
+    care.channels.WecomApi = service.WecomApi;
+    care.channels.clients?.clear();
+    service.connector.onEvent = (event) => care.track(care.handleWecomEvent(event));
+  };
+  const detachWecomCare = () => {
+    const care = followupService()?.care;
+    if (!care) return;
+    care.channels.wecom = null;
+    care.channels.clients?.clear();
+  };
   Object.assign(pluginServices, {
     store,
     patients,
     pending,
     followups,
     cases,
-    care,
     trials: trialCandidates,
     extensions,
     doctor,
@@ -816,6 +821,27 @@ export function createServer(options = {}) {
     knowledge: guidelines,
     literature,
     knowledgeOrganizer,
+    // Followup plugin inputs. All are fixed-region objects or accessors; the
+    // plugin never receives a reference to the server/request layer.
+    followupHost: {
+      runtime: agentRuntime,
+      patients,
+      vault: models.vault,
+      vaultDir,
+      guidelines,
+      patientBrief,
+      skills,
+      getProvider: () =>
+        providerConfigured(workspaces.provider) ? workspaces.provider : null,
+      options: {
+        followup: options.followupOptions,
+        chatFollowups: options.chatFollowups,
+        chatAutoFollow: options.chatAutoFollow,
+        care: options.care,
+        chatAibot: options.chatAibot,
+      },
+    },
+    risks,
     // Dependencies for the generic channel plugin. They are fixed-region
     // objects; the plugin owns the gateway and exposes it back as a service.
     channelHost: {
@@ -825,8 +851,8 @@ export function createServer(options = {}) {
       getKnowledgeBot: () => knowledgeBot,
       options: options.messageGatewayOptions || {},
     },
-    // The plugin constructs the WeCom connector; the fixed shell only
-    // attaches it to CareEngine while the plugin lifecycle is active.
+    // The plugin constructs the WeCom connector; the followup plugin attaches
+    // it to CareEngine through this service.
     channelWecomHost: {
       patients,
       vault: models.vault,
@@ -835,16 +861,17 @@ export function createServer(options = {}) {
       directoryTickMs: options.care?.intervalMs,
       fetch: options.wecom?.fetch,
       now: options.wecom?.now,
-      onStart: attachWecom,
-      onStop: detachWecom,
+      onStart: attachWecomCare,
+      onStop: detachWecomCare,
       // Keep the old gate: member-task refresh ran only while message
       // processing (and therefore automatic reply handling) was enabled.
-      shouldRefreshAwaiting: () => care.settings().processing.enabled,
+      shouldRefreshAwaiting: () =>
+        followupService()?.care.settings().processing.enabled === true,
     },
     channelWechatHost: {
       dataDir: vaultDir,
       vault: models.vault,
-      getChat: () => chatFollowups,
+      getChat: () => followupService()?.chatFollowups || null,
       reader: channelWechatOptions.reader,
       exp: options.wechatExp || channelWechatOptions.exp,
       bridge: channelWechatOptions.bridge,
@@ -864,73 +891,30 @@ export function createServer(options = {}) {
   pluginHost.migrate();
   pluginHost.setup();
   const wecomService = pluginHost.pluginServices["channel-wecom"] || null;
-  const wecomStatus = pluginHost
-    .list()
-    .find((plugin) => plugin.id === "channel-wecom");
-  if (wecomService && wecomStatus?.enabled && wecomStatus?.available)
-    attachWecom(wecomService);
   const wechatService = pluginHost.pluginServices["channel-wechat"] || null;
   const wechat = wechatService?.bridge || null;
-  // 企微智能机器人通道:先建实例再交给 ChatFollowups 注册,start 后按配置自动拉起长连接。
-  // skills 注入群聊自动回复的起草提示词(医生按群勾选技能)。
-  const wecomAibot = options.chatAibot || new WecomAibotChannel({
-    url: wecomService?.AIBOT_WS_URL || "",
-    createSocket: wecomService
-      ? (input) => wecomService.createAibotSocket(input)
-      : null,
-    toChatMessage: wecomService?.toChatMessage || null,
-    log: (message) => console.error(`[aibot] ${message}`),
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
+  const followup = pluginActive("followup") ? followupService() : null;
+  if (followup)
+    risks.surveyAlertsProvider = (patient) => followup.surveys.alerts(patient);
+  const demoPack = new DemoPack(patients, followup?.followups || null, store, {
+    sessions: sessionBridge,
+    cases,
+    trials: trialScreening,
     guidelines,
-    patientBrief,
-    skills,
+    schedule,
+    careTasks,
+    care: () => followup?.care || null,
   });
-  chatFollowups = new ChatFollowups({
-    store,
-    patients,
-    followups,
-    directory: vaultDir,
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
-    aibot: wecomAibot,
-    archive: wecomService?.archive || null,
-    archiveClass: wecomService?.WecomArchiveClient || null,
-    wechat: wechatService?.reader,
-    wxcli: wechatService?.wxcli,
-    createWxCli: wechatService ? () => new wechatService.WxCliClient() : null,
-    parseExport: wechatService?.parseWechatExportBatch,
-    validateRegion: wechatService?.validateRegion,
-    flatName: wechatService?.flatName,
-    ...options.chatFollowups,
-  });
-  wecomAibot.attach(chatFollowups);
-  // The socket implementation moved into channel-wecom; lifecycle.start/stop
-  // still owns when the aibot connection is installed and torn down.
-  wecomService?.attachAibot(wecomAibot);
-  // The embedded exporter/wx-cli bridge starts and stops with the
-  // channel-wechat plugin lifecycle, not here.
-  // 随访问卷:到期随提醒生成,医生经已验证渠道下发,患者按题号回复由确定性解析回收。
-  const surveys = new FollowUpSurveys(store, followups, {
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
-    channels: {
-      async sendWechat(patientId, text) {
-        const binding = chatFollowups.wechatBindingByPatient(patientId);
-        check(binding, "CHAT_CHANNEL", "该患者没有已绑定的微信会话，可改用手动渠道发送", 409);
-        await chatFollowups.sendToBinding({ bindingId: binding.id, text, consent: true, autoLocate: true });
-      },
-      async sendAibot(patientId, text) {
-        const channel = chatFollowups.registry.get("wecom-aibot")?.client;
-        check(channel?.live, "CHAT_CHANNEL", "企微机器人长连接不在线，可改用手动渠道发送", 409);
-        const row = chatFollowups.db.prepare("SELECT data FROM chat_bindings WHERE patient_id=? AND channel='wecom-aibot' AND COALESCE(json_extract(data,'$.disabled'),0)=0 ORDER BY rowid DESC LIMIT 1").get(patientId);
-        check(row, "CHAT_CHANNEL", "该患者没有已绑定的企微机器人会话", 409);
-        await channel.socket.push(JSON.parse(row.data).conversation, { msgtype: "text", text: { content: text } });
-      },
-    },
-  });
-  followups.surveys = surveys;
-  risks.surveyAlertsProvider = (patient) => surveys.alerts(patient);
-  wecomAibot.surveys = surveys;
-  // Started by channel-wecom lifecycle after the HTTP server is listening.
-  const chatAutoFollow = new WechatAutoFollow({ chat: chatFollowups, followups, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, store, ...options.chatAutoFollow });
+  // The followup plugin owns its tools; the legacy MedicalRuntime gets the
+  // same definitions through the host instead of importing plugin files.
+  runtime.registerPlugins([
+    ...pendingActionTools(pending, doctor),
+    ...pluginHost.legacyToolPlugins(),
+    ...trialTools(() => trialCandidates, pending),
+    ...scheduleTools(() => schedule),
+    ...labDisplayTools(() => patients),
+    ...extensionTools(() => extensions, pending),
+  ]);
   const ingestSecret =
     options.ingestSecret || process.env.MEDICAL_INGEST_SECRET || "";
   const digestMessages = async (pid, bodyData) => {
@@ -1054,6 +1038,7 @@ export function createServer(options = {}) {
           }
           raw = Buffer.concat(chunks).toString("utf8");
         }
+        const wecom = currentWecom();
         check(wecom, "WECOM_UNCONFIGURED", "企业微信回调未配置", 503);
         const response = wecom.callback(url.searchParams, raw);
         res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
@@ -1077,8 +1062,8 @@ export function createServer(options = {}) {
         );
         const b = await body(req);
         const ingested = patients.ingest(b.messages);
-        care.discover();
-        care.kick();
+        careService().discover();
+        careService().kick();
         return send(res, 201, ingested);
       }
       // Only the native window can obtain a UI session. Existing API clients
@@ -1215,7 +1200,7 @@ export function createServer(options = {}) {
           labKnowledge: { enabled: true, count: "常见指标内置" },
           drg: { enabled: true, ...drg.settings() },
           cases: cases.counts(),
-          wechat: { enabled: chatFollowups.config("wechat").enabled },
+          wechat: { enabled: followupService()?.chatFollowups.config("wechat").enabled === true },
         }); } finally { res.removeListener("close", disconnected); }
       }
       if (path.startsWith("/api/knowledge/playback/") && ["GET", "HEAD"].includes(req.method)) {
@@ -1708,10 +1693,6 @@ export function createServer(options = {}) {
             );
         }
       }
-      if (path.startsWith("/api/care/") && await track(careApi(care, req, url, { body: () => body(req), send: (status, value) => send(res, status, value), pending }))) return;
-      if (path.startsWith("/api/chat-aibot/") && await track(chatAibotApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/chat-followups/") && await track(chatFollowupsApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/chat-autofollow/") && await track(chatAutoFollowApi(chatAutoFollow, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       const feishuBindings = [
         ["/api/knowledge-bot/feishu-binding", knowledgeBot.bindingOrNull()],
         ["/api/doctor-notifications/feishu-binding", doctorNotifications.bindingOrNull()],
@@ -1746,27 +1727,6 @@ export function createServer(options = {}) {
           patientId: url.searchParams.get("patientId") || "",
           excludeRiskAlerts: Boolean(url.searchParams.get("patientId")) && url.searchParams.get("excludeRiskAlerts") === "1",
           offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 12),
-        }));
-      if (path === "/api/followup-plans" && req.method === "GET")
-        return send(res, 200, { plans: followups.listPlans() });
-      if (path === "/api/followup-plans" && req.method === "POST")
-        return send(res, 201, followups.createPlan(await body(req)));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "followup-plans" &&
-        parts.length === 3 &&
-        req.method === "DELETE"
-      )
-        return send(res, 200, followups.removePlan(parts[2]));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "followups" &&
-        parts[2] === "overview" &&
-        req.method === "GET"
-      )
-        return send(res, 200, followups.overviewPage({
-          limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
-          offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
         }));
       if (path === "/api/risk-alerts" && req.method === "GET")
         return send(res, 200, {
@@ -2175,29 +2135,6 @@ export function createServer(options = {}) {
             offset: Number(url.searchParams.get("offset") || 0),
             limit: Number(url.searchParams.get("limit") || 100),
           }));
-      if (parts[0] === "api" && parts[1] === "reminders" && parts.length === 4 && parts[3] === "addendum" && req.method === "POST")
-        return send(res, 200, followups.addContactAddendum(identifier(parts[2]), await body(req)));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "reminders" &&
-        parts.length === 4 &&
-        parts[3] === "complete" &&
-        req.method === "POST"
-      ) {
-        const reminder = followups.completeReminder(
-          identifier(parts[2]),
-          await body(req),
-        );
-        risks.evaluatePatient(reminder.patientId);
-        return send(res, 200, reminder);
-      }
-      if (
-        parts[0] === "api" &&
-        parts[1] === "reminders" &&
-        parts[3] === "ack" &&
-        req.method === "POST"
-      )
-        return send(res, 200, followups.ackReminder(identifier(parts[2])));
       if (parts[0] === "api" && parts[1] === "extensions") {
         if (parts.length === 2 && req.method === "GET") return send(res, 200, extensions.overview());
         if (parts.length === 2 && req.method === "POST") { const b = await body(req); return send(res, 201, extensions.save({ kind: b.kind, spec: b.spec, source: { via: "manual" } })); }
@@ -2253,11 +2190,6 @@ export function createServer(options = {}) {
         }
         if (parts.length === 4 && parts[3] === "brief" && req.method === "GET")
           return send(res, 200, patientBrief.read(pid));
-        if (parts.length === 4 && parts[3] === "followup-records" && req.method === "POST") {
-          const record = followups.recordContact(pid, await body(req));
-          risks.evaluatePatient(pid);
-          return send(res, 201, record);
-        }
         if (parts[3] === "export" && req.method === "GET")
           return send(res, 200, patients.exportDeidentified(pid));
         if (parts[3] === "share" && req.method === "POST")
@@ -2293,51 +2225,6 @@ export function createServer(options = {}) {
             );
           if (parts[4] === "digest" && req.method === "POST")
             return send(res, 200, await digestMessages(pid, await body(req)));
-        }
-        if (parts[3] === "followup-surveys") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, { surveys: surveys.list(pid, { reminderId: url.searchParams.get("reminderId"), surveyId: url.searchParams.get("surveyId") }) });
-          if (parts.length === 6 && req.method === "POST") {
-            const surveyId = identifier(parts[4]);
-            if (parts[5] === "send") return send(res, 200, await surveys.send(pid, surveyId, await body(req)));
-            if (parts[5] === "collect") {
-              const row = surveys.collect(pid, surveyId, await body(req));
-              risks.evaluatePatient(pid);
-              return send(res, 200, row);
-            }
-            if (parts[5] === "cancel") return send(res, 200, surveys.cancel(pid, surveyId, await body(req)));
-            if (parts[5] === "ai-parse") return send(res, 200, await surveys.aiParse(pid, surveyId));
-          }
-        }
-        if (parts[3] === "followups") {
-          if (parts.length === 4 && req.method === "GET")
-            return send(res, 200, { jobs: followups.list(pid) });
-          if (parts.length === 4 && req.method === "POST")
-            return send(res, 201, followups.create(pid, await body(req)));
-          if (
-            parts.length === 5 &&
-            parts[4] === "apply" &&
-            req.method === "POST"
-          )
-            return send(
-              res,
-              201,
-              followups.applyTemplate(pid, await body(req)),
-            );
-          if (parts.length === 5) {
-            const job = followups.row(parts[4]);
-            check(
-              job.patientId === pid,
-              "NOT_FOUND",
-              "随访计划不属于当前患者",
-              404,
-            );
-            if (req.method === "PATCH")
-              return send(res, 200, followups.update(job.id, await body(req)));
-            if (req.method === "DELETE") {
-              followups.remove(job.id, (await body(req)).revision);
-              return send(res, 200, { ok: true });
-            }
-          }
         }
       }
       if (parts[0] === "api" && parts[1] === "literature") {
@@ -2773,7 +2660,28 @@ export function createServer(options = {}) {
   server.scheduler = scheduler;
   server.patients = patients;
   server.followups = followups;
-  server.surveys = surveys;
+  Object.defineProperties(server, {
+    surveys: {
+      enumerable: true,
+      configurable: true,
+      get: () => followupService()?.surveys || null,
+    },
+    chatFollowups: {
+      enumerable: true,
+      configurable: true,
+      get: () => followupService()?.chatFollowups || null,
+    },
+    chatAutoFollow: {
+      enumerable: true,
+      configurable: true,
+      get: () => followupService()?.chatAutoFollow || null,
+    },
+    care: {
+      enumerable: true,
+      configurable: true,
+      get: () => followupService()?.care || null,
+    },
+  });
   server.doctor = runtime.doctor;
   server.knowledgeBot = knowledgeBot;
   server.doctorNotifications = doctorNotifications;
@@ -2788,23 +2696,19 @@ export function createServer(options = {}) {
   Object.defineProperty(server, "wecom", {
     enumerable: true,
     configurable: true,
-    get: () => wecom,
+    get: () => currentWecom(),
   });
   server.channelWecom = wecomService;
   server.channelWechat = wechatService;
   server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
-  server.chatFollowups = chatFollowups;
-  server.chatAutoFollow = chatAutoFollow;
-  server.care = care;
   server.pendingActions = pending;
   server.labImporter = labImporter;
   server.once("listening", () => {
     scheduler.start();
     workspaces.scheduler.start();
     workspaces.recovery.start();
-    followups.start();
     doctorNotifications.start();
     if (pluginHost.pluginServices.channel) knowledgeBot.binding.start();
     knowledgeBot.start();
@@ -2813,8 +2717,6 @@ export function createServer(options = {}) {
     pluginHost.startAll().catch((error) => {
       console.error("插件启动失败:", error);
     });
-    chatFollowups.start();
-    care.start();
     extensions.start();
   });
   server.shutdown = () => {
@@ -2828,15 +2730,12 @@ export function createServer(options = {}) {
     paddleLocal.stop();
     workspaces.scheduler.stop();
     workspaces.recovery.stop();
-    followups.stop();
     await doctorNotifications.stop();
     if (pluginHost.pluginServices.channel) await knowledgeBot.binding.stop();
     await knowledgeBot.stop();
     // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
     await pluginHost.stopAll();
     await pluginHost.drainAll();
-    await chatFollowups.stop();
-    care.stop();
     extensions.stop();
     if (databasePath === ":memory:" && !options.userSkillsDir) rmSync(userSkillsDir, { recursive: true, force: true });
     for (const id of workspaces.active.keys()) workspaces.interrupt(id);
@@ -2856,8 +2755,6 @@ export function createServer(options = {}) {
     await workspaces.scheduler.drain();
     await workspaces.recovery.drain();
     await workspaces.extensions.close();
-    await followups.drain();
-    await care.drain();
     try {
       const vectorClosures = await Promise.allSettled([vectorStore.close(), materialVectors.close()]);
       const failed = vectorClosures.find(result => result.status === "rejected");

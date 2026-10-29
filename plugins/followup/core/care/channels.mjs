@@ -1,4 +1,4 @@
-import { AppError, check } from "../errors.mjs";
+import { AppError, check } from "../../../../server/errors.mjs";
 
 const VAULT_KEY = "care:channels:v1";
 export const CHANNEL_IDS = Object.freeze(["wecom-kf", "wecom-contact", "manual"]);

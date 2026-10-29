@@ -30,8 +30,10 @@ const firstIdentifier = (match, from = 1) =>
 // parser is deliberately conservative (CREATE TABLE / ALTER TABLE / CREATE
 // INDEX ... ON) and accepts quoted identifiers; it is not a full SQL parser.
 export function validateMigrationSql(sql, tablePrefix) {
+  const prefixes = Array.isArray(tablePrefix) ? tablePrefix : [tablePrefix];
   check(
-    typeof tablePrefix === "string" && tablePrefix,
+    prefixes.length > 0 &&
+      prefixes.every((prefix) => typeof prefix === "string" && prefix),
     "PLUGIN_MIGRATION",
     "插件迁移缺少 tablePrefix",
   );
@@ -63,9 +65,10 @@ export function validateMigrationSql(sql, tablePrefix) {
 
   for (const { statement, name } of names) {
     check(
-      typeof name === "string" && name.startsWith(tablePrefix),
+      typeof name === "string" &&
+        prefixes.some((prefix) => name.startsWith(prefix)),
       "PLUGIN_MIGRATION",
-      `${statement} 的表名 ${name || "(无法识别)"} 必须以 ${tablePrefix} 开头`,
+      `${statement} 的表名 ${name || "(无法识别)"} 必须以 ${prefixes.join(" / ")} 开头`,
     );
   }
   return names.map((item) => item.name);
@@ -799,6 +802,49 @@ export class PluginHost {
         this._fail(record, `工具注册失败：${errorMessage(error)}`);
       }
     }
+  }
+
+  // Collect enabled plugins' tools in the legacy MedicalRuntime shape. The
+  // fixed shell registers them directly (the workspace path already goes
+  // through registerTools), so plugin tools exist on both engines without the
+  // shell importing plugin files.
+  legacyToolPlugins() {
+    const plugins = [];
+    const names = new Set();
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec?.tools) continue;
+      const registry = {
+        register: (plugin) => {
+          check(
+            plugin?.definition?.function?.name &&
+              typeof plugin.execute === "function",
+            "PLUGIN_CONFIG",
+            `插件 ${record.id} 注册了无效工具`,
+          );
+          const name = plugin.definition.function.name;
+          check(
+            !names.has(name),
+            "PLUGIN_CONFIG",
+            `插件工具名称重复：${name}`,
+          );
+          names.add(name);
+          plugins.push({
+            ...plugin,
+            capability: plugin.capability || { backend: "local" },
+          });
+        },
+      };
+      try {
+        record.spec.tools(this.contextFor(record), {
+          registry,
+          workspace: null,
+          run: null,
+        });
+      } catch (error) {
+        this._fail(record, `工具注册失败：${errorMessage(error)}`);
+      }
+    }
+    return plugins;
   }
 
   promptFragments() {

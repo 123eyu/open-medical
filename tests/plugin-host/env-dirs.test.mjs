@@ -44,6 +44,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.equal(byId.channel.status, "ready");
   assert.equal(byId["channel-wecom"].status, "ready");
   assert.equal(byId["channel-wechat"].status, "ready");
+  assert.equal(byId.followup.status, "ready");
   assert.equal(byId["legacy-agenda"].status, "ready");
   assert.equal(byId["similar-cases"].status, "ready");
 
@@ -55,6 +56,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "channel",
       "channel-wechat",
       "channel-wecom",
+      "followup",
       "hello",
       "legacy-agenda",
       "needs-missing",

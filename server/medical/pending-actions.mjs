@@ -839,31 +839,6 @@ const diagnosisItemsDef = {
     },
     {
       definition: definition(
-        "followup_create_propose",
-        "提议为患者创建本机随访提醒（单次或周期），到期提醒医生本人联系患者，不会给患者发消息。若要定时给患者发问题并自动收集回复，用 care_campaign_propose。只创建待确认提案；医生在对话中明确同意后用 proposal_confirm 生效。",
-        {
-          patientId: textDef,
-          name: textDef,
-          once: { type: "boolean" },
-          intervalDays: { type: "integer" },
-          firstDueAt: textDef,
-          checklist: { type: "array", items: textDef },
-          summary: textDef,
-        },
-        ["patientId", "name", "firstDueAt", "summary"],
-      ),
-      execute: (args) => {
-        const { patientId, summary, ...payload } = args;
-        return pending.propose({
-          type: "followup-create",
-          patientId,
-          payload,
-          summary,
-        });
-      },
-    },
-    {
-      definition: definition(
         "case_save_propose",
         "提议把当前病例收入本地病例库（可关联患者快照）。医生说「这个病例有价值/典型/收进案例库」时主动提议；lessons 写两句这次病例最值得记住的经验（为什么有价值、下次遇到类似患者怎么用），不要照抄摘要。只创建待确认提案；医生在对话中明确同意后用 proposal_confirm 入库。",
         {

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "../../server/agent.mjs";
+import { validateMigrationSql } from "../../server/plugin-host/host.mjs";
 import { createScriptedProvider } from "../helpers/scripted-provider.mjs";
 import { startTestServer } from "../helpers/server.mjs";
 
@@ -56,6 +57,33 @@ async function startWithDatabase(database, pluginDirs) {
     close: () => server.shutdown(),
   };
 }
+
+test("迁移校验支持多表前缀插件，但拒绝无关表名", () => {
+  const names = validateMigrationSql(
+    `CREATE TABLE IF NOT EXISTS followup_jobs (id TEXT);
+     CREATE TABLE IF NOT EXISTS chat_messages (id TEXT);
+     CREATE INDEX IF NOT EXISTS care_alerts_time ON care_alerts(created_at);`,
+    ["followup_", "chat_", "care_"],
+  );
+  assert.deepEqual(names, [
+    "followup_jobs",
+    "chat_messages",
+    "care_alerts",
+  ]);
+  for (const sql of [
+    "CREATE TABLE other_jobs (id TEXT)",
+    "CREATE TABLE chat_messages (id TEXT); CREATE TABLE nope (id TEXT)",
+  ]) {
+    assert.throws(
+      () => validateMigrationSql(sql, ["followup_", "chat_", "care_"]),
+      /followup_ \/ chat_ \/ care_/,
+    );
+  }
+  assert.throws(
+    () => validateMigrationSql("CREATE TABLE chat_messages (id TEXT)", []),
+    /tablePrefix/,
+  );
+});
 
 test("迁移幂等：同一数据库启动两次只执行一次迁移", async (t) => {
   const root = createTempRoot();

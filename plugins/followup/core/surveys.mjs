@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
-export { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
-import { check, identifier, string } from "./errors.mjs";
+import { renderQuestionnaire } from "../../../shared/followup-survey-display.mjs";
+export { renderQuestionnaire } from "../../../shared/followup-survey-display.mjs";
+import { check, identifier, string } from "../../../server/errors.mjs";
 
 // Structured follow-up questionnaires. The questionnaire rides on a follow-up
 // job; when the job comes due a survey row is created alongside the reminder,
@@ -269,9 +269,7 @@ export class FollowUpSurveys {
     this.store = store;
     this.followups = followups;
     Object.assign(this, { now, provider, channels });
-    store.db.exec(
-      "CREATE TABLE IF NOT EXISTS followup_surveys (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, follow_up_id TEXT, data TEXT NOT NULL)",
-    );
+    // followup_surveys is created by the plugin migrations before setup.
   }
   save(row) {
     row.revision++;

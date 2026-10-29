@@ -1,6 +1,6 @@
 import { detectRedFlags, screenOutbound } from "./care/red-flags.mjs";
 import { extractFollowup } from "./care/triage.mjs";
-import { check, identifier } from "./errors.mjs";
+import { check, identifier } from "../../../server/errors.mjs";
 
 const clip = (value, max) => String(value ?? "").slice(0, max);
 const json = (row) => (row ? JSON.parse(row.data) : null);
@@ -13,7 +13,7 @@ export class WechatAutoFollow {
     // provider 兼容两种形态:生产装配传 () => configured 函数,测试可直接注入 provider 对象。
     const providerFn = typeof provider === "function" ? provider : () => provider;
     Object.assign(this, { chat, followups, provider: providerFn, guidelines, patientBrief, store, db: store.db });
-    this.db.exec("CREATE TABLE IF NOT EXISTS chat_outreach(job_id TEXT PRIMARY KEY, data TEXT NOT NULL)");
+    // chat_outreach is created by the plugin migrations before setup.
     chat.onIngested = (binding, text) => { try { this.harvest(binding, text); } catch {} };
   }
   write(row) {

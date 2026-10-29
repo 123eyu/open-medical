@@ -1,15 +1,15 @@
-import { messageProvenance } from "../../shared/message-provenance.mjs";
+import { messageProvenance } from "../../../shared/message-provenance.mjs";
 import { randomUUID } from "node:crypto";
-import { check, string, identifier } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
-import { CareChannels } from "./channels.mjs";
-import { AI_DISCLAIMER, SAFETY_REPLY, detectRedFlags, screenOutbound } from "./red-flags.mjs";
-import { extractFollowup, runTriage } from "./triage.mjs";
-import { EDUCATION_COLLECTION } from "../medical/guidelines.mjs";
+import { check, string, identifier } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
+import { CareChannels } from "./care/channels.mjs";
+import { AI_DISCLAIMER, SAFETY_REPLY, detectRedFlags, screenOutbound } from "./care/red-flags.mjs";
+import { extractFollowup, runTriage } from "./care/triage.mjs";
+import { EDUCATION_COLLECTION } from "../../../server/medical/guidelines.mjs";
 import {
-  DEFAULT_SETTINGS, alertRow, campaignRow, createCareSchema, replyRow,
+  DEFAULT_SETTINGS, alertRow, campaignRow, replyRow,
   validatePatientSettings, validateSettings,
-} from "./store.mjs";
+} from "./care/store.mjs";
 
 const iso = (ms) => new Date(ms).toISOString();
 const CARE_PROPOSALS = ["care-message", "care-campaign", "care-settings", "care-bind", "care-group-message", "care-education-broadcast"];
@@ -66,7 +66,7 @@ export class CareEngine {
     this.pendingWork = new Set();
     this.lastTickAt = null;
     this.lastError = null;
-    createCareSchema(this.db);
+    // care_* tables are created by the plugin migrations before setup.
     // Watermark: history imported before the care pipeline existed is never
     // mass-triaged on first start.
     if (!this.db.prepare("SELECT 1 FROM care_settings WHERE id=1").get()) {
