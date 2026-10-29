@@ -44,7 +44,6 @@ import { PatientImporter } from "./medical/patient-import.mjs";
 import { LabImporter } from "./medical/lab-import.mjs";
 import { Backups } from "./medical/backups.mjs";
 import { DemoPack } from "./medical/demo-pack.mjs";
-import { DoctorNotifications } from "./medical/doctor-notifications.mjs";
 import { PatientSchedule } from "./medical/patient-schedule.mjs";
 import { Extensions } from "./medical/extensions.mjs";
 import { extensionTools } from "./medical/extension-tools.mjs";
@@ -707,11 +706,6 @@ export function createServer(options = {}) {
   const patientBrief = new PatientBrief(store, patients, {
     riskEnabled: () => pluginActive("risk-rules"),
   });
-  const doctorNotifications = new DoctorNotifications(store, models.vault, {
-    createFeishuRegistration: (input) =>
-      pluginService("channel")?.createFeishuRegistration(input),
-    ...options.doctorNotificationOptions,
-  });
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
   const backups = new Backups(databasePath);
@@ -869,6 +863,13 @@ export function createServer(options = {}) {
       getProvider: () => (providerConfigured(provider) ? provider : null),
       options: options.knowledgeBotOptions || {},
     },
+    // Doctor-notifications plugin inputs. Follow-up and care rows are read
+    // through their plugin services, never from the fixed shell.
+    notificationHost: {
+      vault: models.vault,
+      options: options.doctorNotificationOptions || {},
+    },
+    careTasks: () => (pluginActive("care-tasks") ? pluginService("care-tasks") : null),
     // The plugin constructs the WeCom connector; the followup plugin attaches
     // it to the care service through this callback.
     channelWecomHost: {
@@ -1720,23 +1721,6 @@ export function createServer(options = {}) {
             );
         }
       }
-      if (path === "/api/doctor-notifications/feishu-binding" && doctorNotifications.bindingOrNull()) {
-        const binding = doctorNotifications.bindingOrNull();
-        if (req.method === "POST") return send(res, 200, await track(binding.begin()));
-        if (req.method === "DELETE") return send(res, 200, binding.cancel((await body(req)).id));
-      }
-      if (path === "/api/doctor-notifications/feishu-binding/status" && req.method === "POST" && doctorNotifications.bindingOrNull())
-        return send(res, 200, await track(doctorNotifications.bindingOrNull().poll((await body(req)).id)));
-      if (path === "/api/doctor-notifications" && req.method === "GET") return send(res, 200, doctorNotifications.settings());
-      if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 3 && req.method === "PUT") return send(res, 200, doctorNotifications.save(parts[2], await body(req)));
-      if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 4 && req.method === "POST") {
-        const channel = parts[2], action = parts[3], input = await body(req);
-        if (action === "test") return send(res, 200, await track(doctorNotifications.test(channel)));
-        if (action === "send") return send(res, 200, await track(doctorNotifications.send(channel, input)));
-        if (action === "disconnect") return send(res, 200, doctorNotifications.disconnect(channel, input.expectedRevision));
-        if (channel === "wechat" && action === "qrcode") return send(res, 200, await track(doctorNotifications.startQr()));
-        if (channel === "wechat" && action === "qrcode-status") return send(res, 200, await track(doctorNotifications.pollQr(input.id)));
-      }
       if (path === "/api/doctor/overview" && req.method === "GET")
         return send(res, 200, doctorOverview.read({
           kind: url.searchParams.get("kind") || "all", query: url.searchParams.get("q") || "",
@@ -2488,7 +2472,11 @@ export function createServer(options = {}) {
     configurable: true,
     get: () => pluginService("feishu-knowledge-bot"),
   });
-  server.doctorNotifications = doctorNotifications;
+  Object.defineProperty(server, "doctorNotifications", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("doctor-notifications"),
+  });
   Object.defineProperty(server, "literature", {
     enumerable: true,
     configurable: true,
@@ -2540,7 +2528,6 @@ export function createServer(options = {}) {
     scheduler.start();
     workspaces.scheduler.start();
     workspaces.recovery.start();
-    doctorNotifications.start();
     // 与迁移前 messageGateway.start() 的位置一致：监听开始后、聊天随访前。
     // 插件生命周期统一由 host 按依赖拓扑启动，单个插件失败已隔离。
     pluginHost.startAll().catch((error) => {
@@ -2559,7 +2546,6 @@ export function createServer(options = {}) {
     paddleLocal.stop();
     workspaces.scheduler.stop();
     workspaces.recovery.stop();
-    await doctorNotifications.stop();
     // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
     await pluginHost.stopAll();
     await pluginHost.drainAll();

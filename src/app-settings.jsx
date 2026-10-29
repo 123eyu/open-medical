@@ -1,18 +1,18 @@
 import { BackupPanel } from "./backup-panel";
 import { LearningSettings } from "./learning-loop";
+// Shared channel layout styles stay in the fixed static entry: plugin panels
+// load in async chunks and must not be the first provider of base layout.
+import "./doctor-notifications.css";
+import "./message-channels.css";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
 import { SlotItem, findSettingsPanel, usePluginActive, useActiveSlot, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
-import { DoctorNotificationSettings } from "./doctor-notifications";
 import { KnowledgeTranscriptionSettings } from "./knowledge-transcription-settings";
 
-const CHANNEL_SECTIONS = [
-  ["channels", "私聊助手"],
-  ["notifications", "医生提醒"],
-];
+const CHANNEL_SECTIONS = [["channels", "私聊助手"]];
 const PERSONAL_SECTIONS = [
   ["skills", "技能"],
   ["workbench", "自动化规则"],
@@ -246,7 +246,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
           {!followupActive && <p className="settings-channel-hint muted">连接微信或企业微信后启用随访与患者消息</p>}
-          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : section === "notifications" ? <DoctorNotificationSettings /> : null}
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : null}
         </>}
         {group === "personal" && <>
           <SettingsSubnav label="技能与规则分类" items={PERSONAL_SECTIONS} section={section} onSelect={setSection} />

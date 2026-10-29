@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
-import "./doctor-notifications.css";
-import "./message-channels.css";
-import { FeishuBinding } from "./feishu-binding";
+import { api } from "../../../src/agent-runtime";
+import { FeishuBinding } from "../../../src/feishu-binding";
 const names = { wechat: "微信", feishu: "飞书" };
 function Channel({ initial, refresh }) {
   const [form, setForm] = useState({ ...initial });

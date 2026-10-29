@@ -65,6 +65,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "channel-wechat",
       "channel-wecom",
       "clinical-ref",
+      "doctor-notifications",
       "drg",
       "feishu-knowledge-bot",
       "followup",

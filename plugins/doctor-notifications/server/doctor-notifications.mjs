@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import { AppError, check } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
+import { AppError, check } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
 
 const CHANNELS = ["wechat", "feishu"];
 const ILINK = "https://ilinkai.weixin.qq.com";
@@ -26,11 +26,9 @@ function feishuWebhook(value) {
 // Outbound doctor digests only. No patient identities, clinical text or chat
 // messages enter the notification payload. Credentials share the app's vault.
 export class DoctorNotifications {
-  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true, createFeishuRegistration = null } = {}) {
-    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart, createFeishuRegistration });
+  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true, createFeishuRegistration = null, patients = () => null, followups = () => null, careTasks = () => null } = {}) {
+    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart, createFeishuRegistration, patients, followups, careTasks });
     this.db = store.db; this.active = new Map(); this.controllers = new Set(); this.qr = null; this.stopped = false;
-    this.db.exec(`CREATE TABLE IF NOT EXISTS doctor_notification_settings(channel TEXT PRIMARY KEY,data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS doctor_notification_deliveries(channel TEXT NOT NULL,connection_id TEXT NOT NULL,day TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(channel,connection_id,day));`);
     this.initializeBinding();
     for (const row of this.db.prepare("SELECT channel,connection_id,day,data FROM doctor_notification_deliveries").all()) {
       const data = JSON.parse(row.data);
@@ -84,12 +82,30 @@ export class DoctorNotifications {
   settings() { return { channels: CHANNELS.map(channel => this.publicConfig(channel)) }; }
   preview(timezone) {
     const today = local(this.now(), timezone).day;
-    const people = new Set(this.db.prepare("SELECT id,data FROM patients").all().filter(row => !JSON.parse(row.data).archived).map(row => row.id));
-    const followup = new Set(), tracking = new Set();
     const due = at => Number.isFinite(at) && local(at, timezone).day <= today;
+    let people = new Set();
+    try {
+      const rows = this.patients()?.all?.() || [];
+      people = new Set(rows.filter(row => !row.archived).map(row => row.id));
+    } catch { /* Patient service unavailable leaves the digest empty. */ }
+    // Follow-ups and care tasks belong to other plugins. Their services are
+    // optional: a disabled or missing plugin contributes no rows, never an
+    // error page. The fixed reminders table stays readable here.
+    const followup = new Set(), tracking = new Set();
     for (const row of this.db.prepare("SELECT patient_id,due_at FROM reminders WHERE status='pending'").all()) if (people.has(row.patient_id) && due(row.due_at)) followup.add(row.patient_id);
-    for (const row of this.db.prepare("SELECT patient_id,next_due FROM follow_ups WHERE status='active'").all()) if (people.has(row.patient_id) && due(row.next_due)) followup.add(row.patient_id);
-    for (const row of this.db.prepare("SELECT patient_id,due_at,status FROM care_tasks WHERE status NOT IN ('completed','cancelled')").all()) if (people.has(row.patient_id) && (row.status !== "waiting_result" || due(row.due_at))) tracking.add(row.patient_id);
+    try {
+      const jobs = this.followups()?.overview?.({ limit: 500 }) || [];
+      for (const job of jobs) if (people.has(job.patientId) && due(job.nextDue)) followup.add(job.patientId);
+    } catch { /* followup plugin inactive */ }
+    try {
+      const service = this.careTasks();
+      for (const patientId of people) {
+        try {
+          const items = service?.list?.(patientId, { status: "active", limit: 100 })?.items || [];
+          for (const task of items) if (task.patientId === patientId && (task.status !== "waiting_result" || due(task.dueAt))) tracking.add(patientId);
+        } catch { /* one patient's rows must not hide the rest */ }
+      }
+    } catch { /* care-tasks plugin inactive */ }
     const count = new Set([...followup, ...tracking]).size;
     return { day: today, patients: count, followup: followup.size, tracking: tracking.size, text: `Open Medical · 医生随访提醒\n${today}：${count} 位患者有今日或逾期的随访、待跟进事项。\n待随访 ${followup.size} 位，待跟进 ${tracking.size} 位。\n请打开 Open Medical 的「随访」与「今日待办」查看并处理。` };
   }
