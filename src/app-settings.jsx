@@ -18,10 +18,53 @@ const PERSONAL_SECTIONS = [
   ["workbench", "自动化规则"],
   ["learning", "学习与记忆"],
 ];
+// Legacy tabs whose owning panel loads asynchronously. A deep link must
+// resolve to its own tab before the panel arrives; the rendering fallback in
+// AppSettingsView keeps a disabled plugin from leaving a blank page.
+const LEGACY_TAB_GROUPS = {
+  "knowledge-bot": "channels",
+  notifications: "channels",
+  followup: "channels",
+  workbench: "personal",
+  learning: "personal",
+};
+const SECTION_ORDER = {
+  channels: 10,
+  "knowledge-bot": 20,
+  notifications: 30,
+  followup: 40,
+  workbench: 50,
+  learning: 60,
+};
+
+// Merge fixed and plugin-provided tabs in their original order. Plugin panels
+// carry an explicit order; the static fixed tabs use the same scale so an
+// async panel never jumps ahead of a fixed one.
+export function mergeChannelSections(legacyPanels = []) {
+  const merged = CHANNEL_SECTIONS.map(([id, label], index) => ({
+    id,
+    label,
+    order: SECTION_ORDER[id] ?? (index + 1) * 10,
+  }));
+  for (const panel of legacyPanels) {
+    if (merged.some((item) => item.id === panel.legacyTab)) continue;
+    merged.push({
+      id: panel.legacyTab,
+      label: panel.label,
+      order: Number.isFinite(panel.order)
+        ? panel.order
+        : (SECTION_ORDER[panel.legacyTab] ?? 100),
+    });
+  }
+  return merged
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+    .map((item) => [item.id, item.label]);
+}
 
 function settingsGroup(section, legacyPanels = []) {
   if (section === "transcription") return "connections";
   if (section === "plugins") return "plugins";
+  if (LEGACY_TAB_GROUPS[section]) return LEGACY_TAB_GROUPS[section];
   if (legacyPanels.some((panel) => panel.legacyTab === section)) return "channels";
   if (CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
@@ -51,6 +94,10 @@ export function resolveSettingsSection(
   const group = settingsGroup(normalized, legacyPanels);
   if (["channels", "personal"].includes(group) && !medical) return "general";
   if (normalized === "desktop" && !desktop) return "general";
+  // A known legacy tab resolves immediately, even before its lazy panel has
+  // registered; when the panel is absent (plugin disabled) the view falls back
+  // to the group's first tab instead of rendering an empty page.
+  if (LEGACY_TAB_GROUPS[normalized]) return normalized;
   return SETTINGS_GROUPS.includes(group) ? normalized : "general";
 }
 
@@ -189,16 +236,19 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
   const [requestedSection, updateSection] = useState(
     () => takeSettingsTab() || param || "general",
   );
-  const section = resolveSettingsSection(requestedSection, legacyPanels, {
+  const requested = resolveSettingsSection(requestedSection, legacyPanels, {
     medical: medicalEnabled(config),
     desktop: Boolean(window.omwDesktop),
   });
+  const requestedPanel = findSettingsPanel(pluginPanels, requested);
+  // While a plugin panel is still loading, or when the plugin is disabled,
+  // show the group's first tab instead of a blank content area.
+  const section = !requestedPanel && LEGACY_TAB_GROUPS[requested]
+    ? (LEGACY_TAB_GROUPS[requested] === "personal" ? "skills" : "channels")
+    : requested;
   const group = settingsGroup(section, legacyPanels);
   const legacyPanel = findSettingsPanel(pluginPanels, section);
-  const channelSections = [...CHANNEL_SECTIONS];
-  for (const panel of legacyPanels)
-    if (!channelSections.some(([id]) => id === panel.legacyTab))
-      channelSections.push([panel.legacyTab, panel.label]);
+  const channelSections = mergeChannelSections(legacyPanels);
   function setSection(next) {
     updateSection(next);
     const url = new URL(window.location.href);
