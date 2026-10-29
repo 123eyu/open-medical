@@ -88,6 +88,9 @@ export class PendingActions {
   get extensions() {
     return this.services.extensions?.() || null;
   }
+  get pluginHost() {
+    return this.services.pluginHost?.() || null;
+  }
   audit(action, payload = action.reviewDraft?.payload || action.payload, reviews = action.reviewDraft?.evidenceReviews || {}) {
     if (action.type !== 'patient-create' || !action.payload.sourceSessionId) return undefined;
     let sources = [];
@@ -121,8 +124,11 @@ export class PendingActions {
     return sqliteTransaction(this.store.db, () => this.proposeTransaction(input));
   }
   proposeTransaction({ type, patientId, payload = {}, summary, prepare, provenance } = {}) {
+    const pluginHandler = !TYPES.includes(type)
+      ? this.pluginHost?.proposalHandler(type)
+      : null;
     check(
-      TYPES.includes(type),
+      TYPES.includes(type) || pluginHandler,
       "INVALID_INPUT",
       `提案类型须为：${TYPES.join("/")}`,
     );
@@ -143,6 +149,11 @@ export class PendingActions {
     let baseRevision = null;
     if (type === "patient-update" || type === "followup-create") {
       check(patientId, "INVALID_INPUT", "该提案需要患者编号");
+      const patient = this.patients.row(patientId);
+      resolvedPatientId = patient.id;
+      baseRevision = patient.revision;
+    }
+    if (pluginHandler && patientId) {
       const patient = this.patients.row(patientId);
       resolvedPatientId = patient.id;
       baseRevision = patient.revision;
@@ -301,7 +312,7 @@ export class PendingActions {
     const where = [];
     const args = [];
     check(Number.isSafeInteger(limit) && limit >= 1 && limit <= 100 && Number.isSafeInteger(offset) && offset >= 0, "INVALID_INPUT", "提案分页参数无效");
-    if (type !== undefined) { check(TYPES.includes(type), "INVALID_INPUT", "提案类型无效"); where.push("type=?"); args.push(type); }
+    if (type !== undefined) { check(TYPES.includes(type) || this.pluginHost?.proposalHandler(type), "INVALID_INPUT", "提案类型无效"); where.push("type=?"); args.push(type); }
     if (sourceSessionId !== undefined) {
       where.push("json_extract(payload,'$.sourceSessionId')=?");
       args.push(string(sourceSessionId, "来源会话", 200));
@@ -432,6 +443,7 @@ export class PendingActions {
           409,
         );
       }
+      const pluginHandler = this.pluginHost?.proposalHandler(action.type);
       let applied, habitSuggestions = [];
       if (isCare(action.type)) {
         check(this.care, "CARE_UNAVAILABLE", "患者管理模块未启用", 503);
@@ -515,6 +527,22 @@ export class PendingActions {
           added++;
         }
         applied = { added, already, skipped };
+      } else if (action.type.includes(".")) {
+        // 插件提案与其它提案共享同一个 sqliteTransaction：validate/apply 抛错
+        // 时状态更新尚未执行，整个事务回滚，提案保持 pending。插件在提案
+        // 创建后被停用/不可用时明确拒绝，不能落入 case-save 的默认分支。
+        check(
+          pluginHandler,
+          "PLUGIN_UNAVAILABLE",
+          "插件未启用或不可用，无法执行该提案",
+          409,
+        );
+        const input = action.payload?.input;
+        const validated = pluginHandler.validate(input);
+        applied = pluginHandler.apply(
+          validated === undefined ? input : validated,
+          this.store.db,
+        );
       } else {
         if (action.patientId) {
           const patient = this.patients.row(action.patientId);

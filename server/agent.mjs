@@ -96,6 +96,7 @@ import {
 import { doctorMemoryTools } from "./medical/doctor-profile.mjs";
 import { knowledgeRunEvidence } from "./medical/knowledge-answer.mjs";
 import { createMedicalWorkspaceDomain } from "./medical/medical-workspace-domain.mjs";
+import { PluginHost } from "./plugin-host/host.mjs";
 import { SessionBridge } from "./session-bridge.mjs";
 import { EmbeddingService } from "./medical/embeddings.mjs";
 import { LanceVectorStore } from "./medical/vector-store.mjs";
@@ -252,6 +253,18 @@ export function createServer(options = {}) {
   };
   const jev = new JevSettings(models.vault);
   let provider = models.provider();
+  // 领域插件宿主先加载声明（技能目录、启停状态），固定区服务就绪后再迁移和
+  // 初始化；单个插件失败只标记 unavailable，不阻断服务启动。
+  const pluginServices = {};
+  const pluginHost = new PluginHost({
+    db: store.db,
+    store,
+    services: pluginServices,
+    ...(options.pluginDirs !== undefined
+      ? { pluginDirs: options.pluginDirs }
+      : {}),
+  });
+  pluginHost.load();
   // The doctor's own skills (extension center) are materialized here.
   const userSkillsDir = options.userSkillsDir ||
     (databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-my-skills-")) : join(dirname(databasePath), "my-skills"));
@@ -263,6 +276,7 @@ export function createServer(options = {}) {
       ...(process.env.MEDICAL_SKILLS_DIR
         ? process.env.MEDICAL_SKILLS_DIR.split(",")
         : []),
+      ...pluginHost.skillDirs(),
     ]);
   const doctor = options.doctor || new DoctorProfile(store);
   const literature = options.literature || new LiteratureService(store);
@@ -275,6 +289,7 @@ export function createServer(options = {}) {
     trials: () => trialCandidates,
     extensions: () => extensions,
     doctor: () => doctor,
+    pluginHost: () => pluginHost,
     intakeSources: (id, fileIds) => id ? sessionBridge.get(id).files.filter(file => !fileIds.length || fileIds.includes(file.id)).map(({ id, name, text }) => ({ id, name, text: text || '' })) : [],
     intakeText: id => id ? sessionBridge.get(id).files.map(f => f.text || "").join("\n") : "",
     copySourceMaterials: (sourceId, targetId, fileIds, sourceInput) => {
@@ -546,6 +561,7 @@ export function createServer(options = {}) {
       saveIntakeNotes: (id, runId, notes) => workspaces.store.update(id, w => { w.runs.find(run => run.id === runId).intakeNotes = notes; }),
       saveDisplayResult: (id, runId, value) => workspaces.store.update(id, w => { const run=w.runs.find(r=>r.id===runId);run.displayResults=[...(run.displayResults||[]).filter(r=>r.key!==value.key),value].slice(-12); }),
       readPatientBrief: (patientId) => patientBrief.read(patientId),
+      pluginHost,
       // 全局助手工具面的依赖（访问器延迟解析：注册表在下方才创建）。
       patients: () => patients,
       pending: () => pending,
@@ -727,6 +743,28 @@ export function createServer(options = {}) {
     proxyResolver: options.skillProxyResolver,
   });
   sessionBridge.evolution = extensions;
+  // 固定区服务已全部就绪：迁移后依次执行插件 setup。插件只能通过 ctx.services
+  // 调用这些对象，不直接改写固定区实现。
+  Object.assign(pluginServices, {
+    store,
+    patients,
+    pending,
+    followups,
+    cases,
+    care,
+    trials: trialCandidates,
+    extensions,
+    doctor,
+    schedule,
+    workspaces,
+    skills,
+    guidelines,
+    knowledge: guidelines,
+    literature,
+    knowledgeOrganizer,
+  });
+  pluginHost.migrate();
+  pluginHost.setup();
   const wechat = new WeChatMacBridge({
     patients,
     enabled: ["1", "on", "true"].includes(
@@ -978,6 +1016,7 @@ export function createServer(options = {}) {
         res.once("close", disconnected);
         try { return send(res, 200, {
           token: secret,
+          plugins: pluginHost.list(),
           demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
           // 应用，显式声明医疗能力可用（前端 medicalEnabled 优先读
@@ -1075,6 +1114,34 @@ export function createServer(options = {}) {
         res.on("close",()=>stream.destroy());stream.on("error",()=>res.destroy());stream.pipe(res);return;
       }
       if (path.startsWith("/api/")) guard(req, true);
+      // 插件 HTTP 路由只接受 /api/p/<id>/...；鉴权与其它 /api 一致。
+      if (
+        path.startsWith("/api/p/") &&
+        (await pluginHost.handleApi(req, url, {
+          body: () => body(req),
+          send: (status, data) => send(res, status, data),
+          error: (error) => errorResponse(res, error),
+          res,
+        }))
+      )
+        return;
+      if (path === "/api/plugins" && req.method === "GET")
+        return send(res, 200, { plugins: pluginHost.list() });
+      const pluginRoute = /^\/api\/plugins\/([^/]+)$/.exec(path);
+      if (pluginRoute && req.method === "PUT") {
+        const input = await body(req);
+        check(
+          typeof input.enabled === "boolean",
+          "INVALID_INPUT",
+          "enabled 必须为布尔值",
+        );
+        return send(res, 200, {
+          plugin: pluginHost.setEnabled(
+            decodeURIComponent(pluginRoute[1]),
+            input.enabled,
+          ),
+        });
+      }
       // 医疗领域能力按需启用（W6）：普通项目默认通用工具面；以下显式
       // 入口打开医疗叠层。会话型工作区（首页/患者会话）始终医疗，不经
       // 此路径。这两个入口属于医疗应用组合根，通用平台服务不感知。
@@ -2584,6 +2651,7 @@ export function createServer(options = {}) {
     });
   });
   server.pending = pending;
+  server.pluginHost = pluginHost;
   server.store = store;
   server.runtime = runtime;
   // 供测试与诊断日志直接调用；HTTP 入口为

@@ -72,6 +72,7 @@ export function createMedicalWorkspaceDomain({
   patients = null,
   pending = null,
   followups = null,
+  pluginHost = null,
 } = {}) {
   // 会话叠层的插件经 runTool 统一分发：材料 sources、schema 校验与
   // readOnly 约定和医疗会话路径共用同一执行契约。
@@ -86,9 +87,10 @@ export function createMedicalWorkspaceDomain({
     // 按需分层：未启用医疗的工作区（普通项目）只带通用内核指令，
     // 不注入医疗纪律文本。
     systemFor(workspace) {
-      return medicalWorkspaceEnabled(workspace)
-        ? `${GenericDomain.system}\n${MEDICAL_WORKSPACE_DISCIPLINE}${workspace.kind === "session" ? `\n${GLOBAL_ASSISTANT_DISCIPLINE}` : ""}`
-        : GenericDomain.system;
+      if (!medicalWorkspaceEnabled(workspace)) return GenericDomain.system;
+      const base = `${GenericDomain.system}\n${MEDICAL_WORKSPACE_DISCIPLINE}${workspace.kind === "session" ? `\n${GLOBAL_ASSISTANT_DISCIPLINE}` : ""}`;
+      const fragments = pluginHost?.promptFragments?.() || "";
+      return fragments ? `${base}\n\n${fragments}` : base;
     },
     limits: GenericDomain.limits,
     beforeComplete: args => {
@@ -165,6 +167,14 @@ export function createMedicalWorkspaceDomain({
       ].filter(Boolean);
     },
     registerTools: ({ registry, workspace, runId }) => {
+      // 已启用领域插件的工具先注册进同一个 registry；工具执行只能经插件
+      // service，写入仍走提案。停用插件不在这里出现。
+      if (workspace.kind === "session" || medicalWorkspaceEnabled(workspace))
+        pluginHost?.registerTools(
+          registry,
+          workspace,
+          workspace.runs?.find((run) => run.id === runId) || null,
+        );
       // 会话叠层：医疗核心工具 + 全部医疗插件走 runTool 分发；项目
       // 工作区在显式启用医疗后直注插件（知识库/提案工具），普通项目
       // 保持纯通用工具面。
