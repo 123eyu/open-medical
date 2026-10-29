@@ -13,15 +13,7 @@ const SERVER_ROOT = join(ROOT, "server");
 // The table-ownership rule is deliberately enforced by source scanning. Each
 // exception must be an exact file + table + line signature, with the reason
 // recorded here; a generic "ignore this file" entry is not accepted.
-const WHITELIST = [
-  {
-    file: "server/medical/medical-workspace-domain.mjs",
-    table: "wecom_groups",
-    lineIncludes: "用 wecom_customers 查客户",
-    reason:
-      "模型提示里的工具名 wecom_groups（企业微信群查询），不是固定区 SQL 表访问",
-  },
-];
+const WHITELIST = [];
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>

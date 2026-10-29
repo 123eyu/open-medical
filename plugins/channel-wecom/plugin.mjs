@@ -22,6 +22,7 @@ export default definePlugin({
   ],
   migrations: "./migrations",
   tablePrefix: "wecom_",
+  prompt: "./prompt.md",
   legacyApiPaths: WECOM_LEGACY_API_PATHS,
   setup(ctx) {
     const host = ctx.services.channelWecomHost || {};
