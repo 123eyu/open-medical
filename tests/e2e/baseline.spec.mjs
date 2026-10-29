@@ -28,12 +28,44 @@ async function open(page, path) {
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function capture(page, name, mask = []) {
+const MAX_SCREENSHOT_HEIGHT = 4000;
+
+// The app shell is a fixed 100dvh frame with an internal scroll area, so
+// fullPage alone only captures the first viewport. Grow the viewport until the
+// page's own scroller has no overflow; width stays 1440.
+async function expandMainContent(page, selector) {
+  const scroller = page.locator(selector).first();
+  await expect(scroller).toBeVisible();
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const { scrollHeight, clientHeight } = await scroller.evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }));
+    if (scrollHeight <= clientHeight + 1) break;
+
+    const viewport = page.viewportSize();
+    const height = Math.min(
+      MAX_SCREENSHOT_HEIGHT,
+      viewport.height + (scrollHeight - clientHeight) + 32,
+    );
+    if (height <= viewport.height) break;
+    await page.setViewportSize({ width: viewport.width, height });
+    await page.waitForTimeout(100);
+  }
+
+  await scroller.evaluate((element) => { element.scrollTop = 0; });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => document.fonts.ready);
+}
+
+async function capture(page, name, { scroll, mask = [] } = {}) {
   // Wait for all page-initiated requests (including the patient attention card
   // and demo/task lists) before freezing the layout for the frame.
   await page.waitForLoadState("networkidle");
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(250);
+  if (scroll) await expandMainContent(page, scroll);
   await expect(page).toHaveScreenshot(name, {
     fullPage: true,
     animations: "disabled",
@@ -54,9 +86,10 @@ test("新建任务首页", async ({ page }) => {
   await expect(page.locator(".home-activity b").nth(1)).not.toHaveText("—");
 
   // The header date is the only wall-clock text on this page.
-  await capture(page, "01-home.png", [
-    page.locator(".hub-page-actions > span"),
-  ]);
+  await capture(page, "01-home.png", {
+    scroll: ".workbench-hub",
+    mask: [page.locator(".hub-page-actions > span")],
+  });
 });
 
 test("患者列表", async ({ page }) => {
@@ -68,7 +101,9 @@ test("患者列表", async ({ page }) => {
   await expect(page.locator(".patient-card")).toHaveCount(3);
   await expect(page.getByText(PATIENT_NAME, { exact: true })).toBeVisible();
 
-  await capture(page, "02-patients.png");
+  await capture(page, "02-patients.png", {
+    scroll: ".patients-view",
+  });
 });
 
 test("示例·张沪生 概览", async ({ page }) => {
@@ -85,10 +120,12 @@ test("示例·张沪生 概览", async ({ page }) => {
     "false",
   );
 
-  // "更新于 hh:mm" is derived from the moment the attention card was fetched.
-  await capture(page, "03-patient-overview.png", [
-    page.locator(".attention-refresh"),
-  ]);
+  // Only the hh:mm inside "更新于 hh:mm" is wall-clock dependent; the refresh
+  // button and the list of tasks below it must stay part of the comparison.
+  await capture(page, "03-patient-overview.png", {
+    scroll: ".patients-view",
+    mask: [page.locator(".attention-refresh time")],
+  });
 });
 
 test("示例·张沪生 诊疗辅助 tab", async ({ page }) => {
@@ -101,7 +138,9 @@ test("示例·张沪生 诊疗辅助 tab", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByLabel("本次诊疗问题")).toBeVisible();
 
-  await capture(page, "04-patient-assistance.png");
+  await capture(page, "04-patient-assistance.png", {
+    scroll: ".patients-view",
+  });
 });
 
 test("今日待办", async ({ page }) => {
@@ -109,7 +148,9 @@ test("今日待办", async ({ page }) => {
   await expect(page.locator(".agenda-heading h1")).toContainText("今日待办");
   await expect(page.locator(".agenda-items .agenda-item").first()).toBeVisible();
 
-  await capture(page, "05-agenda.png");
+  await capture(page, "05-agenda.png", {
+    scroll: ".work-directory.agenda-page",
+  });
 });
 
 test("知识库", async ({ page }) => {
@@ -119,7 +160,9 @@ test("知识库", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText("示例体验资料库", { exact: true })).toBeVisible();
 
-  await capture(page, "06-knowledge.png");
+  await capture(page, "06-knowledge.png", {
+    scroll: ".module-view.library-hub",
+  });
 });
 
 test("示例体验", async ({ page }) => {
@@ -131,7 +174,9 @@ test("示例体验", async ({ page }) => {
     page.getByText("示例资料已就位，可以随时接着体验", { exact: true }),
   ).toBeVisible();
 
-  await capture(page, "07-examples.png");
+  await capture(page, "07-examples.png", {
+    scroll: ".demo-experience.work-directory",
+  });
 });
 
 test("设置", async ({ page }) => {
@@ -143,5 +188,7 @@ test("设置", async ({ page }) => {
     page.getByRole("heading", { name: "模型与运行", exact: true }),
   ).toBeVisible();
 
-  await capture(page, "08-settings.png");
+  await capture(page, "08-settings.png", {
+    scroll: ".app-settings-page",
+  });
 });
