@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "test": "node --test --test-concurrency=1 \"tests/**/*.test.mjs\" \"plugins/*/test/*.test.mjs\"",
     "test:e2e": "playwright test",
+    "plugin:new": "node scripts/new-plugin.mjs",
     "format": "prettier --write src server shared scripts *.mjs *.md",
     "check": "npm run lint && npm run build",
     "backup": "node scripts/backup.mjs",
