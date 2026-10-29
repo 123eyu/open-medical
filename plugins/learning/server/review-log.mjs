@@ -4,11 +4,11 @@ import {
   reviewCounts,
   paragraphDiff,
   normalizedEditDistance,
-} from "../../shared/review-diff.mjs";
-import { deidentifyExample } from "./deidentify-example.mjs";
+} from "../../../shared/review-diff.mjs";
+import { deidentifyExample } from "../../../server/medical/deidentify-example.mjs";
 import { classifyDiff } from "./habit-learner.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
-import { check } from "../errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
+import { check } from "../../../server/errors.mjs";
 export class ReviewLog {
   constructor(store) {
     this.store = store;

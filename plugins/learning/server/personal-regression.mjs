@@ -1,11 +1,11 @@
-import { check } from "../errors.mjs";
-import { deidentifyExample } from "./deidentify-example.mjs";
+import { check } from "../../../server/errors.mjs";
+import { deidentifyExample } from "../../../server/medical/deidentify-example.mjs";
 import { localModel } from "./personal-context.mjs";
 import {
   reviewDiff,
   reviewCounts,
   normalizedEditDistance,
-} from "../../shared/review-diff.mjs";
+} from "../../../shared/review-diff.mjs";
 
 // Opt-in replay of source materials. Confirmed charts are evaluator targets only;
 // no chart or learning signal is written by these temporary intake sessions.

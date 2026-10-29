@@ -1,7 +1,6 @@
 import { patientPhone } from "../shared/patient-phone.mjs";
 import { messageProvenance, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
 import { dashboardLabLayout } from "../shared/patient-dashboard.mjs";
-import { ReviewLog } from "./medical/review-log.mjs";
 import { sqliteTransaction } from "./sqlite-transaction.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { AppError, check, identifier, string } from "./errors.mjs";
@@ -10,7 +9,7 @@ import { DIAGNOSIS_STATUS, mergeDiagnoses } from "../shared/diagnoses.mjs";
 // Patient registry: each patient links to one session that acts as the
 // clinical workspace (materials, runs, artifacts, review, schedules).
 export class PatientRegistry {
-  constructor(store, runtime, { createSession, removeSession, onIdentityChanged, onCreated } = {}) {
+  constructor(store, runtime, { createSession, removeSession, onIdentityChanged, onCreated, learning = null } = {}) {
     this.store = store;
     this.runtime = runtime;
     // 统一内核：新患者病例会话由 SessionBridge 创建（kind:"session" 工作区）。
@@ -22,6 +21,7 @@ export class PatientRegistry {
     this.removeSession = removeSession;
     this.onIdentityChanged = onIdentityChanged;
     this.onCreated = onCreated;
+    this.learning = learning;
     this.store.db.exec("CREATE TABLE IF NOT EXISTS patient_mutation_requests(patient_id TEXT NOT NULL REFERENCES patients(id) ON DELETE CASCADE, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, PRIMARY KEY(patient_id, request_id))");
   }
   all() {
@@ -255,7 +255,7 @@ export class PatientRegistry {
       patient.revision++;
       patient.updatedAt = new Date().toISOString();
       this.save(patient);
-      new ReviewLog(this.store).record({ kind: "chart_edit", patientId: id, ai: reviewBefore, final: patient });
+      this.learning?.()?.reviewLog?.record({ kind: "chart_edit", patientId: id, ai: reviewBefore, final: patient });
       if (previousName !== patient.name) this.onIdentityChanged?.(patient, previousName);
       this.store.audit(patient.sessionId, "patient.updated", {
         patientId: id,

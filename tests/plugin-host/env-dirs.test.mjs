@@ -45,7 +45,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.equal(byId["channel-wecom"].status, "ready");
   assert.equal(byId["channel-wechat"].status, "ready");
   assert.equal(byId.followup.status, "ready");
-  assert.equal(byId["legacy-agenda"].status, "ready");
+  assert.equal(byId.learning.status, "ready");
   assert.equal(byId.literature.status, "ready");
   assert.equal(byId["research-stats"].status, "ready");
   assert.equal(byId["clinical-ref"].status, "ready");
@@ -70,7 +70,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "feishu-knowledge-bot",
       "followup",
       "hello",
-      "legacy-agenda",
+      "learning",
       "literature",
       "needs-missing",
       "research-stats",

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { check } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
+import { check } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
 
 // History IDs distinguish repeated state transitions. The state fingerprint also
 // covers older writers and memories created without a history entry. Same-topic

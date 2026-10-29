@@ -52,7 +52,7 @@ function snapshotShape(overview) {
   };
 }
 
-test("停用 legacy-agenda 后只失去自定义规则来源；重新启用后恢复快照", async (t) => {
+test("停用 learning 后只失去自定义规则与进化来源；重新启用后恢复快照", async (t) => {
   const app = await startTestServer({
     provider: createScriptedProvider([]),
     serverOptions: { pluginDirs: [PRODUCTION_PLUGINS, CHANNEL_FAKE] },
@@ -68,7 +68,7 @@ test("停用 legacy-agenda 后只失去自定义规则来源；重新启用后�
   );
   assert.deepEqual(snapshotShape(before.body), SNAPSHOT);
 
-  const disabled = await app.request("/api/plugins/legacy-agenda", {
+  const disabled = await app.request("/api/plugins/learning", {
     method: "PUT",
     body: { enabled: false },
   });
@@ -80,7 +80,7 @@ test("停用 legacy-agenda 后只失去自定义规则来源；重新启用后�
   assert.deepEqual(
     reduced.body.kinds.map(({ kind }) => kind),
     ["all", "risk", "visit", "followup", "tracking", "messages", "trial"],
-    "停用后固定区复诊与已迁移的 risk-rules/followup/care-tasks/trials 插件来源保留，legacy 只剩 custom",
+    "停用后固定区复诊与已迁移的 risk-rules/followup/care-tasks/trials 插件来源保留，learning 只剩 custom",
   );
   assert.deepEqual(reduced.body.counts, {
     all: 5,
@@ -104,7 +104,7 @@ test("停用 legacy-agenda 后只失去自定义规则来源；重新启用后�
     assert.equal(accepted.status, 200, `已迁移插件的 kind=${kind} 应保留`);
   }
 
-  const enabled = await app.request("/api/plugins/legacy-agenda", {
+  const enabled = await app.request("/api/plugins/learning", {
     method: "PUT",
     body: { enabled: true },
   });

@@ -1,5 +1,4 @@
 import { BackupPanel } from "./backup-panel";
-import { LearningSettings } from "./learning-loop";
 // Shared channel layout styles stay in the fixed static entry: plugin panels
 // load in async chunks and must not be the first provider of base layout.
 import "./doctor-notifications.css";
@@ -47,6 +46,8 @@ export function mergeChannelSections(legacyPanels = []) {
     order: SECTION_ORDER[id] ?? (index + 1) * 10,
   }));
   for (const panel of legacyPanels) {
+    const group = LEGACY_TAB_GROUPS[panel.legacyTab];
+    if (group && group !== "channels") continue;
     if (merged.some((item) => item.id === panel.legacyTab)) continue;
     merged.push({
       id: panel.legacyTab,
@@ -94,10 +95,9 @@ export function resolveSettingsSection(
   const group = settingsGroup(normalized, legacyPanels);
   if (["channels", "personal"].includes(group) && !medical) return "general";
   if (normalized === "desktop" && !desktop) return "general";
-  // A known legacy tab resolves immediately, even before its lazy panel has
-  // registered; when the panel is absent (plugin disabled) the view falls back
-  // to the group's first tab instead of rendering an empty page.
-  if (LEGACY_TAB_GROUPS[normalized]) return normalized;
+  // Before the lazy panel registers, keep the raw request in state and show the
+  // general group; the next render re-resolves once legacyTab exists.
+  if (LEGACY_TAB_GROUPS[normalized] && !legacyPanels.some((panel) => panel.legacyTab === normalized)) return "general";
   return SETTINGS_GROUPS.includes(group) ? normalized : "general";
 }
 
@@ -249,6 +249,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
   const group = settingsGroup(section, legacyPanels);
   const legacyPanel = findSettingsPanel(pluginPanels, section);
   const channelSections = mergeChannelSections(legacyPanels);
+  const personalSections = PERSONAL_SECTIONS.filter(([id]) => id === "skills" || legacyPanels.some((panel) => panel.legacyTab === id));
   function setSection(next) {
     updateSection(next);
     const url = new URL(window.location.href);
@@ -299,8 +300,8 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
           {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : null}
         </>}
         {group === "personal" && <>
-          <SettingsSubnav label="技能与规则分类" items={PERSONAL_SECTIONS} section={section} onSelect={setSection} />
-          {section === "learning" ? <section><h2>学习与记忆</h2><p>管理医生档案、使用习惯和资料使用授权。</p><button onClick={onDoctor}>医生档案与记忆</button><LearningSettings /></section> : <ExtensionCenter key={section} view={section === "skills" ? "skills" : "workbench"} onAsk={onAsk} />}
+          <SettingsSubnav label="技能与规则分类" items={personalSections} section={section} onSelect={setSection} />
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} onDoctor={onDoctor} onAsk={onAsk} /> : <ExtensionCenter key={section} view="skills" onAsk={onAsk} />}
         </>}
         {window.omwDesktop && section === "desktop" && <DesktopAppPanel desktop={window.omwDesktop} />}
         {section === "general" && <section><h2>模型与运行</h2><p>{config?.modelConfigured ? `当前模型：${config.provider} · ${config.model}` : "尚未配置模型"}</p><div className="toolbar-actions"><button onClick={onModel}>选择模型</button></div></section>}

@@ -1,6 +1,6 @@
-import { TERM_GROUPS, diffSummary, normalizeReviewText } from "../../shared/review-diff.mjs";
-import { check } from "../errors.mjs";
-import { deidentifyExample } from "./deidentify-example.mjs";
+import { TERM_GROUPS, diffSummary, normalizeReviewText } from "../../../shared/review-diff.mjs";
+import { check } from "../../../server/errors.mjs";
+import { deidentifyExample } from "../../../server/medical/deidentify-example.mjs";
 // P1/P2 remain opt-in until the release model matrix clears its acceptance gates.
 export const LEARNING_DEFAULTS = {
   examples: "local",
@@ -318,9 +318,10 @@ export class PersonalContext {
       examplesSkipped: context.examplesSkipped,
     };
     const prefs = learningPrefs(this.store.db);
+    const learner = pending.learning?.()?.learner || pending.habitLearner;
     const result =
-      prefs.habits && prefs.postprocess && !context.holdout
-        ? pending.habitLearner.postprocess(before, [
+      prefs.habits && prefs.postprocess && !context.holdout && learner
+        ? learner.postprocess(before, [
             ...new Set([
               ...(context.ruleHabitIds || []),
               ...context.habits.map((h) => h.id),

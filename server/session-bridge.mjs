@@ -1,4 +1,3 @@
-import { ReviewLog } from "./medical/review-log.mjs";
 import {taskPresentation} from '../shared/task-presentation.mjs';
 import {requestsMedicalDeliverable} from '../shared/medical-delivery.mjs';
 import { collectWorkspaceDelivery } from "./core/workspace-delivery.mjs";
@@ -61,7 +60,7 @@ const resolveMode = (mode) => {
 export class SessionBridge {
   // store：旧医疗会话存储；runtime：旧医疗引擎；service：统一内核；
   // sessionsRoot：会话工作区自动目录的父目录（数据库目录下）。
-  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
+  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, learning = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
     Object.assign(this, {
       store,
       runtime,
@@ -71,6 +70,7 @@ export class SessionBridge {
       skills,
       doctor,
       pluginHost,
+      learning,
       plugins: new Map(plugins.map((p) => [p.definition.function.name, p])),
       contextBudget,
       maxRounds,
@@ -1317,8 +1317,8 @@ export class SessionBridge {
     });
     const edited = this.findArtifact(id, artifactId);
     const artifactText = a => a.text || (a.items ? a.items.join('\n\n') : a.events ? a.events.map(e => `${e.date} ${e.event}`).join('\n\n') : a.pico ? Object.entries(a.pico).map(([k, v]) => `${k}: ${v}`).join('\n\n') : a.title);
-    const review = new ReviewLog(this.store).record({ kind: 'artifact', patientId: this.get(id).patientId, ai: { text: artifactText(beforeArtifact) }, final: { text: artifactText(edited) } });
-    this.evolution?.recordEdit({ title: edited.title, type: edited.type, note: changedNotes[0], reviewSessionId: review.id });
+    const review = this.learning?.()?.reviewLog?.record({ kind: 'artifact', patientId: this.get(id).patientId, ai: { text: artifactText(beforeArtifact) }, final: { text: artifactText(edited) } });
+    if (review) this.learning?.()?.automation?.recordEdit({ title: edited.title, type: edited.type, note: changedNotes[0], reviewSessionId: review.id });
     if (this.doctor && changedNotes.length)
       for (const note of changedNotes)
         this.doctor.recordSignal({

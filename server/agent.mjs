@@ -1,8 +1,5 @@
-import { habitMutation, habitRevision } from './medical/habit-concurrency.mjs';
 import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
-import { PersonalRegression } from './medical/personal-regression.mjs';
-import { PersonalContext, learningPrefs, saveLearningPrefs } from "./medical/personal-context.mjs";
 import { KnowledgeOrganizer } from "./medical/knowledge-organizer.mjs";
 import { graphSlice } from "../shared/knowledge-graph-search.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
@@ -242,6 +239,8 @@ export function createServer(options = {}) {
         : {}),
   });
   pluginHost.load();
+  const pluginService = (id) => pluginHost.pluginServices[id] || null;
+  const pluginActive = (id) => pluginHost.isActive(id);
   // The doctor's own skills (extension center) are materialized here.
   const userSkillsDir = options.userSkillsDir ||
     (databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-my-skills-")) : join(dirname(databasePath), "my-skills"));
@@ -255,7 +254,7 @@ export function createServer(options = {}) {
         : []),
       ...pluginHost.skillDirs(),
     ]);
-  const doctor = options.doctor || new DoctorProfile(store);
+  const doctor = options.doctor || new DoctorProfile(store, { ledger: () => pluginActive("learning") ? pluginService("learning")?.ledger || null : null });
   // Literature now lives in the literature plugin. Fixed modules keep a lazy
   // facade so online_case_search can use it when the plugin is active and fail
   // with a normal PLUGIN_SERVICE_UNAVAILABLE error when it is disabled.
@@ -278,6 +277,7 @@ export function createServer(options = {}) {
         ? pluginService("trials")?.candidates || null
         : null,
     extensions: () => extensions,
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
     doctor: () => doctor,
     pluginHost: () => pluginHost,
     intakeSources: (id, fileIds) => id ? sessionBridge.get(id).files.filter(file => !fileIds.length || fileIds.includes(file.id)).map(({ id, name, text }) => ({ id, name, text: text || '' })) : [],
@@ -512,14 +512,8 @@ export function createServer(options = {}) {
     imageShrink: options.imageShrink || null,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
-      personalContext: (run, workspaceId) => {
-        const service = new PersonalContext({ store, doctor, guidelines, cases: () => cases, extensions: () => extensions, provider: () => provider });
-        const prefs = learningPrefs(store.db);
-        const holdout = Boolean(workspaces.store.get(workspaceId).learningRegression) || (prefs.pilot && (run.learningHoldout ?? Math.random() < prefs.holdoutRate));
-        if (run.learningHoldout === undefined) workspaces.store.update(workspaceId, w => { w.runs.find(r => r.id === run.id).learningHoldout = holdout; });
-        run.learningHoldout = holdout;
-        return { build: notes => service.build(notes, { holdout }), modelView: value => service.modelView(value), prepare: (payload, value) => service.prepare(payload, value, pending) };
-      },
+      personalContext: (run, workspaceId) =>
+        pluginActive("learning") ? pluginService("learning")?.personalContext(run, workspaceId) : null,
       saveIntakeNotes: (id, runId, notes) => workspaces.store.update(id, w => { w.runs.find(run => run.id === runId).intakeNotes = notes; }),
       saveDisplayResult: (id, runId, value) => workspaces.store.update(id, w => { const run=w.runs.find(r=>r.id===runId);run.displayResults=[...(run.displayResults||[]).filter(r=>r.key!==value.key),value].slice(-12); }),
       readPatientBrief: (patientId) => patientBrief.read(patientId),
@@ -567,6 +561,7 @@ export function createServer(options = {}) {
     skills,
     doctor,
     pluginHost,
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
     plugins: [
       ...knowledgeToolPlugins,
       ...localPlugins(pendingActionTools(pending, doctor)),
@@ -590,7 +585,6 @@ export function createServer(options = {}) {
     ocrStrategy: ocrStrategyResolver,
   });
   const intakeJobs = new IntakeJobs(sessionBridge, pending);
-  const personalRegression = new PersonalRegression({ store, bridge: sessionBridge, jobs: intakeJobs, pending, provider: () => provider });
   const agentRuntime = sessionBridge.dispatcher;
 
   // 能力分层快照（W6/B1）：三态判定与运行事实探测提取到
@@ -624,6 +618,7 @@ export function createServer(options = {}) {
     },
     // schedule 在下方才创建；建档发生在服务就绪后，闭包引用是安全的。
     onCreated: (patient) => schedule.baselinePatient(patient),
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
     createSession: ({ title, patientId }) => {
       const projected = sessionBridge.createSession({ title, patientId });
       return { id: projected.id };
@@ -637,9 +632,7 @@ export function createServer(options = {}) {
   // The followup plugin owns followup/care/chat services. Fixed
   // modules receive stable proxies that resolve the provided service lazily:
   // setup runs after these constructors, and reads happen after startup.
-  const pluginService = (id) => pluginHost.pluginServices[id] || null;
   const followupService = () => pluginService("followup");
-  const pluginActive = (id) => pluginHost.isActive(id);
   const currentWecom = () =>
     pluginActive("channel-wecom")
       ? pluginService("channel-wecom")?.connector || null
@@ -718,14 +711,14 @@ export function createServer(options = {}) {
     workspaces.agent.provider = provider;
   };
   const extensions = new Extensions({
-    store, patients, schedule, skillsDir: userSkillsDir, care: () => careService(), sessions: sessionBridge,
+    store, skillsDir: userSkillsDir,
+    automation: () => pluginActive("learning") ? pluginService("learning")?.automation || null : null,
     // Imported skill packs must not shadow existing skills; the shared
     // registry is the authority on what is already installed.
     skillExists: (id) => { try { skills.get(id); return true; } catch { return false; } },
     importer: options.skillImporter,
     proxyResolver: options.skillProxyResolver,
   });
-  sessionBridge.evolution = extensions;
   // channel-wechat owns the WeChat desktop reader, wx-cli client, exporter and
   // retired bridge; the followup plugin constructs its chat service from it.
   const wechatBridgeOptions = {
@@ -765,6 +758,11 @@ export function createServer(options = {}) {
     store,
     patients,
     pending,
+    learningHost: {
+      bridge: sessionBridge,
+      jobs: () => intakeJobs,
+      provider: () => provider,
+    },
     followups,
     cases,
     extensions,
@@ -1752,61 +1750,7 @@ export function createServer(options = {}) {
       }
       if (path === "/api/med-safety" && req.method === "POST")
         return send(res, 200, medicationSafetyCheck(await body(req)));
-      if (path === '/api/learning/regression') {
-        if (req.method === 'GET') return send(res, 200, personalRegression.get());
-        if (req.method === 'POST') return send(res, 202, personalRegression.start(await body(req)));
-        if (req.method === 'DELETE') return send(res, 200, personalRegression.cancel());
-      }
-      if (path === '/api/learning/events' && req.method === 'POST') {
-        const input = await body(req);
-        check(['similar-expanded', 'similar-collapsed', 'similar-disabled', 'similar-opened', 'references-expanded', 'habit-viewed'].includes(input.type), 'INVALID_INPUT', '事件无效');
-        store.db.prepare('INSERT INTO learning_events(type,subject,data,created_at) VALUES (?,?,?,?)').run(input.type, String(input.subject || '').slice(0, 100), '{}', new Date().toISOString());
-        return send(res, 200, { ok: true });
-      }
-      if (parts[1] === 'learning' && parts[2] === 'similar' && parts.length === 4 && req.method === 'GET') {
-        const p = patients.row(parts[3]), enabled = learningPrefs(store.db).similarCards;
-        const query = p.diagnoses.map(d => d.name).join(' ');
-        return send(res, 200, { enabled, matches: enabled && query ? cases.similar({ caseText: query.slice(0, 4000), diagnosis: p.diagnoses[0]?.name, excludePatientId: p.id, limit: 3 }).matches.filter(m => m.score >= 2) : [] });
-      }
-      if (path === '/api/learning/changes' && req.method === 'GET') return send(res, 200, { changes: store.db.prepare('SELECT id,habit_id,decision,created_at FROM habit_history ORDER BY id DESC LIMIT 30').all().map(change => ({ ...change, revision: habitRevision(store.db, change.habit_id) })) });
-      if (path === '/api/learning/month' && req.method === 'GET') {
-        const now = new Date(), start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(), end = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const learned = store.db.prepare("SELECT COUNT(*) n FROM doctor_memories WHERE status='confirmed' AND created_at>=? AND created_at<?").get(start, end).n;
-        const stats = pending.reviewLog.stats('90d');
-        return send(res, 200, { show: now.getDate() === 1 && learned > 0, learned, fewerEdits: stats.previousAverage == null ? null : stats.previousAverage - stats.recentAverage });
-      }
-      if (path === '/api/learning/settings') {
-        if (req.method === 'GET') return send(res, 200, learningPrefs(store.db));
-        if (req.method === 'PUT') return send(res, 200, saveLearningPrefs(store.db, await body(req)));
-      }
-      if (path === '/api/learning/export' && req.method === 'GET') return send(res, 200, pending.reviewLog.stats('365d'));
-      if (path === '/api/learning/habits' && req.method === 'GET') return send(res, 200, { habits: doctor.memories().filter(m => ['confirmed', 'paused', 'deleted'].includes(m.status)).map(m => ({ ...m, ledger: pending.reviewLog.ledger(m.id) })) });
-      if (path === '/api/learning/feedback' && req.method === 'POST') {
-        const input = await body(req), action = pending.row(input.actionId);
-        check(action.payload.personalization?.habits?.some(h => h.id === input.habitId), 'INVALID_INPUT', '此草稿未采用该习惯');
-        return send(res, 200, pending.reviewLog.feedback(input.habitId, input.actionId, 'notApplicable'));
-      }
-      if (path === "/api/review-stats" && req.method === "GET") return send(res, 200, pending.reviewLog.stats(url.searchParams.get('range') || '90d'));
-      if (path === "/api/review-details" && req.method === "GET") return send(res, 200, { diffs: pending.reviewLog.details(url.searchParams.get('section'), url.searchParams.get('field')) });
-      if (path === "/api/learning/clear" && req.method === "POST") {
-        const input = await body(req);
-        check(input.confirmed === true, 'CONFIRM_REQUIRED', '请确认清空学习记录');
-        check(!personalRegression.active, 'RUN_ACTIVE', '请先停止历史档案评测，再清空学习记录', 409);
-        return send(res, 200, pending.reviewLog.clear({ includeStated: input.includeStated === true }));
-      }
       if (parts[1] === 'pending-actions' && parts.length === 4 && parts[3] === 'review-draft' && req.method === 'PATCH') return send(res, 200, pending.saveReview(parts[2], await body(req)));
-      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 4 && req.method === 'GET') {
-        const memory = doctor.memoryRow(Number(parts[3]));
-        const all = store.db.prepare('SELECT id,source FROM doctor_memories').all();
-        const descendants = new Set([memory.id]);
-        for (let changed = true; changed;) {
-          changed = false;
-          for (const row of all) if (!descendants.has(row.id) && descendants.has(JSON.parse(row.source || '{}').replaces)) { descendants.add(row.id); changed = true; }
-        }
-        const related = doctor.memories().filter(m => ['confirmed', 'paused', 'deleted'].includes(m.status) && (descendants.has(m.id) || (memory.topic && m.topic === memory.topic)));
-        return send(res, 200, { ...memory, related });
-      }
-      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 5 && parts[4] === 'decision' && req.method === 'POST') { const input = await body(req); return send(res, 200, habitMutation(store.db, Number(parts[3]), input.decision, input, () => pending.habitLearner.decide(Number(parts[3]), input.decision, { ...input, requestId: undefined }), { required: true })); }
       if (path === "/api/pending-actions" && req.method === "GET") {
         const limit = Number(url.searchParams.get("limit") ?? 100), offset = Number(url.searchParams.get("offset") ?? 0);
         const actions = pending.list({
@@ -1834,10 +1778,13 @@ export function createServer(options = {}) {
         // 请求体可空：托盘普通确认发 {}，带反馈说明时发 { note }。
         const feedback = await body(req).catch(() => ({}));
         const result = parts[3] === 'confirm' ? pending.confirm(parts[2], feedback) : pending.reject(parts[2], feedback);
-        if (parts[3] === 'confirm' && result.action.type === 'patient-create' && learningPrefs(store.db).habits) {
-          const sourceId = result.action.payload.sourceSessionId;
-          try { const consent = Boolean(sourceId && intakeJobs.get(sourceId)?.startedAt); result.habitSuggestions.push(...await track(pending.habitLearner.consolidateStyle(provider, { consent }))); }
-          catch { result.learningNotice = '档案已保存，摘要风格归纳暂未完成，原始修改仍在本机保留。'; }
+        if (parts[3] === 'confirm' && result.action.type === 'patient-create') {
+          const learning = pluginActive("learning") ? pluginService("learning") : null;
+          if (learning?.prefs()?.habits) {
+            const sourceId = result.action.payload.sourceSessionId;
+            try { const consent = Boolean(sourceId && intakeJobs.get(sourceId)?.startedAt); result.habitSuggestions.push(...await track(learning.consolidateStyle(provider, { consent }))); }
+            catch { result.learningNotice = '档案已保存，摘要风格归纳暂未完成，原始修改仍在本机保留。'; }
+          }
         }
         return send(res, 200, result);
       }
@@ -2238,24 +2185,26 @@ export function createServer(options = {}) {
               runtime.doctor.addMemory({ ...b, kind: "explicit" }),
             );
           }
+          const mutateMemory = (id, operation, input, execute) =>
+            pluginService("learning")?.mutateMemory(id, operation, input, execute) ?? execute();
           if (parts.length === 4 && req.method === "DELETE") {
             const id = Number(parts[3]);
             const input = await body(req);
-            return send(res, 200, habitMutation(store.db, id, "memory-delete", input, () => runtime.doctor.deleteMemory(id), { required: true }));
+            return send(res, 200, mutateMemory(id, "memory-delete", input, () => runtime.doctor.deleteMemory(id)));
           }
           if (parts.length === 5) {
             const id = Number(parts[3]);
             if (req.method === "POST" && parts[4] === "confirm") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "dismiss") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "pin") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true)));
             }
           }
         }
@@ -2533,14 +2482,12 @@ export function createServer(options = {}) {
     pluginHost.startAll().catch((error) => {
       console.error("插件启动失败:", error);
     });
-    extensions.start();
   });
   server.shutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     guidelines.stopStatusQueries?.();
     shutdownPromise = (async () => {
-    await personalRegression.stop();
     workspaces.stopping = true;
     scheduler.stop();
     paddleLocal.stop();
@@ -2549,7 +2496,6 @@ export function createServer(options = {}) {
     // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
     await pluginHost.stopAll();
     await pluginHost.drainAll();
-    extensions.stop();
     if (databasePath === ":memory:" && !options.userSkillsDir) rmSync(userSkillsDir, { recursive: true, force: true });
     for (const id of workspaces.active.keys()) workspaces.interrupt(id);
     for (const id of runtime.active.keys()) runtime.cancel(id);

@@ -6,8 +6,8 @@ import {
   alignReviewItems,
   TERM_GROUPS,
   describeHabitRule,
-} from "../../shared/review-diff.mjs";
-import { check } from "../errors.mjs";
+} from "../../../shared/review-diff.mjs";
+import { check } from "../../../server/errors.mjs";
 const norm = normalizeReviewText;
 const frequencyGroups = [
   ["bid", "每日两次", "每日2次"],

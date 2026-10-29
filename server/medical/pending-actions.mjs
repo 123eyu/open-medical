@@ -1,8 +1,5 @@
 import { intakeAudit } from './intake-evidence.mjs';
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../../shared/clinical-summary.mjs';
-import { learningPrefs } from "./personal-context.mjs";
-import { ReviewLog } from "./review-log.mjs";
-import { HabitLearner } from "./habit-learner.mjs";
 import { alignReviewItems, reviewDiff, diffSummary } from "../../shared/review-diff.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { check, string } from "../errors.mjs";
@@ -48,8 +45,6 @@ export class PendingActions {
   constructor(store, services) {
     this.store = store;
     this.services = services;
-    this.reviewLog = new ReviewLog(store);
-    this.habitLearner = new HabitLearner(store, services.doctor?.());
     store.db.exec(`CREATE TABLE IF NOT EXISTS patient_create_confirmations (
       action_id TEXT PRIMARY KEY REFERENCES pending_actions(id) ON DELETE CASCADE,
       patient_id TEXT NOT NULL,
@@ -67,6 +62,15 @@ export class PendingActions {
   }
   get extensions() {
     return this.services.extensions?.() || null;
+  }
+  get learning() {
+    return this.services.learning?.() || null;
+  }
+  get reviewLog() {
+    return this.learning?.reviewLog || null;
+  }
+  get habitLearner() {
+    return this.learning?.learner || null;
   }
   get pluginHost() {
     return this.services.pluginHost?.() || null;
@@ -268,7 +272,7 @@ export class PendingActions {
         time,
         time,
       );
-    if (type === "patient-create") for (const h of normalized.personalization?.habits || []) this.reviewLog.feedback(h.id, id, "applied");
+    if (type === "patient-create") for (const h of normalized.personalization?.habits || []) this.reviewLog?.feedback(h.id, id, "applied");
     // 新提案即时提醒：顶栏角标以外，桌面系统通知兜底，医生不盯屏幕也不会漏。
     try {
       this.services.onProposed?.({ id, type, summary: title, patientId: resolvedPatientId });
@@ -407,7 +411,7 @@ export class PendingActions {
         const receipt = this.store.db.prepare("SELECT patient_id,fingerprint FROM patient_create_confirmations WHERE action_id=?").get(id);
         // Older confirmations already have an exact action-to-patient audit link.
         // Never recover by patient name or by a different proposal from the same task.
-        const legacy = !receipt && this.store.db.prepare("SELECT patient_id FROM review_sessions WHERE action_id=? AND kind='intake' AND superseded=0").get(id);
+        const legacy = !receipt && this.learning?.reviewActionPatient(id);
         check(receipt || legacy, "ACTION_RESOLVED", "该提案已处理，但无法确认对应档案，请从患者列表核对。", 409);
         if (payload !== undefined) {
           const saved = receipt?.fingerprint || confirmationFingerprint(action.reviewDraft?.payload || action.payload);
@@ -416,7 +420,7 @@ export class PendingActions {
         }
         return { ok: true, action, applied: this.patients.row((receipt || legacy).patient_id), replayed: true, habitSuggestions: [], remembered: [], pausedHabits: [] };
       }
-      const eventCursor = this.store.db.prepare("SELECT COALESCE(MAX(id),0) n FROM learning_events").get().n;
+      const eventCursor = this.learning?.eventCursor() ?? 0;
       check(
         action.status === "pending",
         "ACTION_RESOLVED",
@@ -474,7 +478,7 @@ export class PendingActions {
         if (audit) this.store.db.prepare('UPDATE pending_actions SET review_draft=? WHERE id=?').run(JSON.stringify({ payload: final, reasons: reasons || action.reviewDraft?.reasons || {}, evidenceReviews: reviews }), id);
         const patient = this.patients.create(final);
         this.store.db.prepare("INSERT INTO patient_create_confirmations(action_id,patient_id,fingerprint) VALUES (?,?,?)").run(id, patient.id, confirmationFingerprint(final));
-        this.reviewLog.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });
+        this.reviewLog?.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });
         applied = { ...patient };
         if (action.payload.sourceSessionId && this.services.copySourceMaterials)
           this.services.copySourceMaterials(action.payload.sourceSessionId, patient.sessionId, action.payload.sourceFileIds || [], action.payload.sourceInput);
@@ -483,8 +487,8 @@ export class PendingActions {
         if (this.services.flagSuspectMaterials)
           this.services.flagSuspectMaterials(patient.sessionId, action.payload);
         applied = this.patients.row(patient.id);
-        if (action.payload.sourceSessionId) this.store.db.prepare('UPDATE review_sessions SET patient_id=? WHERE patient_id=? AND superseded=1').run(patient.id, action.payload.sourceSessionId);
-        if (this.doctor && learningPrefs(this.store.db).habits) habitSuggestions = this.habitLearner.aggregate();
+        if (action.payload.sourceSessionId) this.learning?.supersedeIntakeSessions(patient.id, action.payload.sourceSessionId);
+        if (this.doctor && this.learning?.prefs()?.habits && this.habitLearner) habitSuggestions = this.habitLearner.aggregate();
       } else if (action.type === "patient-update") {
         applied = this.patients.update(action.patientId, {
           ...action.payload,
@@ -580,7 +584,7 @@ export class PendingActions {
         409,
       );
       const remembered = this.recordFeedback(action, "confirmed", feedback);
-      return { ok: true, action: this.row(id), applied, habitSuggestions, remembered, pausedHabits: this.store.db.prepare("SELECT subject FROM learning_events WHERE type='habit-paused' AND id>?").all(eventCursor).map(r => Number(r.subject)).concat((action.payload.personalization?.habits || []).filter(h => this.doctor?.memoryRow(h.id).status === "paused").map(h => h.id)).filter((id,i,ids) => ids.indexOf(id) === i) };
+      return { ok: true, action: this.row(id), applied, habitSuggestions, remembered, pausedHabits: (this.learning?.pausedHabits(eventCursor) ?? []).concat((action.payload.personalization?.habits || []).filter(h => this.doctor?.memoryRow(h.id).status === "paused").map(h => h.id)).filter((id,i,ids) => ids.indexOf(id) === i) };
     }); } catch (error) {
       // Installs return a list of ids; restore every skill file the rolled
       // back transaction had materialized.
@@ -605,7 +609,7 @@ export class PendingActions {
   supersede(id, byId) {
     const stale = this.row(id);
     if (stale.status !== "pending") return;
-    if (stale.type === 'patient-create' && stale.reviewDraft) this.reviewLog.record({ action: stale, final: stale.reviewDraft.payload, reasons: stale.reviewDraft.reasons, superseded: true, materialText: this.services.intakeText?.(stale.payload.sourceSessionId) || '' });
+    if (stale.type === 'patient-create' && stale.reviewDraft) this.reviewLog?.record({ action: stale, final: stale.reviewDraft.payload, reasons: stale.reviewDraft.reasons, superseded: true, materialText: this.services.intakeText?.(stale.payload.sourceSessionId) || '' });
     const payload = JSON.stringify({ ...stale.payload, supersededBy: byId });
     this.store.db
       .prepare(
