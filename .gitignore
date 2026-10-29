@@ -119,3 +119,7 @@ id_ed25519
 /docs/assets/features/workflow-record-draft.png
 /docs/assets/features/workflow-timeline.png
 /docs/assets/features/workspace.png
+
+# T2 Playwright baseline is source, not a local test artifact.
+!tests/e2e/
+!tests/e2e/**
