@@ -12,6 +12,8 @@ const fixture = (name) => join(HOST_FIXTURES, name);
 const PROVIDER = fixture("service-provider");
 const CONSUMER = fixture("service-consumer");
 const ARRAY_DEP = fixture("service-array");
+const ANY_GROUPS = fixture("service-any-groups");
+const ANY_GROUP_MISSING = fixture("service-any-group-missing");
 
 const start = (pluginDirs) =>
   startTestServer({
@@ -77,7 +79,7 @@ test("ctx.service 取不到服务时抛结构化错误并只影响当前插件",
   assert.match(list["service-missing"].reason, /not-a-service/);
 });
 
-test("requires.anyOf 至少满足一个即可；都不满足时 unavailable", async (t) => {
+test("requires.anyOf 组内至少满足一个；都不满足时 unavailable", async (t) => {
   const satisfied = await start([PROVIDER, fixture("service-any")]);
   t.after(() => satisfied.close());
   const satisfiedList = byId(satisfied.server.pluginHost.list());
@@ -92,6 +94,23 @@ test("requires.anyOf 至少满足一个即可；都不满足时 unavailable", as
   const missingList = byId(missing.server.pluginHost.list());
   assert.equal(missingList["service-any-missing"].status, "unavailable");
   assert.match(missingList["service-any-missing"].reason, /missing-a/);
+});
+
+test("requires.anyOf 多组之间是且：每组都要至少满足一个", async (t) => {
+  const satisfied = await start([PROVIDER, ANY_GROUPS, ARRAY_DEP]);
+  t.after(() => satisfied.close());
+  const satisfiedList = byId(satisfied.server.pluginHost.list());
+  assert.equal(satisfiedList["service-any-groups"].status, "ready");
+  assert.equal(satisfiedList["service-any-groups"].available, true);
+
+  const missing = await start([PROVIDER, ANY_GROUP_MISSING, ARRAY_DEP]);
+  t.after(() => missing.close());
+  const missingList = byId(missing.server.pluginHost.list());
+  assert.equal(missingList["service-any-group-missing"].status, "unavailable");
+  assert.match(
+    missingList["service-any-group-missing"].reason,
+    /\(service-provider\) 且 \(missing-group-only\)/,
+  );
 });
 
 test("循环依赖 fail fast：相关插件 unavailable，服务不崩溃", async (t) => {

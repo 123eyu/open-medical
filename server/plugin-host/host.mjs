@@ -400,19 +400,27 @@ export class PluginHost {
           }
         }
         if (!failure && record.spec.requires.anyOf.length) {
-          // anyOf is an OR across all listed alternatives. A single group with
-          // several ids and several singleton groups behave the same way.
-          const alternatives = record.spec.requires.anyOf.flat();
-          const satisfied = alternatives.some((dependency) => {
-            const target = this.byId.get(dependency);
-            return Boolean(
-              target &&
-                target.enabled &&
-                resolveRecord(target, [...trail, record.id]),
-            );
-          });
-          if (!satisfied)
-            failure = `需要启用以下插件之一：${alternatives.join(" / ")}`;
+          // Each group is an OR, and groups are ANDed together. This mirrors
+          // the manifest contract: [[a,b],[c]] means (a or b) and c.
+          const groups = record.spec.requires.anyOf;
+          for (const group of groups) {
+            const satisfied = group.some((dependency) => {
+              const target = this.byId.get(dependency);
+              return Boolean(
+                target &&
+                  target.enabled &&
+                  resolveRecord(target, [...trail, record.id]),
+              );
+            });
+            if (!satisfied) {
+              failure = groups.length === 1
+                ? `需要启用以下插件之一：${group.join(" / ")}`
+                : `需要同时满足以下插件组：${groups
+                    .map((item) => `(${item.join(" / ")})`)
+                    .join(" 且 ")}`;
+              break;
+            }
+          }
         }
       }
       record._visiting = false;
@@ -430,13 +438,16 @@ export class PluginHost {
   _startupDependencies(record) {
     if (!record.spec) return [];
     const dependencies = Object.keys(record.spec.requires.plugins);
-    const anyOfTarget = record.spec.requires.anyOf
-      .flat()
-      .map((id) => this.byId.get(id))
-      .find(
-        (candidate) => candidate && candidate.enabled && candidate.available,
-      );
-    if (anyOfTarget) dependencies.push(anyOfTarget.id);
+    // One satisfier per group participates in start ordering; every group is
+    // required, so flattening would let the first group mask the others.
+    for (const group of record.spec.requires.anyOf) {
+      const target = group
+        .map((id) => this.byId.get(id))
+        .find(
+          (candidate) => candidate && candidate.enabled && candidate.available,
+        );
+      if (target) dependencies.push(target.id);
+    }
     return [...new Set(dependencies)];
   }
 
@@ -573,17 +584,22 @@ export class PluginHost {
           this._fail(record, `依赖插件 ${missing} 不可用`);
           continue;
         }
-        const alternatives = record.spec.requires.anyOf.flat();
-        if (
-          alternatives.length &&
-          !alternatives.some((dependency) => {
-            const target = this.byId.get(dependency);
-            return target && target.enabled && target.available;
-          })
-        ) {
+        const groups = record.spec.requires.anyOf;
+        const unsatisfied = groups.find(
+          (group) =>
+            !group.some((dependency) => {
+              const target = this.byId.get(dependency);
+              return target && target.enabled && target.available;
+            }),
+        );
+        if (unsatisfied) {
           this._fail(
             record,
-            `需要启用以下插件之一：${alternatives.join(" / ")}`,
+            groups.length === 1
+              ? `需要启用以下插件之一：${unsatisfied.join(" / ")}`
+              : `需要同时满足以下插件组：${groups
+                  .map((item) => `(${item.join(" / ")})`)
+                  .join(" 且 ")}`,
           );
           continue;
         }
