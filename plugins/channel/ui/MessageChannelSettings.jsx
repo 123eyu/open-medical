@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
-import { FeishuBinding } from "./feishu-binding";
-import "./doctor-notifications.css";
-import "./message-channels.css";
+import { api } from "../../../src/agent-runtime";
+import { FeishuBinding } from "../../../src/feishu-binding";
+import "../../../src/doctor-notifications.css";
+import "../../../src/message-channels.css";
 
 const states = {
   disabled: "已停用",
@@ -416,3 +416,5 @@ export function MessageChannelSettings() {
     </section>
   );
 }
+
+export default MessageChannelSettings;

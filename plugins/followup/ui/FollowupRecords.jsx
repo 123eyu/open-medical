@@ -1,8 +1,8 @@
-import { followupDate } from "../shared/followup-display.mjs";
+import { followupDate } from "../../../shared/followup-display.mjs";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { patientOptionLabel } from "./patient-labels";
-import { useClinicalDraft } from "./clinical-drafts";
-import { api } from "./agent-runtime";
+import { patientOptionLabel } from "../../../src/patient-labels";
+import { useClinicalDraft } from "../../../src/clinical-drafts";
+import { api } from "../../../src/agent-runtime";
 
 const outcomeLabels = {
   completed: "已完成随访",

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { api } from "./agent-runtime";
-import { requestCareTab } from "./care-inbox";
+import { requestPluginIntent } from "./plugin-navigation";
 import { requestTrial } from "./trial-screening";
 import { requestSettingsTab } from "./extension-center";
 import "./patient-attention.css";
@@ -60,7 +60,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
         });
       else if (action.view) {
         if (action.view === "care")
-          requestCareTab({
+          requestPluginIntent("followup", "care-tab", {
             tab: action.tab || "alerts",
             patientId: patient.id,
             patientName: patient.name,

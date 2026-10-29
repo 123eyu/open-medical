@@ -26,7 +26,7 @@ import {
   Stethoscope,
   X,
 } from "lucide-react";
-import { requestCareSetup, setupProgress } from "./care-setup";
+import { careSetupProgress, requestPluginIntent } from "./plugin-navigation";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
@@ -237,7 +237,7 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
     let alive = true;
     const probe = (key, path, read) => api(path).then((value) => read(value)).catch(() => null).then((value) => { if (alive) setFacts((f) => ({ ...f, [key]: value })); });
     probe("knowledge", "/api/knowledge", (v) => Array.isArray(v?.documents) ? v.documents.length > 0 : null);
-    probe("wecom", "/api/care/settings", (v) => Array.isArray(v?.channels?.list) ? setupProgress(v).essential : null);
+    probe("wecom", "/api/care/settings", (v) => Array.isArray(v?.channels?.list) ? careSetupProgress(v).essential : null);
     probe("autoReply", "/api/care/settings", (v) => typeof v?.autoReply?.mode === "string" ? { mode: v.autoReply.mode, saved: Boolean(v.updatedAt) } : null);
     return () => { alive = false; };
   }, []);
@@ -246,7 +246,7 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
     { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已填写连接" : "未填写连接", action: "去连接", open: onModelSettings },
     { id: "knowledge", label: "导入医生知识库", done: facts.knowledge === true, state: facts.knowledge == null ? "未检测" : facts.knowledge ? "已有资料" : "暂无资料", action: "导入资料", open: () => onView?.("knowledge") },
     // 微信/企微接入有封号风险且非必需，不再出现在新手清单；仍可在 设置→高级 里配置。
-    ...(facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestCareSetup(); onView?.("care"); } }] : []),
+    ...(facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestPluginIntent("followup", "care-setup"); onView?.("care"); } }] : []),
     ...(facts.autoReply?.saved ? [{ id: "autoReply", label: "自动回复边界", done: true, state: modeLabel[facts.autoReply.mode] || facts.autoReply.mode, action: "设置自动回复", open: () => onView?.("care") }] : []),
   ];
   const remaining = items.filter((item) => !item.done).length;

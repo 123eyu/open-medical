@@ -1,11 +1,12 @@
-import { messageChannelLabel, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
+import { messageChannelLabel, messageSpeakerLabel, messageTimeLabel } from "../../../shared/message-provenance.mjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, Contact, Inbox, Loader2, MessageSquare, RefreshCw, Send, Settings2, Stethoscope, UserCog } from "lucide-react";
-import { api } from "./agent-runtime";
-import { Modal } from "./components";
-import { CareContacts } from "./care-contacts";
-import { CareSetup, setupProgress, takeCareSetupRequest } from "./care-setup";
-import "./care.css";
+import { api } from "../../../src/agent-runtime";
+import { Modal } from "../../../src/components";
+import { careSetupProgress, takePluginIntent } from "../../../src/plugin-navigation";
+import { CareContacts } from "../../channel-wecom/ui/CareContacts.jsx";
+import { CareSetup } from "./CareSetup.jsx";
+import "../../../src/care.css";
 
 const TABS = [["alerts", "提醒", Bell], ["drafts", "待回复草稿", MessageSquare], ["messages", "全部消息", Inbox], ["contacts", "客户与群", Contact], ["settings", "设置", Settings2]];
 const LEVEL = { urgent: "紧急", attention: "需关注", routine: "常规" };
@@ -21,16 +22,12 @@ function Empty({ children }) {
   return <div className="care-empty"><p>{children}</p></div>;
 }
 
-const TAB_KEY = "omw-care-tab";
-// Lets the agenda open 患者消息 on a given tab.
-export function requestCareTab(tab) { try { sessionStorage.setItem(TAB_KEY, typeof tab === "string" ? tab : JSON.stringify(tab)); } catch { /* storage unavailable */ } }
+// The agenda/overview publish a generic intent; this plugin owns the tab
+// grammar and defaults.
 function takeCareTab() {
-  try {
-    const raw = sessionStorage.getItem(TAB_KEY); sessionStorage.removeItem(TAB_KEY);
-    const intent = raw?.startsWith("{") ? JSON.parse(raw) : { tab: raw };
-    const tab = TABS.some(([id]) => id === intent.tab) ? intent.tab : "alerts";
-    return { tab, ...(["alerts", "drafts", "messages"].includes(tab) && typeof intent.patientId === "string" && intent.patientId ? { patientId: intent.patientId, patientName: intent.patientName } : {}) };
-  } catch { return { tab: "alerts" }; }
+  const intent = takePluginIntent("followup", "care-tab") || {};
+  const tab = TABS.some(([id]) => id === intent.tab) ? intent.tab : "alerts";
+  return { tab, ...(["alerts", "drafts", "messages"].includes(tab) && typeof intent.patientId === "string" && intent.patientId ? { patientId: intent.patientId, patientName: intent.patientName } : {}) };
 }
 
 export function CareInbox({ onOpenPatient }) {
@@ -46,10 +43,10 @@ export function CareInbox({ onOpenPatient }) {
   const [sending, setSending] = useState(null);
   const [patientSettings, setPatientSettings] = useState(null);
   const [patients, setPatients] = useState(null);
-  const [setupOpen, setSetupOpen] = useState(takeCareSetupRequest);
+  const [setupOpen, setSetupOpen] = useState(() => Boolean(takePluginIntent("followup", "care-setup")));
   const [setup, setSetup] = useState(null);
   const [setupLater, setSetupLater] = useState(() => { try { return sessionStorage.getItem("omw-care-setup-later") === "1"; } catch { return false; } });
-  const loadSetup = useCallback(() => api("/api/care/settings").then((value) => setSetup(setupProgress(value))).catch(() => {}), []);
+  const loadSetup = useCallback(() => api("/api/care/settings").then((value) => setSetup(careSetupProgress(value))).catch(() => {}), []);
   useEffect(() => { loadSetup(); }, [loadSetup]);
 
   const load = useCallback(async () => {

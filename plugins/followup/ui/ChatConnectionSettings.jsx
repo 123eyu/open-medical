@@ -1,9 +1,17 @@
-import { WechatImportForm } from './wechat-import';
-import { ConnectionForm, ServiceConnectionForm, AibotConnectionForm } from './chat-connection-setup';
+import { WechatImportForm } from '../../channel-wechat/ui/WechatImportForm.jsx';
+import { WechatConnection } from '../../channel-wechat/ui/WechatConnection.jsx';
+import { AibotConnectionForm } from '../../channel-wecom/ui/ConnectionForm.jsx';
+import { SavedConnection, ServiceConnectionForm } from '../../channel/ui/ConnectionForm.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { api } from './agent-runtime';
-import { patientOptionLabel } from './patient-labels';
+import { api } from '../../../src/agent-runtime';
+import { patientOptionLabel } from '../../../src/patient-labels';
 import './chat-followups.css';
+
+// The channel plugins own their connection forms; this panel only chooses the
+// form for the selected channel so the followup plugin stays the settings owner.
+const ConnectionForm = props => props.initial.channel === 'wechat'
+  ? <WechatConnection {...props} />
+  : <SavedConnection {...props} />;
 
 const names={wechat:'微信桌面',wecom:'企业微信存档','wecom-aibot':'企微智能机器人','wx-cli':'已有历史记录连接','wechat-exp':'微信历史导入向导'};
 const when=value=>value?new Date(value).toLocaleString():'尚未同步';
@@ -235,3 +243,4 @@ function DraftCard({draft,onChanged}) {
  </article>;
 }
 
+export default ChatConnectionSettings;

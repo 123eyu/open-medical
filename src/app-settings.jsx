@@ -1,6 +1,5 @@
 import { BackupPanel } from "./backup-panel";
 import { LearningSettings } from "./learning-loop";
-import { ChatConnectionSettings } from "./chat-followups";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
@@ -9,14 +8,12 @@ import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
 import { DoctorNotificationSettings } from "./doctor-notifications";
-import { MessageChannelSettings } from "./message-channels";
 import { KnowledgeTranscriptionSettings } from "./knowledge-transcription-settings";
 
 const CHANNEL_SECTIONS = [
   ["channels", "私聊助手"],
   ["knowledge-bot", "飞书知识库机器人"],
   ["notifications", "医生提醒"],
-  ["followup", "患者随访"],
 ];
 const PERSONAL_SECTIONS = [
   ["skills", "技能"],
@@ -84,6 +81,7 @@ function DesktopAppPanel({ desktop }) {
 }
 
 const PLUGIN_STATUS = { ready: "已启用", disabled: "已停用", unavailable: "不可用" };
+const PLUGIN_API = "/api/plugins";
 
 function PluginSettings({ onPluginsChanged }) {
   const [plugins, setPlugins] = useState([]);
@@ -108,7 +106,7 @@ function PluginSettings({ onPluginsChanged }) {
     setBusy(plugin.id);
     setError("");
     try {
-      await api(`/api/plugins/${encodeURIComponent(plugin.id)}`, "PUT", { enabled: !plugin.enabled });
+      await api(`${PLUGIN_API}/${encodeURIComponent(plugin.id)}`, "PUT", { enabled: !plugin.enabled });
       // Refresh the shared bootstrap snapshot so every slot updates immediately;
       // the server persists the new state, so no restart is needed.
       const next = await bootstrap(true);
@@ -223,9 +221,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} />}
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
-          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>
-            <ChatConnectionSettings />
-          </>}
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : null}
         </>}
         {group === "personal" && <>
           <SettingsSubnav label="技能与规则分类" items={PERSONAL_SECTIONS} section={section} onSelect={setSection} />

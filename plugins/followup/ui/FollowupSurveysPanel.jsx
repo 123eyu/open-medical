@@ -1,7 +1,7 @@
-import { followupDate, contactOutcomeLabels } from "../shared/followup-display.mjs";
+import { followupDate, contactOutcomeLabels } from "../../../shared/followup-display.mjs";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { renderQuestionnaire } from "../shared/followup-survey-display.mjs";
-import { api } from "./agent-runtime";
+import { renderQuestionnaire } from "../../../shared/followup-survey-display.mjs";
+import { api } from "../../../src/agent-runtime";
 
 // Per-patient follow-up survey queue: send the questionnaire through a
 // verified channel (or copy it manually), collect replies (auto-collected

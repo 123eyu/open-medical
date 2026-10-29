@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './agent-runtime';
-import { ContactFacts, linkContact } from './care-contacts';
+import { api } from "../../../src/agent-runtime";
+import { ContactFacts, linkContact } from "./CareContacts.jsx";
 import './wecom-panel.css';
 
 const labels = { draft: '草稿 · 未外发', submitting: '正在提交', unknown: '结果待核实 · 勿重复提交', awaiting_member: '待成员发送', sent: '已发送 · 不代表已读', rejected: '企业微信未接受', delivery_failed: '发送未完成' };

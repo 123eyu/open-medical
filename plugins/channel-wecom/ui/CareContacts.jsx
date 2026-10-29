@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw, Search, Send, UserPlus, Users } from "lucide-react";
-import { api } from "./agent-runtime";
-import { Modal } from "./components";
+import { api } from "../../../src/agent-runtime";
+import { Modal } from "../../../src/components";
 
 const VIEWS = [["suggested", "待确认匹配"], ["unmatched", "未关联"], ["bound", "已关联"], ["groups", "客户群"]];
 const TASK = { draft: "草稿", submitting: "正在提交", awaiting_member: "待群主发送", sent: "已发送", rejected: "企业微信未接受", delivery_failed: "发送未完成", unknown: "结果待核实" };

@@ -4,18 +4,17 @@ import {
   BookOpen,
   FileText,
   FolderOpen,
-  Inbox,
-  MessageSquare,
   Pin,
   Plus,
   Search,
   Stethoscope,
   Sigma,
   Globe,
+  MessageSquare,
   Terminal,
 } from "lucide-react";
 import { api, medicalEnabled } from "./agent-runtime";
-import { Slot, useSlot } from "./plugin-slots";
+import { SlotItem, useSlot } from "./plugin-slots";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import "./task-context.css";
 
@@ -167,8 +166,6 @@ const catalog = [
     Search,
     "联网检索",
   ],
-  ["care", "患者消息", "查看患者消息，处理回复草稿与客户联系。", "医疗工具", Inbox, ""],
-  ["followups", "随访", "管理随访计划、待办和患者反馈。", "医疗工具", MessageSquare, ""],
   ["research", "临床试验", "管理试验方案，按入排标准开展患者初筛。", "科研工具", BookOpen, "试验初筛"],
   [
     "clinical-ref",
@@ -188,6 +185,21 @@ const catalog = [
   ],
   ["data-analysis", "科研统计", "上传 CSV，进行描述统计、组间比较、样本量估算与脱敏导出。", "科研工具", Sigma, "本地计算"],
 ];
+// The fixed catalog keeps its order while plugin cards slot in at the same
+// positions the old hard-coded rows used.
+const CATALOG_ORDER = {
+  browser: 10,
+  terminal: 20,
+  documents: 30,
+  literature: 40,
+  care: 50,
+  followups: 55,
+  research: 60,
+  "clinical-ref": 70,
+  cases: 80,
+  "data-analysis": 90,
+};
+
 export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings }) {
   const [filter, setFilter] = useState("全部"),
     [query, setQuery] = useState("");
@@ -203,15 +215,34 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       "项目工具",
       ...(medical ? ["医疗工具", "科研工具"] : []),
     ];
-  const rows = catalog.filter(
-    (x) =>
-      (medical ||
-        !["literature", "care", "followups", "research", "clinical-ref", "cases", "drg", "data-analysis"].includes(
-          x[0],
-        )) &&
-      (filter === "全部" || x[3] === filter) &&
-      `${x[1]} ${x[2]} ${{"clinical-ref":"评分 计算器 不良反应 药物", "care":"消息 回复 客户 企业微信", "followups":"随访 计划 反馈", "research":"试验 入组 入排", "data-analysis":"数据分析 统计学 CSV", "documents":"Word Excel 报告"}[x[0]] || ""}`.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const matches = (id, name, desc, category, keywords = "") =>
+    (filter === "全部" || category === filter) &&
+    `${name} ${desc} ${keywords}`.toLowerCase().includes(query.trim().toLowerCase());
+  const rows = [
+    ...catalog
+      .filter(
+        (x) =>
+          (medical ||
+            !["literature", "research", "clinical-ref", "cases", "drg", "data-analysis"].includes(
+              x[0],
+            )) &&
+          matches(
+            x[0],
+            x[1],
+            x[2],
+            x[3],
+            {"clinical-ref":"评分 计算器 不良反应 药物", "research":"试验 入组 入排", "data-analysis":"数据分析 统计学 CSV", "documents":"Word Excel 报告"}[x[0]] || "",
+          ),
+      )
+      .map((row) => ({ kind: "fixed", id: row[0], order: CATALOG_ORDER[row[0]] ?? 100, row })),
+    ...pluginTools
+      .filter((tool) => {
+        const meta = tool.meta || {};
+        if (!medical && meta.medical) return false;
+        return matches(tool.id, meta.name || tool.label, meta.description || "", meta.category, meta.keywords);
+      })
+      .map((tool) => ({ kind: "plugin", id: `plugin:${tool.pluginId}:${tool.id}`, order: tool.order ?? 100, tool })),
+  ].sort((left, right) => left.order - right.order);
   return (
     <main id="main" className="work-directory" aria-label="工具目录">
       <header className="directory-heading">
@@ -244,7 +275,10 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
         </label>
       </div>
       <div className="directory-tools">
-        {rows.map(([id, name, desc, _category, Icon, status]) => {
+        {rows.map((entry) => {
+          if (entry.kind === "plugin")
+            return <SlotItem key={entry.id} contribution={entry.tool} onNavigate={onNavigate} config={config} />;
+          const [id, name, desc, _category, Icon, status] = entry.row;
           const state = availability(id);
           return (
           <article key={id}>
@@ -267,9 +301,8 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
             </a>
           </article>
         );})}
-        <Slot name="tools.directory" onNavigate={onNavigate} config={config} />
       </div>
-      {!rows.length && !pluginTools.length && <p className="directory-empty">没有找到匹配工具。</p>}
+      {!rows.length && <p className="directory-empty">没有找到匹配工具。</p>}
 
     </main>
   );

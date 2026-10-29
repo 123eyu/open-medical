@@ -120,6 +120,12 @@ export function findPatientTab(contributions, tab) {
   return (contributions || []).find((item) => patientTabKey(item) === tab) || null;
 }
 
+// A patient-tab label may be a function because the historical "消息记录 · N
+// 待整理" badge depends on the open patient. Other slots keep plain strings.
+export function patientTabLabel(item, context) {
+  return typeof item?.label === "function" ? item.label(context) : item?.label;
+}
+
 // Merge fixed patient tabs with plugin contributions for one area. A plugin
 // legacyTab replaces the same fixed tab; other plugin tabs are appended and the
 // whole list is sorted by the declared order (stable on plugin/id).
@@ -247,6 +253,21 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
           throw new Error(
             `插件 ${id} 的插槽 ${name}.${item.id} 缺少 component 加载函数`,
           );
+        if (
+          item.label !== undefined &&
+          typeof item.label !== "string" &&
+          !(name === "patient.tabs" && typeof item.label === "function")
+        )
+          throw new Error(
+            `插件 ${id} 的插槽 ${name}.${item.id} 的 label 必须是字符串`,
+          );
+        if (
+          item.meta !== undefined &&
+          (!item.meta || typeof item.meta !== "object" || Array.isArray(item.meta))
+        )
+          throw new Error(
+            `插件 ${id} 的插槽 ${name}.${item.id} 的 meta 必须是对象`,
+          );
         const legacyTab = item.legacyTab;
         if (legacyTab !== undefined && !isLegacyTab(legacyTab))
           throw new Error(
@@ -273,6 +294,7 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
           id: item.id,
           label: item.label || item.id,
           order: Number.isFinite(item.order) ? item.order : 100,
+          ...(item.meta ? { meta: Object.freeze({ ...item.meta }) } : {}),
           ...(name === "patient.tabs"
             ? {
                 area,

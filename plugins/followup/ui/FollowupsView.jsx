@@ -1,9 +1,9 @@
-import { followupDate } from "../shared/followup-display.mjs";
-import { CampaignPanel } from "./care-inbox";
-import { WechatOutreachPanel } from "./chat-autofollow";
-import { ChatFollowupsPanel } from "./chat-followups";
-import { Modal } from "./components";
-import { patientOptionLabel } from "./patient-labels";
+import { followupDate } from "../../../shared/followup-display.mjs";
+import { CampaignPanel } from "./CareInbox.jsx";
+import { WechatOutreachPanel } from "./WechatOutreachPanel.jsx";
+import { ChatFollowupsPanel } from "./ChatConnectionSettings.jsx";
+import { Modal } from "../../../src/components";
+import { patientOptionLabel } from "../../../src/patient-labels";
 import { useEffect, useState } from "react";
 import {
   CalendarClock,
@@ -15,8 +15,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { api } from "./agent-runtime";
-import { FollowupRecords } from "./followup-records";
+import { api } from "../../../src/agent-runtime";
+import { FollowupRecords } from "./FollowupRecords.jsx";
 
 const fmtDue = (value) => {
   const diff = value - Date.now();

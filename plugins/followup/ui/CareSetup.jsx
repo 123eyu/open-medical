@@ -1,44 +1,7 @@
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
-import { Modal } from "./components";
-const OPEN_KEY = "omw-care-setup-open";
-// What is already connected, derived from GET /api/care/settings.
-export function setupProgress(settings) {
-  const c = settings?.channels || {};
-  const configured = (id) =>
-    Boolean(c.list?.find((item) => item.id === id)?.configured);
-  const done = {
-    corp: Boolean(c.corp?.corpId),
-    kf: configured("wecom-kf"),
-    app: Boolean(
-      c.notifier?.configured && settings?.alerts?.notifyUserIds?.length,
-    ),
-    contact: Boolean(c.corp?.hasContactSecret),
-  };
-  return {
-    done,
-    count: Object.values(done).filter(Boolean).length,
-    total: 4,
-    essential: done.corp && done.kf && done.app,
-  };
-}
-// Lets other pages (the home checklist) open the wizard on arrival.
-export function requestCareSetup() {
-  try {
-    sessionStorage.setItem(OPEN_KEY, "1");
-  } catch {
-    /* storage unavailable */
-  }
-}
-export function takeCareSetupRequest() {
-  try {
-    const wanted = sessionStorage.getItem(OPEN_KEY) === "1";
-    sessionStorage.removeItem(OPEN_KEY);
-    return wanted;
-  } catch {
-    return false;
-  }
-}
+import { api } from "../../../src/agent-runtime";
+import { Modal } from "../../../src/components";
+import { careSetupProgress } from "../../../src/plugin-navigation";
 
 export function CareSetup({ onClose, onChanged }) {
   const [settings, setSettings] = useState(null),
@@ -73,7 +36,7 @@ export function CareSetup({ onClose, onChanged }) {
               {c.label} · {c.configured ? "已连接" : "尚未连接"}
             </p>
           ))}
-          {!setupProgress(settings).done.kf && (
+          {!careSetupProgress(settings).done.kf && (
             <p>
               当前尚无可用的企业微信客服连接。此服务暂不支持在工作台扫码开通；你可以先在聊天中粘贴患者消息或导入聊天记录，整理随访。
             </p>
@@ -92,7 +55,7 @@ export function CareSetup({ onClose, onChanged }) {
               检查已有连接
             </button>
           )}
-          {setupProgress(settings).done.kf && (
+          {careSetupProgress(settings).done.kf && (
             <button
               disabled={busy}
               onClick={() =>

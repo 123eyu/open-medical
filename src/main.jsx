@@ -1,6 +1,5 @@
 import { PatientQuestionStarters } from "./patient-question-starters";
 import { DoctorAgenda } from "./doctor-agenda";
-import { CareInbox } from "./care-inbox";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
 import { AppSettingsView } from "./app-settings";
 import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS } from "./navigation";
@@ -74,7 +73,6 @@ import { DoctorProfilePanel } from "./doctor-profile";
 import { LiteratureView } from "./literature";
 import { KnowledgeLibraries } from "./knowledge-libraries";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
-import { FollowupsView } from "./followups";
 import { CasesView } from "./cases";
 import { ResearchView } from "./research";
 import { TrialScreeningView } from "./trial-screening";
@@ -1633,7 +1631,7 @@ function App() {
                 refreshList().catch(() => {});
               }}
             />
-          ) : view === "care" && medical ? (<CareInbox onOpenPatient={(id) => openPatient({ id, tab: "messages" })} />) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><DoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
+          ) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><DoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
             <PatientsView
               key={`${patientRoute.id || "list"}-${patientRoute.tab || "overview"}-${patientRoute.create || false}-${patientRoute.import || false}-${patientRoute.intakeOpen || ""}-${patientRoute.navigationKey || ""}`}
               config={config}
@@ -1653,8 +1651,6 @@ function App() {
             <KnowledgeLibraries onOpenTask={openTask} />
           ) : view === "clinical-ref" ? (
             <ClinicalRefView />
-          ) : view === "followups" && medical ? (
-            <FollowupsView onSettings={()=>{navigate("settings");window.history.replaceState({},"", "?view=settings&settingsTab=followup");}} onOpenTask={openTask} onOpenPatient={(id) => openPatient({ id, tab: "followups" })} />
           ) : view === "cases" ? (
             <CasesView />
           ) : view === "research" && medical ? (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from './agent-runtime';
+import { api } from "../../../src/agent-runtime";
 const encode=file=>new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=()=>reject(new Error('文件读取失败'));r.onload=()=>resolve(String(r.result).split(',')[1]);r.readAsDataURL(file);});
 export function WechatImportForm({patientId,onImported}) {
  const [preview,setPreview]=useState(null),[batchNotice,setBatchNotice]=useState(''),[title,setTitle]=useState(''),[speakerName,setSpeakerName]=useState(''),[relationship,setRelationship]=useState('self'),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');

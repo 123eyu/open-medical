@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './agent-runtime';
+import { api } from "../../../src/agent-runtime";
 
 const STATUS = { none: '待生成话术', draft: '待发送', sent: '已发送，等待回复', replied: '已回复，待整理', recorded: '已归档' };
 const when = (v) => (v ? new Date(v).toLocaleString() : '');
