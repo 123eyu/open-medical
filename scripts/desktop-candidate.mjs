@@ -5,7 +5,7 @@ import { resolve, relative, join, dirname, sep, isAbsolute } from 'node:path';
 
 export const manifestName = 'candidate-manifest.json';
 export const sourceManifestName = 'candidate-source.json';
-export const sourceEntries = ['src', 'dist', 'desktop', 'server', 'shared', 'skills', 'integrations', 'examples', 'scripts', 'package.json', 'package-lock.json', 'vite.config.mjs', '.env.example', 'build/icons'];
+export const sourceEntries = ['src', 'dist', 'desktop', 'server', 'plugins', 'shared', 'skills', 'integrations', 'examples', 'scripts', 'package.json', 'package-lock.json', 'vite.config.mjs', '.env.example', 'build/icons'];
 const inside = (root, path) => { const r = relative(root, path); return r === '' || (r !== '..' && !r.startsWith('..' + sep) && !isAbsolute(r)); };
 const normalize = (path) => path.split(sep).join('/');
 export function prohibited(path) {
@@ -15,6 +15,20 @@ export function prohibited(path) {
     || /\.(?:sqlite(?:3)?|db)(?:-(?:wal|shm))?$/i.test(part)
     || /^(?:__pycache__)$/i.test(part) || /\.pyc$/i.test(part)
     || /\.(?:pem|key)$/i.test(part));
+}
+// Plugin test assets never ship. Keep this path-based so staging and candidate
+// verification agree even though the latter only sees manifest entries.
+const EXCLUDED_PLUGIN_DIRECTORIES = /^(?:tests?|fixtures|__tests__|__mocks__|__snapshots__|__screenshots__|screenshots?|snapshots?)$/i;
+const TEST_FILE = /(?:^|[._-])(?:test|spec)(?:[._-]|$)/i;
+const SCREENSHOT_NAME = /(?:screens?shots?|screen[-_ ]?shot|截图)/i;
+export function excludedPluginPath(path) {
+  const normalized = String(path).split(/[\\/]+/).filter(Boolean).join('/');
+  if (!normalized) return false;
+  if (prohibited(normalized)) return true;
+  const parts = normalized.split('/');
+  if (parts.some((part) => EXCLUDED_PLUGIN_DIRECTORIES.test(part) || SCREENSHOT_NAME.test(part))) return true;
+  const basename = parts.at(-1);
+  return TEST_FILE.test(basename) || SCREENSHOT_NAME.test(basename);
 }
 export function argument(args, name) {
   const prefix = `--${name}=`;
@@ -106,7 +120,8 @@ export async function verifyCandidate(directory, sourceRoot) {
   if (!source?.files || fingerprint(source.files) !== source.fingerprint || source.fingerprint !== manifest.sourceFingerprint) throw new Error('Source manifest mismatch');
   const packaged = new Map((await inventory(app)).map((file) => [file.path, file]));
   for (const original of source.files) {
-    if (!/^(?:dist|desktop|server|shared|skills|integrations|examples)\//.test(original.path)
+    if (original.path.startsWith('plugins/') && excludedPluginPath(original.path.slice('plugins/'.length))) continue;
+    if (!/^(?:dist|desktop|server|plugins|shared|skills|integrations|examples)\//.test(original.path)
       && !['.env.example', 'scripts/workspace-cli.mjs', 'scripts/agent-daemon.mjs', 'scripts/daemon-supervisor.mjs', 'scripts/local-transcription.py'].includes(original.path)) continue;
     const included = packaged.get(original.path);
     if (!included || included.type !== original.type || included.sha256 !== original.sha256 || included.target !== original.target)

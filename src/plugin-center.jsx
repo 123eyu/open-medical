@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './agent-runtime';
 const when=value=>value?new Date(value).toLocaleString():'尚未同步';
+const CHANNEL_PLUGIN_API='/api/chat-followups/plugins';
 // 插件中心:可安装连接插件的目录与已安装管理。目录是随产品发布的静态清单——
 // 产品只内置"会说协议的客户端",第三方工具一律由用户自行部署(边界见各条目风险说明)。
 const PLUGIN_CATALOG=[
@@ -35,7 +36,7 @@ export function PluginCenter({ onChanged }) {
    </div>;})}
   {connections&&<details><summary>已安装的插件连接（{connections.filter(c=>!c.plugin?.builtin).length}）</summary>
    {!connections.some(c=>!c.plugin?.builtin)&&<p className="muted">还没有安装任何插件。</p>}
-   {connections.filter(c=>!c.plugin?.builtin).map(c=><p key={c.channel}>{c.plugin?.name||c.channel} · {c.enabled?'已启用':'未启用'} · 最近同步：{when(c.lastSyncAt)} <button disabled={busy} onClick={()=>{if(window.confirm(`移除「${c.plugin?.name||c.channel}」插件并清除其连接密钥？已有聊天记录保留，随访连接里将不再显示该渠道。`))act(()=>api(`/api/chat-followups/plugins/${c.channel}`,'DELETE'));}}>移除插件</button></p>)}
+   {connections.filter(c=>!c.plugin?.builtin).map(c=><p key={c.channel}>{c.plugin?.name||c.channel} · {c.enabled?'已启用':'未启用'} · 最近同步：{when(c.lastSyncAt)} <button disabled={busy} onClick={()=>{if(window.confirm(`移除「${c.plugin?.name||c.channel}」插件并清除其连接密钥？已有聊天记录保留，随访连接里将不再显示该渠道。`))act(()=>api(`${CHANNEL_PLUGIN_API}/${c.channel}`,'DELETE'));}}>移除插件</button></p>)}
    <p className="muted">插件的连接配置（账号、服务地址、同步开关）在 <a className="chat-next-link" href="/?view=settings&settingsTab=followup">患者随访</a> 对应渠道里管理。</p>
   </details>}
 

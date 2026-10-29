@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePluginActive } from "./plugin-slots";
 import { Activity, ArrowRight, CalendarClock, FolderOpen, Inbox, Search, Stethoscope, UserPlus } from "lucide-react";
 
 // 命令面板（Cmd/Ctrl+K）：患者快速检索（姓名 / 编号 / 姓氏拼音首字母）
@@ -11,12 +12,12 @@ for (let i = 0; i < SURNAME_INITIAL.length - 1; i += 2)
   if (!surnameMap.has(SURNAME_INITIAL[i])) surnameMap.set(SURNAME_INITIAL[i], SURNAME_INITIAL[i + 1]);
 const surnameInitials = name => surnameMap.get(String(name || "").trim().charAt(0)) || "";
 
-const COMMANDS = medical => [
+const COMMANDS = (medical, followupActive) => [
   { id: "home", label: "新建任务", hint: "回到任务入口", icon: UserPlus, run: "home" },
   ...(medical ? [
     { id: "agenda", label: "今日待办", hint: "今天要处理的患者与事项", icon: CalendarClock, run: "agenda" },
     { id: "patients", label: "患者列表", hint: "全部在管患者", icon: Stethoscope, run: "patients" },
-    { id: "care", label: "患者消息", hint: "微信 / 企微收件与回复", icon: Inbox, run: "care" },
+    ...(followupActive ? [{ id: "care", label: "患者消息", hint: "微信 / 企微收件与回复", icon: Inbox, run: "care" }] : []),
     { id: "review", label: "待复核", hint: "AI 草稿复核队列", icon: Activity, run: "review" },
   ] : [
     { id: "tasks", label: "任务记录", hint: "历史任务", icon: Activity, run: "tasks" },
@@ -25,6 +26,7 @@ const COMMANDS = medical => [
 ];
 
 export function CommandPalette({ open, onClose, patients, medical, onOpenPatient, onNavigate, onCreatePatient }) {
+  const followupActive = usePluginActive("followup");
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef(null), listRef = useRef(null);
@@ -33,7 +35,7 @@ export function CommandPalette({ open, onClose, patients, medical, onOpenPatient
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const commands = COMMANDS(medical)
+    const commands = COMMANDS(medical, followupActive)
       .filter(c => !q || c.label.toLowerCase().includes(q) || c.hint.toLowerCase().includes(q))
       .map(c => ({ kind: "command", ...c }));
     if (!q) return commands;
@@ -45,7 +47,7 @@ export function CommandPalette({ open, onClose, patients, medical, onOpenPatient
       .slice(0, 7)
       .map(p => ({ kind: "patient", id: p.id, label: p.name, hint: `${p.patientNumber || p.id.slice(0, 8)}${p.birthYear ? ` · ${new Date().getFullYear() - p.birthYear} 岁` : ""}${p.groups?.length ? ` · ${p.groups.join("、")}` : ""}`, patient: p }));
     return [...matches, ...commands];
-  }, [query, patients, medical]);
+  }, [query, patients, medical, followupActive]);
 
   useEffect(() => { setCursor(0); }, [query]);
   useEffect(() => {

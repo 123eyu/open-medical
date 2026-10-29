@@ -1,6 +1,7 @@
 import { sseFrames } from "../shared/sse.mjs";
 let auth;
 export const PENDING_REFRESH_EVENT = "care-pending-refresh";
+export const PLUGIN_CONFIG_EVENT = "medical-plugin-config-changed";
 // App Shell 能力判定:优先读 bootstrap 的 capabilities(通用平台显式声明),
 // 医疗应用(旧 bootstrap 无 capabilities)回退到 patientsEnabled。
 // 返回 false 时前端不得请求 /api/sessions 等医疗接口、不渲染患者导航与医疗默认任务。
@@ -22,6 +23,14 @@ export async function bootstrap(force = false) {
         throw error;
       });
   return auth;
+}
+// Re-read bootstrap after a connection change so plugin activation (and the
+// lazily registered plugin UI) updates without restarting the app.
+export async function refreshPlugins() {
+  const config = await bootstrap(true);
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new CustomEvent(PLUGIN_CONFIG_EVENT, { detail: config }));
+  return config;
 }
 export async function api(path, options = {}, dataOrRetried = false) {
   const retried = dataOrRetried === true;

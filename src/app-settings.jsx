@@ -1,33 +1,104 @@
 import { BackupPanel } from "./backup-panel";
-import { LearningSettings } from "./learning-loop";
-import { ChatConnectionSettings } from "./chat-followups";
+// Shared channel layout styles stay in the fixed static entry: plugin panels
+// load in async chunks and must not be the first provider of base layout.
+import "./doctor-notifications.css";
+import "./message-channels.css";
 import { useEffect, useRef, useState } from "react";
-import { api, medicalEnabled } from "./agent-runtime";
+import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
+import { SlotItem, findSettingsPanel, usePluginActive, useActiveSlot, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
-import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
-import { DoctorNotificationSettings } from "./doctor-notifications";
-import { MessageChannelSettings } from "./message-channels";
 import { KnowledgeTranscriptionSettings } from "./knowledge-transcription-settings";
 
-const CHANNEL_SECTIONS = [
-  ["channels", "私聊助手"],
-  ["knowledge-bot", "飞书知识库机器人"],
-  ["notifications", "医生提醒"],
-  ["followup", "患者随访"],
-];
+const CHANNEL_SECTIONS = [["channels", "私聊助手"]];
 const PERSONAL_SECTIONS = [
   ["skills", "技能"],
   ["workbench", "自动化规则"],
   ["learning", "学习与记忆"],
 ];
+// Legacy tabs whose owning panel loads asynchronously. A deep link must
+// resolve to its own tab before the panel arrives; the rendering fallback in
+// AppSettingsView keeps a disabled plugin from leaving a blank page.
+const LEGACY_TAB_GROUPS = {
+  "knowledge-bot": "channels",
+  notifications: "channels",
+  followup: "channels",
+  workbench: "personal",
+  learning: "personal",
+};
+const SECTION_ORDER = {
+  channels: 10,
+  "knowledge-bot": 20,
+  notifications: 30,
+  followup: 40,
+  workbench: 50,
+  learning: 60,
+};
 
-function settingsGroup(section) {
+// Merge fixed and plugin-provided tabs in their original order. Plugin panels
+// carry an explicit order; the static fixed tabs use the same scale so an
+// async panel never jumps ahead of a fixed one.
+export function mergeChannelSections(legacyPanels = []) {
+  const merged = CHANNEL_SECTIONS.map(([id, label], index) => ({
+    id,
+    label,
+    order: SECTION_ORDER[id] ?? (index + 1) * 10,
+  }));
+  for (const panel of legacyPanels) {
+    const group = LEGACY_TAB_GROUPS[panel.legacyTab];
+    if (group && group !== "channels") continue;
+    if (merged.some((item) => item.id === panel.legacyTab)) continue;
+    merged.push({
+      id: panel.legacyTab,
+      label: panel.label,
+      order: Number.isFinite(panel.order)
+        ? panel.order
+        : (SECTION_ORDER[panel.legacyTab] ?? 100),
+    });
+  }
+  return merged
+    .sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))
+    .map((item) => [item.id, item.label]);
+}
+
+function settingsGroup(section, legacyPanels = []) {
   if (section === "transcription") return "connections";
-  if (section === "plugins" || CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
+  if (section === "plugins") return "plugins";
+  if (LEGACY_TAB_GROUPS[section]) return LEGACY_TAB_GROUPS[section];
+  if (legacyPanels.some((panel) => panel.legacyTab === section)) return "channels";
+  if (CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
   return section;
+}
+
+const SETTINGS_GROUPS = [
+  "general",
+  "desktop",
+  "connections",
+  "channels",
+  "personal",
+  "backup",
+  "plugins",
+];
+
+// Resolve a settingsTab from the URL (or a deferred request) against the
+// currently registered panels. Plugin UI loads asynchronously, so a deep link
+// such as settingsTab=followup may arrive before its panel; keeping the raw
+// request in state lets the same computation succeed on the next render.
+export function resolveSettingsSection(
+  requested,
+  legacyPanels = [],
+  { medical = true, desktop = false } = {},
+) {
+  const normalized = requested === "personal" ? "skills" : requested;
+  const group = settingsGroup(normalized, legacyPanels);
+  if (["channels", "personal"].includes(group) && !medical) return "general";
+  if (normalized === "desktop" && !desktop) return "general";
+  // Before the lazy panel registers, keep the raw request in state and show the
+  // general group; the next render re-resolves once legacyTab exists.
+  if (LEGACY_TAB_GROUPS[normalized] && !legacyPanels.some((panel) => panel.legacyTab === normalized)) return "general";
+  return SETTINGS_GROUPS.includes(group) ? normalized : "general";
 }
 
 function SettingsSubnav({ label, items, section, onSelect }) {
@@ -80,18 +151,105 @@ function DesktopAppPanel({ desktop }) {
   </section>;
 }
 
-export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange }) {
+const PLUGIN_STATUS = { ready: "已启用", disabled: "已停用", unavailable: "不可用" };
+const PLUGIN_API = "/api/plugins";
+
+function PluginSettings({ onPluginsChanged }) {
+  const [plugins, setPlugins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const busyRef = useRef(false);
+  const panels = useSlot("settings.panels");
+  useEffect(() => {
+    let alive = true;
+    api("/api/plugins")
+      .then(value => { if (alive) setPlugins(value.plugins || []); })
+      .catch(value => { if (alive) setError(value.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+  async function toggle(plugin) {
+    // The controlled checkbox only changes after the PUT response; this guard
+    // also prevents a same-tick double click before React disables the input.
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(plugin.id);
+    setError("");
+    try {
+      await api(`${PLUGIN_API}/${encodeURIComponent(plugin.id)}`, "PUT", { enabled: !plugin.enabled });
+      // Refresh the shared bootstrap snapshot so every slot updates immediately;
+      // the server persists the new state, so no restart is needed.
+      const next = await bootstrap(true);
+      onPluginsChanged?.(next.plugins || []);
+      const list = await api("/api/plugins");
+      setPlugins(list.plugins || []);
+    } catch (value) {
+      setError(value.message);
+    } finally {
+      busyRef.current = false;
+      setBusy("");
+    }
+  }
+  return <section aria-label="插件">
+    <h2>插件</h2>
+    <p>插件为工作台增加可选的患者页、对话卡片和设置面板。停用后数据保留，可以随时重新启用。</p>
+    {error && <p role="alert" className="error-text">{error}</p>}
+    {loading && <p role="status">正在读取插件…</p>}
+    {!loading && !plugins.length && <p className="muted">还没有安装插件。</p>}
+    {!loading && plugins.length > 0 && <ul className="plugin-settings-list">
+      {plugins.map(plugin => {
+        const ownPanels = panels.filter(item => item.pluginId === plugin.id);
+        return <li key={plugin.id} className="plugin-settings-item">
+          <div className="plugin-settings-summary">
+            <div>
+              <b>{plugin.title}</b>
+              <small>{plugin.id} · v{plugin.version} · {PLUGIN_STATUS[plugin.status] || plugin.status}</small>
+              {plugin.reason && <p className="muted">不可用原因：{plugin.reason}</p>}
+            </div>
+            <label className="settings-login-item">
+              <input
+                type="checkbox"
+                aria-label={`启用 ${plugin.title}`}
+                checked={Boolean(plugin.enabled)}
+                disabled={Boolean(busy) || plugin.status === "unavailable"}
+                onChange={() => toggle(plugin)}
+              />
+              启用
+            </label>
+          </div>
+          {plugin.status === "ready" && ownPanels.length > 0 && <div className="plugin-settings-panel">
+            {ownPanels.map(item => <SlotItem key={`${item.pluginId}:${item.id}`} contribution={item} plugin={plugin} />)}
+          </div>}
+        </li>;
+      })}
+    </ul>}
+  </section>;
+}
+
+export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange, onPluginsChanged }) {
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
+  const pluginPanels = useActiveSlot("settings.panels");
+  const followupActive = usePluginActive("followup");
+  const legacyPanels = pluginPanels.filter((panel) => panel.legacyTab);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
-  const [section, updateSection] = useState(() => {
-    const initial = takeSettingsTab() || param || "general";
-    const requested = initial === "personal" ? "skills" : initial;
-    const group = settingsGroup(requested);
-    if (["channels", "personal"].includes(group) && !medicalEnabled(config)) return "general";
-    if (requested === "desktop" && !window.omwDesktop) return "general";
-    return ["general", "desktop", "connections", "channels", "personal", "backup"].includes(group) ? requested : "general";
+  const [requestedSection, updateSection] = useState(
+    () => takeSettingsTab() || param || "general",
+  );
+  const requested = resolveSettingsSection(requestedSection, legacyPanels, {
+    medical: medicalEnabled(config),
+    desktop: Boolean(window.omwDesktop),
   });
-  const group = settingsGroup(section);
+  const requestedPanel = findSettingsPanel(pluginPanels, requested);
+  // While a plugin panel is still loading, or when the plugin is disabled,
+  // show the group's first tab instead of a blank content area.
+  const section = !requestedPanel && LEGACY_TAB_GROUPS[requested]
+    ? (LEGACY_TAB_GROUPS[requested] === "personal" ? "skills" : "channels")
+    : requested;
+  const group = settingsGroup(section, legacyPanels);
+  const legacyPanel = findSettingsPanel(pluginPanels, section);
+  const channelSections = mergeChannelSections(legacyPanels);
+  const personalSections = PERSONAL_SECTIONS.filter(([id]) => id === "skills" || legacyPanels.some((panel) => panel.legacyTab === id));
   function setSection(next) {
     updateSection(next);
     const url = new URL(window.location.href);
@@ -130,19 +288,20 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {medicalEnabled(config) && <button aria-pressed={group === "personal"} onClick={() => setSection("skills")}>技能与规则</button>}
         <button aria-pressed={group === "backup"} onClick={() => setSection("backup")}>备份与恢复</button>
         <button aria-pressed={group === "connections"} onClick={() => setSection("connections")}>工具与服务</button>
+        <button aria-pressed={group === "plugins"} onClick={() => setSection("plugins")}>插件</button>
         {window.omwDesktop && <button aria-pressed={group === "desktop"} onClick={() => setSection("desktop")}>桌面应用</button>}
       </nav>
       <div className="app-settings-content">
         {section === "backup" && <BackupPanel />}
+        {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} />}
         {group === "channels" && <>
-          <SettingsSubnav label="消息渠道用途" items={CHANNEL_SECTIONS} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
-          {section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>
-            <ChatConnectionSettings />
-          </>}
+          <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
+          {!followupActive && <p className="settings-channel-hint muted">连接微信或企业微信后启用随访与患者消息</p>}
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : null}
         </>}
         {group === "personal" && <>
-          <SettingsSubnav label="技能与规则分类" items={PERSONAL_SECTIONS} section={section} onSelect={setSection} />
-          {section === "learning" ? <section><h2>学习与记忆</h2><p>管理医生档案、使用习惯和资料使用授权。</p><button onClick={onDoctor}>医生档案与记忆</button><LearningSettings /></section> : <ExtensionCenter key={section} view={section === "skills" ? "skills" : "workbench"} onAsk={onAsk} />}
+          <SettingsSubnav label="技能与规则分类" items={personalSections} section={section} onSelect={setSection} />
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} onDoctor={onDoctor} onAsk={onAsk} /> : <ExtensionCenter key={section} view="skills" onAsk={onAsk} />}
         </>}
         {window.omwDesktop && section === "desktop" && <DesktopAppPanel desktop={window.omwDesktop} />}
         {section === "general" && <section><h2>模型与运行</h2><p>{config?.modelConfigured ? `当前模型：${config.provider} · ${config.model}` : "尚未配置模型"}</p><div className="toolbar-actions"><button onClick={onModel}>选择模型</button></div></section>}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarPlus, RotateCw } from "lucide-react";
 import { useClinicalDraft } from "./clinical-drafts";
 import { api } from "./agent-runtime";
+import { usePluginActive } from "./plugin-slots";
 import "./care.css";
 
 const STATUS = { scheduled: "已预约", attended: "已到诊", missed: "未到诊", cancelled: "已取消" };
@@ -11,6 +12,7 @@ const localToday = () => { const d = new Date(); return new Date(d.getTime() - d
 
 // Return-visit appointments; the day before and the day itself show up in 今日待办.
 export function AppointmentsPanel({ patient }) {
+  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const [form, setForm] = useClinicalDraft(patient.id, "appointment", null);
   const inFlight = useRef(false);
@@ -40,9 +42,10 @@ export function AppointmentsPanel({ patient }) {
   const loadDrafts = useCallback(async () => {
     const request = ++reads.current.drafts;
     setDraftsError("");
+    if (!followupActive) { setDrafts([]); return; }
     try { const value = await api(`/api/care/replies?status=draft&patientId=${patient.id}`); if (active.current && request === reads.current.drafts) setDrafts(value.replies || []); }
     catch (err) { if (active.current && request === reads.current.drafts) setDraftsError(`提醒草稿读取失败：${err.message}`); }
-  }, [patient.id]);
+  }, [patient.id, followupActive]);
   const load = useCallback(() => Promise.all([loadAppointments(), loadDrafts()]), [loadAppointments, loadDrafts]);
   useEffect(() => { active.current = true; load(); return () => { active.current = false; reads.current.appointments++; reads.current.drafts++; }; }, [load]);
   const act = async (fn, message, { closeForm = false } = {}) => {
@@ -125,16 +128,16 @@ export function AppointmentsPanel({ patient }) {
         <div className="toolbar-actions">
           {a.date <= today && <><button className="secondary" disabled={busy || patient.archived || Boolean(form)} onClick={() => update(a, { status: "attended" }, "已登记到诊。")}>已到诊</button>
             <button className="secondary" disabled={busy || patient.archived || Boolean(form)} onClick={() => update(a, { status: "missed" }, "已登记未到诊，可以重新预约。")}>未到诊</button></>}
-          {a.date >= today && <button className="text-button" disabled={busy || patient.archived || Boolean(form)} onClick={() => draftReminder(a)}>起草提醒消息</button>}
+          {followupActive && a.date >= today && <button className="text-button" disabled={busy || patient.archived || Boolean(form)} onClick={() => draftReminder(a)}>起草提醒消息</button>}
           <button className="text-button" disabled={busy || patient.archived || Boolean(form)} onClick={() => edit(a)}>改期或更正</button>
           <button className="text-button" disabled={busy || patient.archived || Boolean(form)} onClick={() => { if (window.confirm(`取消 ${a.date} 的复诊预约？`)) update(a, { status: "cancelled" }, "已取消预约。"); }}>取消预约</button>
         </div>{history(a)}
       </article>;
     })}
     {past.length > 0 && <details><summary>历史预约 · {past.length}</summary>{past.map((a) => <article key={a.id} className="care-tracking-card"><p>{a.date} {a.time} · {STATUS[a.status]} · {a.place || "地点未记录"} · {a.reason}{a.note ? ` · ${a.note}` : ""}</p><button className="secondary" disabled={busy || patient.archived || Boolean(form)} onClick={() => edit(a)}>更正预约结果</button>{history(a)}</article>)}</details>}
-    {draftsError && <p className="error-text" role="alert">{draftsError}<button className="text-button" onClick={loadDrafts}>重试读取提醒草稿</button></p>}
-    {drafts.length > 0 && <details open={Boolean(draft)}><summary>待核对消息草稿 · {drafts.length}</summary>{drafts.map(reply => <p key={reply.id}>{reply.text}<button className="text-button" onClick={() => openDraft(reply)}>核对此草稿</button></p>)}</details>}
-    {draft && <form className="appointment-draft" aria-label="核对提醒草稿" onSubmit={e => { e.preventDefault(); act(async () => { const saved = await api(`/api/care/replies/${draft.id}`, "PUT", { text: draftText }); openDraft(saved); }, "草稿修改已保存，尚未发送。"); }}><h4>核对提醒草稿 · {patient.name}</h4><p className="muted">请核对预约日期、时间与地点；改期后需同步核对先前草稿。尚未发送</p><label>提醒草稿内容<textarea rows={4} required maxLength={2000} value={draftText} onChange={e => setDraftText(e.target.value)} /></label><div className="toolbar-actions"><button className="primary" disabled={busy || patient.archived}>保存草稿修改</button><button type="button" className="secondary" onClick={() => setDraft(null)}>返回预约</button></div></form>}
+    {followupActive && draftsError && <p className="error-text" role="alert">{draftsError}<button className="text-button" onClick={loadDrafts}>重试读取提醒草稿</button></p>}
+    {followupActive && drafts.length > 0 && <details open={Boolean(draft)}><summary>待核对消息草稿 · {drafts.length}</summary>{drafts.map(reply => <p key={reply.id}>{reply.text}<button className="text-button" onClick={() => openDraft(reply)}>核对此草稿</button></p>)}</details>}
+    {followupActive && draft && <form className="appointment-draft" aria-label="核对提醒草稿" onSubmit={e => { e.preventDefault(); act(async () => { const saved = await api(`/api/care/replies/${draft.id}`, "PUT", { text: draftText }); openDraft(saved); }, "草稿修改已保存，尚未发送。"); }}><h4>核对提醒草稿 · {patient.name}</h4><p className="muted">请核对预约日期、时间与地点；改期后需同步核对先前草稿。尚未发送</p><label>提醒草稿内容<textarea rows={4} required maxLength={2000} value={draftText} onChange={e => setDraftText(e.target.value)} /></label><div className="toolbar-actions"><button className="primary" disabled={busy || patient.archived}>保存草稿修改</button><button type="button" className="secondary" onClick={() => setDraft(null)}>返回预约</button></div></form>}
 
   </section>;
 }

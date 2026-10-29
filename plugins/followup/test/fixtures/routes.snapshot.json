@@ -1,0 +1,728 @@
+{
+  "/api/followup-plans": {
+    "status": 200,
+    "body": {
+      "plans": [
+        {
+          "id": "builtin_hypertension",
+          "builtin": true,
+          "name": "高血压慢病随访",
+          "disease": "I10 原发性高血压",
+          "createdAt": 0,
+          "nodes": [
+            {
+              "offsetDays": 30,
+              "title": "1 个月随访",
+              "items": [
+                "家庭血压记录",
+                "服药依从性",
+                "不良反应"
+              ],
+              "questionnaire": {
+                "title": "高血压月度自测",
+                "replyWindowHours": 72,
+                "questions": [
+                  {
+                    "id": "bp",
+                    "text": "最近一周晨起自测收缩压平均值是多少？",
+                    "type": "number",
+                    "unit": "mmHg",
+                    "required": true,
+                    "alertIf": {
+                      "op": "gt",
+                      "value": 180
+                    }
+                  },
+                  {
+                    "id": "dizzy",
+                    "text": "近一周是否有头晕或头痛？",
+                    "type": "single",
+                    "required": true,
+                    "options": [
+                      {
+                        "label": "经常",
+                        "score": 2
+                      },
+                      {
+                        "label": "偶尔",
+                        "score": 1
+                      },
+                      {
+                        "label": "没有",
+                        "score": 0
+                      }
+                    ]
+                  },
+                  {
+                    "id": "adherence",
+                    "text": "降压药是否按医嘱服用？",
+                    "type": "single",
+                    "required": true,
+                    "options": [
+                      {
+                        "label": "规律服用",
+                        "score": 0
+                      },
+                      {
+                        "label": "偶尔漏服",
+                        "score": 1
+                      },
+                      {
+                        "label": "经常漏服",
+                        "score": 2
+                      }
+                    ]
+                  }
+                ],
+                "scoring": {
+                  "alert": {
+                    "op": "gte",
+                    "value": 3,
+                    "severity": "warning",
+                    "message": "随访自测症状与依从性评分偏高，建议尽快复核血压管理与用药依从性。"
+                  }
+                }
+              }
+            },
+            {
+              "offsetDays": 90,
+              "title": "3 个月随访",
+              "items": [
+                "血压达标评估",
+                "血钾与肾功能",
+                "血脂"
+              ]
+            },
+            {
+              "offsetDays": 180,
+              "title": "6 个月评估",
+              "items": [
+                "年度心血管风险评估",
+                "靶器官损害筛查"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "builtin_diabetes",
+          "builtin": true,
+          "name": "2 型糖尿病随访",
+          "disease": "E11 2 型糖尿病",
+          "createdAt": 0,
+          "nodes": [
+            {
+              "offsetDays": 30,
+              "title": "1 个月随访",
+              "items": [
+                "血糖监测记录",
+                "用药与低血糖事件"
+              ]
+            },
+            {
+              "offsetDays": 90,
+              "title": "3 个月随访",
+              "items": [
+                "糖化血红蛋白",
+                "体重与腰围"
+              ]
+            },
+            {
+              "offsetDays": 180,
+              "title": "6 个月并发症筛查",
+              "items": [
+                "眼底检查",
+                "尿微量白蛋白",
+                "足部检查"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "builtin_postop",
+          "builtin": true,
+          "name": "术后随访",
+          "disease": "外科术后通用",
+          "createdAt": 0,
+          "nodes": [
+            {
+              "offsetDays": 7,
+              "title": "术后 1 周",
+              "items": [
+                "伤口愈合情况",
+                "体温与疼痛"
+              ]
+            },
+            {
+              "offsetDays": 30,
+              "title": "术后 1 个月",
+              "items": [
+                "血常规与生化复查",
+                "功能恢复评估"
+              ]
+            },
+            {
+              "offsetDays": 90,
+              "title": "术后 3 个月",
+              "items": [
+                "影像学复查",
+                "肿瘤标志物（如适用）"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "/api/followups/overview": {
+    "status": 200,
+    "body": {
+      "jobs": [
+        {
+          "id": "<uuid>",
+          "patientId": "<uuid>",
+          "patientName": "示例·李婉珍",
+          "name": "示例·血糖控制季度随访",
+          "once": false,
+          "intervalDays": 90,
+          "checklist": [
+            "近期血糖记录",
+            "用药依从性"
+          ],
+          "hasSurvey": true,
+          "status": "active",
+          "nextDue": 1800868834095,
+          "revision": 1
+        }
+      ],
+      "total": 1,
+      "offset": 0,
+      "limit": 200,
+      "hasMore": false
+    }
+  },
+  "/api/reminders?status=pending&limit=100": {
+    "status": 200,
+    "body": {
+      "reminders": [
+        {
+          "id": "<uuid>",
+          "patientId": "<uuid>",
+          "patientName": "示例·李婉珍",
+          "kind": "followup",
+          "dueAt": 1793265634095,
+          "status": "pending",
+          "followUpId": "<uuid>",
+          "title": "随访：示例·血糖控制季度随访",
+          "detail": "按计划到期，随访问卷待下发",
+          "checklist": [
+            "近期血糖记录",
+            "用药依从性"
+          ],
+          "sessionId": "<uuid>"
+        }
+      ],
+      "counts": {
+        "pending": 1,
+        "done": 0
+      },
+      "total": 1,
+      "offset": 0,
+      "limit": 100,
+      "hasMore": false
+    }
+  },
+  "/api/chat-followups/settings": {
+    "status": 200,
+    "body": {
+      "connections": [
+        {
+          "channel": "wechat",
+          "protocol": "desktop",
+          "enabled": false,
+          "accountId": "",
+          "endpoint": "",
+          "revision": 0,
+          "cursor": "0",
+          "intervalMinutes": 15,
+          "autoUntil": "",
+          "nextRun": 0,
+          "plugin": {
+            "id": "wechat",
+            "name": "微信桌面",
+            "protocol": "desktop",
+            "builtin": true,
+            "defaultEndpoint": "",
+            "capabilities": {
+              "conversations": false,
+              "history": false,
+              "send": true
+            }
+          },
+          "hasToken": false,
+          "status": {
+            "ready": false,
+            "message": "连接未启用"
+          },
+          "availableBindings": [],
+          "running": false,
+          "platform": "linux"
+        },
+        {
+          "channel": "wecom",
+          "protocol": "archive-v1",
+          "enabled": false,
+          "accountId": "",
+          "endpoint": "",
+          "revision": 0,
+          "cursor": "0",
+          "intervalMinutes": 15,
+          "autoUntil": "",
+          "nextRun": 0,
+          "plugin": {
+            "id": "wecom",
+            "name": "企业微信存档",
+            "protocol": "archive-v1",
+            "builtin": true,
+            "defaultEndpoint": "",
+            "capabilities": {
+              "conversations": true,
+              "history": true,
+              "send": false
+            }
+          },
+          "hasToken": false,
+          "status": {
+            "ready": false,
+            "message": "连接未启用"
+          },
+          "availableBindings": [],
+          "running": false,
+          "platform": "linux"
+        },
+        {
+          "channel": "wx-cli",
+          "protocol": "wx-cli",
+          "enabled": false,
+          "accountId": "",
+          "endpoint": "http://127.0.0.1:9100",
+          "revision": 0,
+          "cursor": "0",
+          "intervalMinutes": 15,
+          "autoUntil": "",
+          "nextRun": 0,
+          "plugin": {
+            "id": "wx-cli",
+            "name": "微信 · wx-cli",
+            "protocol": "wx-cli",
+            "builtin": true,
+            "defaultEndpoint": "http://127.0.0.1:9100",
+            "capabilities": {
+              "conversations": true,
+              "history": true,
+              "send": false
+            }
+          },
+          "hasToken": false,
+          "status": {
+            "ready": false,
+            "message": "连接未启用"
+          },
+          "availableBindings": [],
+          "running": false,
+          "platform": "linux"
+        },
+        {
+          "channel": "wecom-aibot",
+          "protocol": "aibot-ws",
+          "enabled": false,
+          "accountId": "",
+          "endpoint": "wss://openws.work.weixin.qq.com",
+          "revision": 0,
+          "cursor": "0",
+          "intervalMinutes": 15,
+          "autoUntil": "",
+          "nextRun": 0,
+          "plugin": {
+            "id": "wecom-aibot",
+            "name": "企业微信 · 智能机器人",
+            "protocol": "aibot-ws",
+            "builtin": true,
+            "defaultEndpoint": "wss://openws.work.weixin.qq.com",
+            "capabilities": {
+              "conversations": true,
+              "history": true,
+              "send": false
+            }
+          },
+          "hasToken": false,
+          "status": {
+            "ready": false,
+            "message": "连接未启用"
+          },
+          "availableBindings": [],
+          "running": false,
+          "platform": "linux"
+        }
+      ]
+    }
+  },
+  "/api/chat-autofollow/queue?limit=20&offset=0": {
+    "status": 200,
+    "body": {
+      "items": [],
+      "limit": 20,
+      "offset": 0
+    }
+  },
+  "/api/care/overview": {
+    "status": 200,
+    "body": {
+      "stats": {
+        "messagesToday": 1,
+        "pending": 0,
+        "unassigned": 0,
+        "openAlerts": 1,
+        "urgentAlerts": 0,
+        "autoRepliedToday": 0,
+        "drafts": 1,
+        "activeCampaigns": 0,
+        "pendingActions": 0,
+        "contactMatches": 0
+      },
+      "channels": [
+        {
+          "id": "wecom-kf",
+          "label": "微信客服",
+          "configured": false,
+          "autoSend": true,
+          "detail": "患者来消息后 48 小时内可自动回复（每次最多 5 条）"
+        },
+        {
+          "id": "wecom-contact",
+          "label": "企业微信客户联系",
+          "configured": false,
+          "autoSend": false,
+          "detail": "生成群发任务，需成员在企业微信确认发送"
+        },
+        {
+          "id": "manual",
+          "label": "人工发送",
+          "configured": true,
+          "autoSend": false,
+          "detail": "复制内容后由医生或助理自行发送"
+        }
+      ],
+      "notifier": {
+        "id": "wecom-app",
+        "label": "企业微信应用消息",
+        "configured": false
+      },
+      "kfSync": {
+        "lastSyncAt": null,
+        "lastError": null,
+        "nextAt": null,
+        "failures": 0,
+        "syncing": false,
+        "polling": false,
+        "pollSeconds": 60
+      },
+      "settings": {
+        "autoReply": {
+          "mode": "draft",
+          "categories": [
+            "education",
+            "admin"
+          ],
+          "disclaimer": true
+        }
+      },
+      "processing": {
+        "enabled": true,
+        "modelConsent": false,
+        "modelReady": false,
+        "modelConfigured": true,
+        "lastTickAt": "<time>",
+        "lastError": null
+      }
+    }
+  },
+  "/api/care/inbox?limit=100": {
+    "status": 200,
+    "body": {
+      "messages": [
+        {
+          "id": 1,
+          "patientId": "<uuid>",
+          "patientName": "示例·李婉珍",
+          "channel": "manual",
+          "direction": "in",
+          "time": "<time>",
+          "speaker": "unknown",
+          "rawSpeaker": "",
+          "timeUnknown": false,
+          "rawTime": "",
+          "collectedAt": null,
+          "text": "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？",
+          "attachments": [],
+          "sender": null,
+          "kfExternalUserId": null,
+          "state": {
+            "status": "recorded",
+            "level": "routine",
+            "category": null,
+            "reasons": [
+              "接入前的历史消息，仅记录不分诊"
+            ],
+            "replyId": null,
+            "alertId": null
+          }
+        }
+      ]
+    }
+  },
+  "/api/care/settings": {
+    "status": 200,
+    "body": {
+      "autoReply": {
+        "mode": "draft",
+        "categories": [
+          "education",
+          "admin"
+        ],
+        "disclaimer": true
+      },
+      "alerts": {
+        "notifyUserIds": [],
+        "escalateAfterMinutes": 30
+      },
+      "redFlags": {
+        "extra": []
+      },
+      "processing": {
+        "enabled": true,
+        "modelConsent": false
+      },
+      "updatedAt": null,
+      "channels": {
+        "corp": {
+          "corpId": "",
+          "hasContactSecret": false,
+          "hasCallbackToken": false,
+          "hasAesKey": false,
+          "callbackConfigured": false,
+          "from": {
+            "corpId": "none",
+            "corpSecret": "none",
+            "callbackToken": "none",
+            "aesKey": "none"
+          }
+        },
+        "kf": {
+          "openKfId": "",
+          "hasSecret": false
+        },
+        "app": {
+          "agentId": "",
+          "hasSecret": false
+        },
+        "list": [
+          {
+            "id": "wecom-kf",
+            "label": "微信客服",
+            "configured": false,
+            "autoSend": true,
+            "detail": "患者来消息后 48 小时内可自动回复（每次最多 5 条）"
+          },
+          {
+            "id": "wecom-contact",
+            "label": "企业微信客户联系",
+            "configured": false,
+            "autoSend": false,
+            "detail": "生成群发任务，需成员在企业微信确认发送"
+          },
+          {
+            "id": "manual",
+            "label": "人工发送",
+            "configured": true,
+            "autoSend": false,
+            "detail": "复制内容后由医生或助理自行发送"
+          }
+        ],
+        "notifier": {
+          "id": "wecom-app",
+          "label": "企业微信应用消息",
+          "configured": false
+        },
+        "kfSync": {
+          "lastSyncAt": null,
+          "lastError": null,
+          "nextAt": null,
+          "failures": 0,
+          "syncing": false,
+          "polling": false,
+          "pollSeconds": 60
+        },
+        "kfLastInboundAt": null
+      }
+    }
+  },
+  "/api/doctor/overview?limit=100": {
+    "status": 200,
+    "body": {
+      "counts": {
+        "all": 5,
+        "risk": 0,
+        "visit": 1,
+        "followup": 1,
+        "tracking": 0,
+        "messages": 3,
+        "trial": 0,
+        "custom": 0
+      },
+      "kinds": [
+        {
+          "kind": "all",
+          "label": "全部",
+          "count": 5
+        },
+        {
+          "kind": "risk",
+          "label": "高危风险",
+          "count": 0
+        },
+        {
+          "kind": "visit",
+          "label": "复诊",
+          "count": 1
+        },
+        {
+          "kind": "followup",
+          "label": "随访",
+          "count": 1
+        },
+        {
+          "kind": "tracking",
+          "label": "检查检验",
+          "count": 0
+        },
+        {
+          "kind": "messages",
+          "label": "患者消息",
+          "count": 3
+        },
+        {
+          "kind": "trial",
+          "label": "试验入组",
+          "count": 0
+        },
+        {
+          "kind": "custom",
+          "label": "我的规则",
+          "count": 0
+        }
+      ],
+      "criticalCount": 0,
+      "total": 5,
+      "offset": 0,
+      "limit": 100,
+      "hasMore": false,
+      "items": [
+        {
+          "id": "visit:<uuid>",
+          "kind": "visit",
+          "patientId": "<uuid>",
+          "title": "今天复诊",
+          "detail": "2026-10-29 10:00，示例·携带测量记录复诊 · 演示门诊，提前查看档案和近期结果",
+          "at": 1793268000000,
+          "weight": 2,
+          "action": {
+            "type": "patient",
+            "tab": "appointments",
+            "label": "查看预约"
+          },
+          "patientName": "示例·张沪生",
+          "patientNumber": "",
+          "birthYear": 1952
+        },
+        {
+          "id": "care-alert:<uuid>",
+          "kind": "messages",
+          "patientId": "<uuid>",
+          "title": "患者消息需要医生回复",
+          "detail": "示例·复诊资料需要医生核对",
+          "at": 1793265634108,
+          "weight": 3,
+          "action": {
+            "type": "view",
+            "view": "care",
+            "tab": "alerts",
+            "label": "查看消息"
+          },
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "birthYear": 1966
+        },
+        {
+          "id": "care-draft:<uuid>",
+          "kind": "messages",
+          "patientId": "<uuid>",
+          "title": "回复待发送",
+          "detail": "已起草回复，核对后发给患者",
+          "at": 1793265634108,
+          "weight": 4,
+          "count": 1,
+          "action": {
+            "type": "view",
+            "view": "care",
+            "tab": "drafts",
+            "label": "核对发送"
+          },
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "birthYear": 1966
+        },
+        {
+          "id": "reminder:<uuid>",
+          "kind": "followup",
+          "patientId": "<uuid>",
+          "title": "随访：示例·血糖控制季度随访",
+          "detail": "联系患者后登记随访结果",
+          "at": 1793265634095,
+          "weight": 5,
+          "action": {
+            "type": "patient",
+            "tab": "followups",
+            "label": "登记随访"
+          },
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "birthYear": 1966
+        },
+        {
+          "id": "messages:<uuid>",
+          "kind": "messages",
+          "patientId": "<uuid>",
+          "title": "1 条聊天记录待整理",
+          "detail": "查看原文，决定是否回复或记入档案",
+          "at": 1793265634107,
+          "weight": 6,
+          "count": 1,
+          "action": {
+            "type": "patient",
+            "tab": "messages",
+            "label": "处理消息"
+          },
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "birthYear": 1966
+        }
+      ],
+      "work": {
+        "total": 0,
+        "items": []
+      },
+      "generatedAt": 1793265634123,
+      "patientCount": 3
+    }
+  }
+}

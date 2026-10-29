@@ -1,0 +1,22 @@
+{
+  "counts": {
+    "all": 5,
+    "risk": 0,
+    "visit": 1,
+    "followup": 1,
+    "tracking": 0,
+    "messages": 3,
+    "trial": 0,
+    "custom": 0
+  },
+  "total": 5,
+  "itemsByKind": {
+    "visit": ["visit:<uuid>"],
+    "messages": [
+      "care-alert:<uuid>",
+      "care-draft:<uuid>",
+      "messages:<uuid>"
+    ],
+    "followup": ["reminder:<uuid>"]
+  }
+}

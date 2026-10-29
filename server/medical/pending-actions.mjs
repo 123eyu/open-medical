@@ -1,8 +1,5 @@
 import { intakeAudit } from './intake-evidence.mjs';
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../../shared/clinical-summary.mjs';
-import { learningPrefs } from "./personal-context.mjs";
-import { ReviewLog } from "./review-log.mjs";
-import { HabitLearner } from "./habit-learner.mjs";
 import { alignReviewItems, reviewDiff, diffSummary } from "../../shared/review-diff.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { check, string } from "../errors.mjs";
@@ -20,22 +17,11 @@ const TYPES = [
   "patient-create",
   "patient-update",
   "patient-grouping",
-  "followup-create",
   "case-save",
-  "care-message",
-  "care-campaign",
-  "care-settings",
-  "care-bind",
-  "care-group-message",
-  "care-education-broadcast",
   "patient-group-suggest",
-  "trial-batch",
-  "trial-enrollment",
   "ext-change",
   "ext-install",
 ];
-const isCare = (type) => type.startsWith("care-");
-const isTrial = (type) => type.startsWith("trial-");
 const isExt = (type) => type.startsWith("ext-");
 const confirmationFingerprint = (value) => {
   const canonical = (item) => Array.isArray(item) ? item.map(canonical) : item && typeof item === "object"
@@ -59,8 +45,6 @@ export class PendingActions {
   constructor(store, services) {
     this.store = store;
     this.services = services;
-    this.reviewLog = new ReviewLog(store);
-    this.habitLearner = new HabitLearner(store, services.doctor?.());
     store.db.exec(`CREATE TABLE IF NOT EXISTS patient_create_confirmations (
       action_id TEXT PRIMARY KEY REFERENCES pending_actions(id) ON DELETE CASCADE,
       patient_id TEXT NOT NULL,
@@ -70,23 +54,26 @@ export class PendingActions {
   get patients() {
     return this.services.patients();
   }
-  get followups() {
-    return this.services.followups();
-  }
   get cases() {
     return this.services.cases();
   }
   get doctor() {
     return this.services.doctor?.();
   }
-  get care() {
-    return this.services.care?.() || null;
-  }
-  get trials() {
-    return this.services.trials?.() || null;
-  }
   get extensions() {
     return this.services.extensions?.() || null;
+  }
+  get learning() {
+    return this.services.learning?.() || null;
+  }
+  get reviewLog() {
+    return this.learning?.reviewLog || null;
+  }
+  get habitLearner() {
+    return this.learning?.learner || null;
+  }
+  get pluginHost() {
+    return this.services.pluginHost?.() || null;
   }
   audit(action, payload = action.reviewDraft?.payload || action.payload, reviews = action.reviewDraft?.evidenceReviews || {}) {
     if (action.type !== 'patient-create' || !action.payload.sourceSessionId) return undefined;
@@ -121,8 +108,20 @@ export class PendingActions {
     return sqliteTransaction(this.store.db, () => this.proposeTransaction(input));
   }
   proposeTransaction({ type, patientId, payload = {}, summary, prepare, provenance } = {}) {
+    const fixedType = TYPES.includes(type);
+    const pluginKnown = !fixedType && this.pluginHost?.knowsProposalType(type);
+    const pluginHandler = fixedType
+      ? null
+      : this.pluginHost?.proposalHandler(type);
+    if (pluginKnown)
+      check(
+        pluginHandler,
+        "PLUGIN_UNAVAILABLE",
+        "插件未启用或不可用，无法执行该提案",
+        409,
+      );
     check(
-      TYPES.includes(type),
+      fixedType || pluginHandler,
       "INVALID_INPUT",
       `提案类型须为：${TYPES.join("/")}`,
     );
@@ -141,28 +140,41 @@ export class PendingActions {
     }
     let resolvedPatientId = null;
     let baseRevision = null;
-    if (type === "patient-update" || type === "followup-create") {
+    if (type === "patient-update") {
       check(patientId, "INVALID_INPUT", "该提案需要患者编号");
       const patient = this.patients.row(patientId);
       resolvedPatientId = patient.id;
       baseRevision = patient.revision;
     }
+    if (pluginHandler && patientId) {
+      const patient = this.patients.row(patientId);
+      resolvedPatientId = patient.id;
+      // Legacy care proposals only reference a patient for display and never
+      // overwrite the chart. They keep baseRevision=null like before the move.
+      baseRevision =
+        pluginHandler.legacy && !pluginHandler.revisionScoped
+          ? null
+          : patient.revision;
+    }
     let normalized = payload;
-    if (isCare(type)) {
-      check(this.care, "CARE_UNAVAILABLE", "患者管理模块未启用", 503);
-      normalized = this.care.normalizeProposal(type, { ...payload, ...(patientId ? { patientId } : {}) });
-      // Care proposals reference the patient for display only; they never
-      // overwrite the clinical record, so no revision check applies.
-      if (normalized.patientId) resolvedPatientId = this.patients.row(normalized.patientId).id;
+    if (pluginHandler?.legacy) {
+      const descriptor = { type, patientId, payload };
+      const validated = pluginHandler.validate(descriptor);
+      normalized =
+        validated === undefined || validated === descriptor
+          ? payload
+          : validated;
+      check(
+        normalized && typeof normalized === "object" && !Array.isArray(normalized),
+        "PLUGIN_PROPOSAL",
+        "插件提案校验结果必须是对象",
+      );
+      if (normalized.patientId)
+        resolvedPatientId = this.patients.row(normalized.patientId).id;
     }
     if (isExt(type)) {
       check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
       normalized = this.extensions.normalizeProposal(type, payload);
-    }
-    if (isTrial(type)) {
-      check(this.trials, "TRIAL_UNAVAILABLE", "临床试验模块未启用", 503);
-      normalized = this.trials.normalizeProposal(type, { ...payload, ...(patientId ? { patientId } : {}) });
-      if (normalized.patientId) resolvedPatientId = normalized.patientId;
     }
     if (type === "patient-update") {
       const fields = {
@@ -185,13 +197,6 @@ export class PendingActions {
         ...normalizePatientCreate(payload),
       };
       if (prepare) normalized = prepare(normalized);
-    }
-    if (type === "followup-create") {
-      check(
-        payload && typeof payload.name === "string" && payload.name.trim(),
-        "INVALID_INPUT",
-        "随访提案需要 name",
-      );
     }
     if (type === "patient-grouping") {
       // 多患者分组提案：逐人快照姓名与当前分组，供托盘展示和确认时核对；
@@ -267,7 +272,7 @@ export class PendingActions {
         time,
         time,
       );
-    if (type === "patient-create") for (const h of normalized.personalization?.habits || []) this.reviewLog.feedback(h.id, id, "applied");
+    if (type === "patient-create") for (const h of normalized.personalization?.habits || []) this.reviewLog?.feedback(h.id, id, "applied");
     // 新提案即时提醒：顶栏角标以外，桌面系统通知兜底，医生不盯屏幕也不会漏。
     try {
       this.services.onProposed?.({ id, type, summary: title, patientId: resolvedPatientId });
@@ -301,7 +306,15 @@ export class PendingActions {
     const where = [];
     const args = [];
     check(Number.isSafeInteger(limit) && limit >= 1 && limit <= 100 && Number.isSafeInteger(offset) && offset >= 0, "INVALID_INPUT", "提案分页参数无效");
-    if (type !== undefined) { check(TYPES.includes(type), "INVALID_INPUT", "提案类型无效"); where.push("type=?"); args.push(type); }
+    if (type !== undefined) {
+      check(
+        TYPES.includes(type) || this.pluginHost?.knowsProposalType(type),
+        "INVALID_INPUT",
+        "提案类型无效",
+      );
+      where.push("type=?");
+      args.push(type);
+    }
     if (sourceSessionId !== undefined) {
       where.push("json_extract(payload,'$.sourceSessionId')=?");
       args.push(string(sourceSessionId, "来源会话", 200));
@@ -398,7 +411,7 @@ export class PendingActions {
         const receipt = this.store.db.prepare("SELECT patient_id,fingerprint FROM patient_create_confirmations WHERE action_id=?").get(id);
         // Older confirmations already have an exact action-to-patient audit link.
         // Never recover by patient name or by a different proposal from the same task.
-        const legacy = !receipt && this.store.db.prepare("SELECT patient_id FROM review_sessions WHERE action_id=? AND kind='intake' AND superseded=0").get(id);
+        const legacy = !receipt && this.learning?.reviewActionPatient(id);
         check(receipt || legacy, "ACTION_RESOLVED", "该提案已处理，但无法确认对应档案，请从患者列表核对。", 409);
         if (payload !== undefined) {
           const saved = receipt?.fingerprint || confirmationFingerprint(action.reviewDraft?.payload || action.payload);
@@ -407,15 +420,30 @@ export class PendingActions {
         }
         return { ok: true, action, applied: this.patients.row((receipt || legacy).patient_id), replayed: true, habitSuggestions: [], remembered: [], pausedHabits: [] };
       }
-      const eventCursor = this.store.db.prepare("SELECT COALESCE(MAX(id),0) n FROM learning_events").get().n;
+      const eventCursor = this.learning?.eventCursor() ?? 0;
       check(
         action.status === "pending",
         "ACTION_RESOLVED",
         "该提案已处理",
         409,
       );
-      // Care and trial proposals never overwrite the chart, so no revision check applies.
-      if (action.patientId && (isCare(action.type) || isTrial(action.type))) {
+      // Legacy plugin types keep their pre-migration revision semantics
+      // (care/trial types were never pinned to a patient revision). New plugin
+      // types still use the normal guard.
+      const pluginKnown =
+        !TYPES.includes(action.type) &&
+        this.pluginHost?.knowsProposalType(action.type);
+      const pluginHandler = this.pluginHost?.proposalHandler(action.type);
+      if (pluginKnown)
+        check(
+          pluginHandler,
+          "PLUGIN_UNAVAILABLE",
+          "插件未启用或不可用，无法执行该提案",
+          409,
+        );
+      const skipRevisionCheck =
+        pluginHandler?.legacy && !pluginHandler.revisionScoped;
+      if (action.patientId && skipRevisionCheck) {
         check(!this.patients.row(action.patientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案并重新核对提案。", 409);
       } else if (action.patientId) {
         check(!this.patients.row(action.patientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案并重新核对提案。", 409);
@@ -433,16 +461,10 @@ export class PendingActions {
         );
       }
       let applied, habitSuggestions = [];
-      if (isCare(action.type)) {
-        check(this.care, "CARE_UNAVAILABLE", "患者管理模块未启用", 503);
-        applied = this.care.applyProposal(action);
-      } else if (isExt(action.type)) {
+      if (isExt(action.type)) {
         check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
         applied = this.extensions.applyProposal(action);
         if (applied?.kind === "skill") writtenSkill = applied.id ?? applied.ids;
-      } else if (isTrial(action.type)) {
-        check(this.trials, "TRIAL_UNAVAILABLE", "临床试验模块未启用", 503);
-        applied = this.trials.applyProposal(action);
       } else if (action.type === "patient-create") {
         if (action.payload.sourceSessionId) check(!this.list({ type: "patient-create", sourceSessionId: action.payload.sourceSessionId, status: "applied", limit: 1 }).length,
           "ALREADY_CREATED", "该资料任务已完成建档，请到已有患者档案查看。", 409);
@@ -456,7 +478,7 @@ export class PendingActions {
         if (audit) this.store.db.prepare('UPDATE pending_actions SET review_draft=? WHERE id=?').run(JSON.stringify({ payload: final, reasons: reasons || action.reviewDraft?.reasons || {}, evidenceReviews: reviews }), id);
         const patient = this.patients.create(final);
         this.store.db.prepare("INSERT INTO patient_create_confirmations(action_id,patient_id,fingerprint) VALUES (?,?,?)").run(id, patient.id, confirmationFingerprint(final));
-        this.reviewLog.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });
+        this.reviewLog?.record({ action, patientId: patient.id, final, reviewMs, reasons: reasons || action.reviewDraft?.reasons || {}, materialText: this.services.intakeText?.(action.payload.sourceSessionId) || '' });
         applied = { ...patient };
         if (action.payload.sourceSessionId && this.services.copySourceMaterials)
           this.services.copySourceMaterials(action.payload.sourceSessionId, patient.sessionId, action.payload.sourceFileIds || [], action.payload.sourceInput);
@@ -465,8 +487,8 @@ export class PendingActions {
         if (this.services.flagSuspectMaterials)
           this.services.flagSuspectMaterials(patient.sessionId, action.payload);
         applied = this.patients.row(patient.id);
-        if (action.payload.sourceSessionId) this.store.db.prepare('UPDATE review_sessions SET patient_id=? WHERE patient_id=? AND superseded=1').run(patient.id, action.payload.sourceSessionId);
-        if (this.doctor && learningPrefs(this.store.db).habits) habitSuggestions = this.habitLearner.aggregate();
+        if (action.payload.sourceSessionId) this.learning?.supersedeIntakeSessions(patient.id, action.payload.sourceSessionId);
+        if (this.doctor && this.learning?.prefs()?.habits && this.habitLearner) habitSuggestions = this.habitLearner.aggregate();
       } else if (action.type === "patient-update") {
         applied = this.patients.update(action.patientId, {
           ...action.payload,
@@ -474,8 +496,6 @@ export class PendingActions {
         });
         if (this.services.flagSuspectMaterials)
           this.services.flagSuspectMaterials(this.patients.row(action.patientId).sessionId, action.payload);
-      } else if (action.type === "followup-create") {
-        applied = this.followups.create(action.patientId, action.payload);
       } else if (action.type === "patient-group-suggest") {
         // Per-patient optimistic apply: a profile edited after the proposal
         // is skipped with its reason, never overwritten.
@@ -515,6 +535,29 @@ export class PendingActions {
           added++;
         }
         applied = { added, already, skipped };
+      } else if (!TYPES.includes(action.type)) {
+        // 插件提案与其它提案共享同一个 sqliteTransaction：validate/apply 抛错
+        // 时状态更新尚未执行，整个事务回滚，提案保持 pending。插件在提案
+        // 创建后被停用/不可用时已在上面明确拒绝，不能落入 case-save 的默认分支。
+        check(
+          pluginHandler,
+          "PLUGIN_UNAVAILABLE",
+          "插件未启用或不可用，无法执行该提案",
+          409,
+        );
+        const input = pluginHandler.legacy
+          ? {
+              type: action.type,
+              patientId: action.patientId,
+              payload: action.payload,
+            }
+          : action.payload?.input;
+        const validated = pluginHandler.validate(input);
+        applied = pluginHandler.apply(
+          validated === undefined ? input : validated,
+          this.store.db,
+          { action },
+        );
       } else {
         if (action.patientId) {
           const patient = this.patients.row(action.patientId);
@@ -541,7 +584,7 @@ export class PendingActions {
         409,
       );
       const remembered = this.recordFeedback(action, "confirmed", feedback);
-      return { ok: true, action: this.row(id), applied, habitSuggestions, remembered, pausedHabits: this.store.db.prepare("SELECT subject FROM learning_events WHERE type='habit-paused' AND id>?").all(eventCursor).map(r => Number(r.subject)).concat((action.payload.personalization?.habits || []).filter(h => this.doctor?.memoryRow(h.id).status === "paused").map(h => h.id)).filter((id,i,ids) => ids.indexOf(id) === i) };
+      return { ok: true, action: this.row(id), applied, habitSuggestions, remembered, pausedHabits: (this.learning?.pausedHabits(eventCursor) ?? []).concat((action.payload.personalization?.habits || []).filter(h => this.doctor?.memoryRow(h.id).status === "paused").map(h => h.id)).filter((id,i,ids) => ids.indexOf(id) === i) };
     }); } catch (error) {
       // Installs return a list of ids; restore every skill file the rolled
       // back transaction had materialized.
@@ -566,7 +609,7 @@ export class PendingActions {
   supersede(id, byId) {
     const stale = this.row(id);
     if (stale.status !== "pending") return;
-    if (stale.type === 'patient-create' && stale.reviewDraft) this.reviewLog.record({ action: stale, final: stale.reviewDraft.payload, reasons: stale.reviewDraft.reasons, superseded: true, materialText: this.services.intakeText?.(stale.payload.sourceSessionId) || '' });
+    if (stale.type === 'patient-create' && stale.reviewDraft) this.reviewLog?.record({ action: stale, final: stale.reviewDraft.payload, reasons: stale.reviewDraft.reasons, superseded: true, materialText: this.services.intakeText?.(stale.payload.sourceSessionId) || '' });
     const payload = JSON.stringify({ ...stale.payload, supersededBy: byId });
     this.store.db
       .prepare(
@@ -806,31 +849,6 @@ const diagnosisItemsDef = {
           patientId,
           payload: updates,
           summary: `${updateMode === "append" ? "追加资料" : "替换所选字段"} · ${summary}`.slice(0, 300),
-        });
-      },
-    },
-    {
-      definition: definition(
-        "followup_create_propose",
-        "提议为患者创建本机随访提醒（单次或周期），到期提醒医生本人联系患者，不会给患者发消息。若要定时给患者发问题并自动收集回复，用 care_campaign_propose。只创建待确认提案；医生在对话中明确同意后用 proposal_confirm 生效。",
-        {
-          patientId: textDef,
-          name: textDef,
-          once: { type: "boolean" },
-          intervalDays: { type: "integer" },
-          firstDueAt: textDef,
-          checklist: { type: "array", items: textDef },
-          summary: textDef,
-        },
-        ["patientId", "name", "firstDueAt", "summary"],
-      ),
-      execute: (args) => {
-        const { patientId, summary, ...payload } = args;
-        return pending.propose({
-          type: "followup-create",
-          patientId,
-          payload,
-          summary,
         });
       },
     },

@@ -1,0 +1,109 @@
+{
+  "alertsBefore": {
+    "status": 200,
+    "body": {
+      "alerts": [],
+      "counts": {
+        "active": 0,
+        "critical": 0
+      }
+    }
+  },
+  "monitorsBefore": {
+    "status": 200,
+    "body": {
+      "monitors": []
+    }
+  },
+  "monitorCreate": {
+    "status": 201,
+    "body": {
+      "id": "<uuid>",
+      "patientId": "<uuid>",
+      "item": "白细胞计数",
+      "op": "gt",
+      "threshold": 0,
+      "recheckDays": null,
+      "severity": "warning",
+      "note": "快照",
+      "unitHint": "10^9/L",
+      "status": "active",
+      "createdAt": "<time>",
+      "revision": 0
+    }
+  },
+  "monitorsAfter": {
+    "status": 200,
+    "body": {
+      "monitors": [
+        {
+          "id": "<uuid>",
+          "patientId": "<uuid>",
+          "item": "白细胞计数",
+          "op": "gt",
+          "threshold": 0,
+          "recheckDays": null,
+          "severity": "warning",
+          "note": "快照",
+          "unitHint": "10^9/L",
+          "status": "active",
+          "createdAt": "<time>",
+          "revision": 0
+        }
+      ]
+    }
+  },
+  "alertsAfter": {
+    "status": 200,
+    "body": {
+      "alerts": [
+        {
+          "id": "<uuid>",
+          "patientId": "<uuid>",
+          "ruleKey": "lab_monitor_<uuid>",
+          "severity": "warning",
+          "status": "active",
+          "updatedAt": "<time>",
+          "patientName": "示例·王建国",
+          "sessionId": "<uuid>",
+          "title": "监测：白细胞计数越界",
+          "message": "「白细胞计数」最新值 7.210^9/L（2026-10-13）高于监测阈值 010^9/L。",
+          "evidence": [
+            {
+              "item": "白细胞计数",
+              "value": 7.2,
+              "unit": "10^9/L",
+              "date": "2026-10-13",
+              "source": "示例数据包"
+            },
+            {
+              "condition": "value",
+              "monitorRevision": 0
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "active": 1,
+        "critical": 0
+      }
+    }
+  },
+  "monitorPause": {
+    "status": 200,
+    "body": {
+      "id": "<uuid>",
+      "patientId": "<uuid>",
+      "item": "白细胞计数",
+      "op": "gt",
+      "threshold": 0,
+      "recheckDays": null,
+      "severity": "warning",
+      "note": "快照",
+      "unitHint": "10^9/L",
+      "status": "paused",
+      "createdAt": "<time>",
+      "revision": 1
+    }
+  }
+}

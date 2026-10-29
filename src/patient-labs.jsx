@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { dashboardLabGroups, dashboardLabLayout, dashboardLabComparison } from '../shared/patient-dashboard.mjs';
 import { diagnosisSources } from '../shared/diagnoses.mjs';
 import { api } from './agent-runtime';
+import { usePluginActive } from './plugin-slots';
 import './patient-labs.css';
 
 export function PatientLabs({ patient, session, focusLab, onChanged, onError, onClinical, onOpenWorkspace, onEdit, Plot, citedFileName }) {
+  const riskActive = usePluginActive('risk-rules');
   const [display, setDisplay] = useState(patient.labDisplay || { revision: 0 });
   const [displayBusy, setDisplayBusy] = useState(false);
   const [monitors, setMonitors] = useState([]);
@@ -34,6 +36,7 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
   const comparisonDates = [...new Set(layout.comparison.flatMap(g => g.records.map(r => r.date || '日期未记录')))].sort().reverse();
   const files = session.files || [];
   const loadMonitors = () => {
+    if (!riskActive) return;
     api(`/api/patients/${patient.id}/lab-monitors`).then(s => setMonitors(s.monitors || [])).catch(() => {});
     api(`/api/risk-alerts?patientId=${patient.id}`).then(s => {
       const map = {};
@@ -41,7 +44,10 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
       setMonitorAlerts(map);
     }).catch(() => {});
   };
-  useEffect(() => { loadMonitors(); }, [patient.id]);
+  useEffect(() => {
+    if (!riskActive) { setMonitors([]); setMonitorAlerts({}); setMonitorForm(null); return; }
+    loadMonitors();
+  }, [patient.id, riskActive]);
   useEffect(() => { setDisplay(patient.labDisplay || { revision: 0 }); }, [patient.id, patient.labDisplay]);
   const saveDisplay = async patch => {
     setDisplayBusy(true);
@@ -127,7 +133,7 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
         {expanded && <div className="lab-result-detail">
           {focused && layout.hidden.some(hidden => hidden.key === group.key) && <p className="chart-lab-hint">已临时展开这项记录；离开后仍按原展示设置显示。</p>}
           <div className="lab-detail-toolbar"><b>趋势与来源 · {group.records.length} 条记录</b><div>
-            <button className="text-button" disabled={patient.archived} onClick={()=>startMonitor(group)}>设置监测</button>
+            {riskActive && <button className="text-button" disabled={patient.archived} onClick={()=>startMonitor(group)}>设置监测</button>}
             <details className="labs-menu"><summary>对照与展示</summary><div className="labs-menu-content">
               <button className="text-button" disabled={displayBusy} onClick={()=>saveDisplay({order:[group.key, ...layout.groups.map(g=>g.key).filter(k=>k!==group.key)]})}>排在最前</button>
               <button className="text-button" disabled={displayBusy} aria-pressed={layout.comparison.some(g=>g.key===group.key)} onClick={()=>toggleDisplay('compare',group.key)}>{layout.comparison.some(g=>g.key===group.key) ? '移出对照' : '加入对照'}</button>
@@ -156,7 +162,7 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
         </table></div> : <p className="muted">暂无参与对照的项目，可在检验详情中加入。</p>}
       </details>
     </div>}
-    {(!!monitors.length || !!monitorForm) && <details className="labs-monitor-settings" open={monitorOpen} onToggle={event=>setMonitorOpen(event.currentTarget.open)}><summary>监测设置{monitors.length ? ` · ${monitors.length} 项` : ''}</summary>
+    {riskActive && (!!monitors.length || !!monitorForm) && <details className="labs-monitor-settings" open={monitorOpen} onToggle={event=>setMonitorOpen(event.currentTarget.open)}><summary>监测设置{monitors.length ? ` · ${monitors.length} 项` : ''}</summary>
       <div className="chart-monitors" aria-label="个性化检验监测">
         {monitorForm && <form className="chart-monitor-form" onSubmit={submitMonitor}>
           <div className="chart-monitor-row"><b>{monitorForm.item}</b><label>条件<select value={monitorForm.op} onChange={e=>setMonitorForm({...monitorForm, op: e.target.value})}><option value="gt">高于</option><option value="lt">低于</option></select></label>

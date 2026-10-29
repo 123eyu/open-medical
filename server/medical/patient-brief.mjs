@@ -7,7 +7,7 @@ const source = (value, fallback) => value || fallback;
 // A deterministic, local read model. It does not infer diagnoses, normalize
 // incompatible units, or turn missing history into a negative clinical fact.
 export class PatientBrief {
-  constructor(store, patients) { this.store = store; this.patients = patients; }
+  constructor(store, patients, { briefContributions = null } = {}) { this.store = store; this.patients = patients; this.briefContributions = briefContributions; }
   read(patientId) {
     const p = this.patients.row(patientId);
     const db = this.store.db;
@@ -36,12 +36,27 @@ export class PatientBrief {
       .map((r) => { const data = JSON.parse(r.data); return { id: r.id, title: data.title, ...data.outcome, addenda: (data.outcome.addenda || []).slice(-3), addendumCount: data.outcome.addenda?.length || 0, source: `随访记录 ${r.id}` }; });
     const messages = db.prepare("SELECT id,direction,time,data FROM patient_messages WHERE patient_id=? AND processed=0 ORDER BY time DESC LIMIT 3").all(patientId)
       .map((r) => ({ id: r.id, at: r.time, text: JSON.parse(r.data).text, ...messageProvenance(JSON.parse(r.data), r.direction), source: `患者消息 ${r.id}` }));
-    const careTaskCount = db.prepare("SELECT COUNT(*) n FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled')").get(patientId).n;
-    const careTasks = db.prepare("SELECT data FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled') ORDER BY due_at LIMIT 5").all(patientId)
-      .map((row) => { const task = JSON.parse(row.data); return { id: task.id, title: task.title, status: task.status, dueAt: task.dueAt, note: task.note, resultSource: task.resultSource, reviewNote: task.reviewNote, source: `待跟进事项 ${task.id}` }; });
+    // Plugin-owned data arrives through contributions. With the owning plugin
+    // disabled or missing the fixed region keeps the historical empty shape.
+    let contributed = {};
+    if (typeof this.briefContributions === "function") {
+      try {
+        contributed = this.briefContributions(patientId) || {};
+      } catch (error) {
+        console.error("患者简报贡献失败:", error);
+      }
+    }
+    const careTaskCount = Number.isFinite(contributed.careTaskCount)
+      ? contributed.careTaskCount
+      : 0;
+    const careTasks = Array.isArray(contributed.careTasks)
+      ? contributed.careTasks
+      : [];
     const counts = this.patients.counts(patientId);
     const pendingReviews = db.prepare("SELECT COUNT(*) n FROM pending_actions WHERE patient_id=? AND status='pending'").get(patientId).n;
-    const activeRisks = db.prepare("SELECT COUNT(*) n FROM risk_alerts WHERE patient_id=? AND status='active'").get(patientId).n;
+    const activeRisks = Number.isFinite(contributed.activeRisks)
+      ? contributed.activeRisks
+      : 0;
     const allergyStatus = (p.allergies || []).length ? "recorded" : p.allergyStatus || "unknown";
     const gaps = [];
     if (allergyStatus === "unknown") gaps.push({ field: "allergies", label: "过敏史未记录", tab: "clinical" });

@@ -1,0 +1,14 @@
+{
+  "counts": {
+    "all": 1,
+    "risk": 0,
+    "visit": 1,
+    "tracking": 0,
+    "trial": 0,
+    "custom": 0
+  },
+  "total": 1,
+  "itemsByKind": {
+    "visit": ["visit:<uuid>"]
+  }
+}

@@ -1,6 +1,4 @@
 import { CLINICAL_SUMMARY_INSTRUCTION } from '../../shared/clinical-summary.mjs';
-import { learningPrefs } from "./personal-context.mjs";
-const learningEnabled = db => learningPrefs(db).habits;
 import { check } from '../errors.mjs';
 
 // Intake execution belongs to the server, not an HTTP connection or modal.
@@ -25,7 +23,7 @@ export class IntakeJobs {
     check(!w.patientId, 'PATIENT_SESSION', '请为新患者创建独立的建档任务', 409);
     check(w.materials?.length, 'NO_MATERIALS', '没有可解析的资料');
     check(!this.pending.list({status:'applied', type:'patient-create', sourceSessionId:id, limit:1}).length, 'ALREADY_CREATED', '该任务已完成建档', 409);
-    const remembered = this.pending.doctor && learningEnabled(this.pending.store.db) ? this.pending.doctor.extractStated(correction, { via: 'intake-correction' }) : [];
+    const remembered = this.pending.doctor && this.pending.learning?.()?.prefs()?.habits ? this.pending.doctor.extractStated(correction, { via: 'intake-correction' }) : [];
     const changes = this.drafts(id).map(d => this.pending.reviewCorrection(d.id, reviewMode)).filter(Boolean).join('\n');
     if (changes) correction = `请在新草稿保留医生的手动修改：\n${changes}\n${correction}`;
     check(correction.length <= 30000, 'INVALID_INPUT', '修改内容过长，请分批整理');

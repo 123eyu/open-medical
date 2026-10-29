@@ -1,0 +1,346 @@
+{
+  "/api/wecom/status": {
+    "status": 200,
+    "body": {
+      "configured": true,
+      "corpId": "wwsnap0000000001",
+      "callbackConfigured": true,
+      "callbackPath": "/api/wecom/callback",
+      "sdk": "witjs/wecom 1.0.0-rc.2",
+      "capabilities": {
+        "contacts": true,
+        "followupTasks": true,
+        "chatArchive": false,
+        "automaticSend": false
+      },
+      "lastEventAt": "2026-01-04T00:00:00.000Z"
+    }
+  },
+  "/api/wecom/contacts": {
+    "status": 200,
+    "body": {
+      "contacts": [
+        {
+          "member": "zhangsan",
+          "external": "wmEXT001",
+          "name": "张三",
+          "active": true,
+          "updated": "2026-01-02T03:04:05.000Z",
+          "remark": "张三·P0001",
+          "description": "家属：女儿陪同",
+          "mobiles": [
+            "13800000000"
+          ],
+          "tags": [
+            "复诊"
+          ],
+          "type": "wechat",
+          "gender": "male",
+          "corpName": "示例企业",
+          "addedAt": "2026-01-01T00:00:00.000Z",
+          "displayName": "张三·P0001",
+          "state": "bound",
+          "bindings": [
+            {
+              "id": "binding-snap",
+              "external": "wmEXT001",
+              "patientId": "<patientId>",
+              "patientName": "示例·王建国",
+              "patientNumber": "",
+              "relationship": "self",
+              "verifiedAt": "2026-01-02T04:05:06.000Z"
+            }
+          ],
+          "suggestion": {
+            "candidates": [],
+            "relationship": null,
+            "confident": false
+          },
+          "groups": [
+            {
+              "chatId": "wrGROUP001",
+              "name": "糖友交流群"
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "bound": 1,
+        "suggested": 0,
+        "unmatched": 0
+      },
+      "status": {
+        "configured": true,
+        "syncing": false,
+        "members": [
+          "zhangsan"
+        ],
+        "lastSyncAt": "2026-01-06T00:00:00.000Z",
+        "lastError": null,
+        "groupsError": null,
+        "contacts": 1,
+        "bound": 1,
+        "groups": 1
+      }
+    }
+  },
+  "/api/wecom/contacts?status=bound&q=%E5%BC%A0": {
+    "status": 200,
+    "body": {
+      "contacts": [
+        {
+          "member": "zhangsan",
+          "external": "wmEXT001",
+          "name": "张三",
+          "active": true,
+          "updated": "2026-01-02T03:04:05.000Z",
+          "remark": "张三·P0001",
+          "description": "家属：女儿陪同",
+          "mobiles": [
+            "13800000000"
+          ],
+          "tags": [
+            "复诊"
+          ],
+          "type": "wechat",
+          "gender": "male",
+          "corpName": "示例企业",
+          "addedAt": "2026-01-01T00:00:00.000Z",
+          "displayName": "张三·P0001",
+          "state": "bound",
+          "bindings": [
+            {
+              "id": "binding-snap",
+              "external": "wmEXT001",
+              "patientId": "<patientId>",
+              "patientName": "示例·王建国",
+              "patientNumber": "",
+              "relationship": "self",
+              "verifiedAt": "2026-01-02T04:05:06.000Z"
+            }
+          ],
+          "suggestion": {
+            "candidates": [],
+            "relationship": null,
+            "confident": false
+          },
+          "groups": [
+            {
+              "chatId": "wrGROUP001",
+              "name": "糖友交流群"
+            }
+          ]
+        }
+      ],
+      "counts": {
+        "bound": 1,
+        "suggested": 0,
+        "unmatched": 0
+      },
+      "status": {
+        "configured": true,
+        "syncing": false,
+        "members": [
+          "zhangsan"
+        ],
+        "lastSyncAt": "2026-01-06T00:00:00.000Z",
+        "lastError": null,
+        "groupsError": null,
+        "contacts": 1,
+        "bound": 1,
+        "groups": 1
+      }
+    }
+  },
+  "/api/wecom/directory": {
+    "status": 200,
+    "body": {
+      "configured": true,
+      "syncing": false,
+      "members": [
+        "zhangsan"
+      ],
+      "lastSyncAt": "2026-01-06T00:00:00.000Z",
+      "lastError": null,
+      "groupsError": null,
+      "contacts": 1,
+      "bound": 1,
+      "groups": 1
+    }
+  },
+  "/api/wecom/groups": {
+    "status": 200,
+    "body": {
+      "groups": [
+        {
+          "chatId": "wrGROUP001",
+          "name": "糖友交流群",
+          "owner": "zhangsan",
+          "notice": "群公告",
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updated": "2026-01-02T03:04:05.000Z",
+          "memberCount": 2,
+          "customerCount": 1,
+          "patients": [
+            {
+              "patientId": "<patientId>",
+              "patientName": "示例·王建国",
+              "relationship": "self",
+              "member": "张三"
+            }
+          ],
+          "unlinkedCustomers": 0
+        }
+      ],
+      "status": {
+        "configured": true,
+        "syncing": false,
+        "members": [
+          "zhangsan"
+        ],
+        "lastSyncAt": "2026-01-06T00:00:00.000Z",
+        "lastError": null,
+        "groupsError": null,
+        "contacts": 1,
+        "bound": 1,
+        "groups": 1
+      }
+    }
+  },
+  "/api/wecom/groups/wrGROUP001": {
+    "status": 200,
+    "body": {
+      "chatId": "wrGROUP001",
+      "name": "糖友交流群",
+      "owner": "zhangsan",
+      "active": true,
+      "updated": "2026-01-02T03:04:05.000Z",
+      "notice": "群公告",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "admins": [
+        "zhangsan"
+      ],
+      "members": [
+        {
+          "id": "wmEXT001",
+          "external": true,
+          "name": "张三",
+          "joinedAt": "2026-01-01T00:00:00.000Z",
+          "patients": [
+            {
+              "patientId": "<patientId>",
+              "patientName": "示例·王建国",
+              "relationship": "self"
+            }
+          ]
+        },
+        {
+          "id": "zhangsan",
+          "external": false,
+          "name": "助理",
+          "joinedAt": null,
+          "patients": []
+        }
+      ],
+      "tasks": [
+        {
+          "id": "gtask-snap",
+          "chatId": "wrGROUP001",
+          "groupName": "糖友交流群",
+          "owner": "zhangsan",
+          "text": "本周健康讲座。",
+          "status": "draft",
+          "createdAt": "2026-01-05T00:00:00.000Z",
+          "updatedAt": "2026-01-05T00:00:00.000Z"
+        }
+      ]
+    }
+  },
+  "/api/wecom/patients/<patientId>": {
+    "status": 200,
+    "body": {
+      "configured": true,
+      "status": {
+        "configured": true,
+        "syncing": false,
+        "members": [
+          "zhangsan"
+        ],
+        "lastSyncAt": "2026-01-06T00:00:00.000Z",
+        "lastError": null,
+        "groupsError": null,
+        "contacts": 1,
+        "bound": 1,
+        "groups": 1
+      },
+      "linked": [
+        {
+          "bindingId": "binding-snap",
+          "member": "zhangsan",
+          "external": "wmEXT001",
+          "relationship": "self",
+          "verifiedAt": "2026-01-02T04:05:06.000Z",
+          "active": true,
+          "name": "张三",
+          "remark": "张三·P0001",
+          "description": "家属：女儿陪同",
+          "mobiles": [
+            "13800000000"
+          ],
+          "tags": [
+            "复诊"
+          ],
+          "addedAt": "2026-01-01T00:00:00.000Z",
+          "groups": [
+            {
+              "chatId": "wrGROUP001",
+              "name": "糖友交流群"
+            }
+          ]
+        }
+      ],
+      "suggestions": []
+    }
+  },
+  "/api/wecom/bindings?patientId=<patientId>": {
+    "status": 200,
+    "body": {
+      "bindings": [
+        {
+          "id": "binding-snap",
+          "corp": "wwsnap0000000001",
+          "member": "zhangsan",
+          "external": "wmEXT001",
+          "patient_id": "<patientId>",
+          "relationship": "self",
+          "verified_at": "2026-01-02T04:05:06.000Z",
+          "name": "张三",
+          "active": 1
+        }
+      ]
+    }
+  },
+  "/api/wecom/tasks?patientId=<patientId>": {
+    "status": 200,
+    "body": {
+      "tasks": [
+        {
+          "id": "task-snap",
+          "corpId": "wwsnap0000000001",
+          "patientId": "<patientId>",
+          "bindingId": "binding-snap",
+          "member": "zhangsan",
+          "external": "wmEXT001",
+          "recipient": "张三",
+          "relationship": "self",
+          "text": "请下周回来复诊。",
+          "status": "awaiting_member",
+          "msgid": "MSG-SNAP",
+          "detail": "已创建企业微信任务，等待成员确认发送。",
+          "createdAt": "2026-01-03T00:00:00.000Z",
+          "updatedAt": "2026-01-03T00:01:00.000Z"
+        }
+      ]
+    }
+  }
+}

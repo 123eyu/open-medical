@@ -8,6 +8,7 @@ import {
 import { diagnosisSources, groupDiagnoses } from "../shared/diagnoses.mjs";
 import { dashboardLabSummary } from "../shared/patient-dashboard.mjs";
 import "./patient-overview.css";
+import { Slot } from "./plugin-slots";
 import { PatientAttention } from "./patient-attention";
 
 function OverviewLink({ children, onClick }) {
@@ -321,6 +322,7 @@ export function PatientOverview({
             </OverviewLink>
           </section>
         </div>
+        <Slot name="patient.overviewCards" patient={patient} />
       </div>
 
       <nav className="overview-record-links" aria-label="档案内容导航">

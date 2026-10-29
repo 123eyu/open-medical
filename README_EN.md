@@ -502,7 +502,7 @@ Most detailed guides are currently in Chinese.
 | WeChat, WeCom and message archiving | [Chat connectors](docs/chat-connectors.md) |
 | Patient, message and follow-up data | [Patient management](docs/PATIENTS.md) |
 | Clinical interface, interaction rules and task validation | [Development guide](docs/DEVELOPMENT_GUIDE.md) |
-| Architecture and extensions | [Architecture](docs/ARCHITECTURE.md) · [Generic runtime](docs/GENERIC_RUNTIME.md) · [Orchestration](docs/ORCHESTRATION.md) |
+| Architecture and extensions | [Architecture](docs/ARCHITECTURE.md) · [Plugin guide](docs/PLUGIN_GUIDE.md) · [Generic runtime](docs/GENERIC_RUNTIME.md) · [Orchestration](docs/ORCHESTRATION.md) |
 | Runtime compatibility | [Runtime compatibility](RUNTIME_COMPATIBILITY.md) |
 | Private task queues and workers | [Remote deployment](deploy/remote/README.md) |
 

@@ -1,4 +1,3 @@
-import { habitRevision } from './habit-concurrency.mjs';
 import { sqliteTransaction } from "../sqlite-transaction.mjs";
 import { createHash } from "node:crypto";
 import { AppError, check, string } from "../errors.mjs";
@@ -26,9 +25,13 @@ const hashContent = (value) =>
 const nowIso = () => new Date().toISOString();
 
 export class DoctorProfile {
-  constructor(store) {
+  constructor(store, { ledger = null } = {}) {
     this.store = store;
+    this.ledger = ledger;
   }
+  revision(id) { return this.ledger?.()?.revision(id) ?? null; }
+  recordHistory(id, decision, snapshot) { this.ledger?.()?.record(id, decision, snapshot); }
+  suppressPattern(id) { this.ledger?.()?.suppress(id); }
   row() {
     const row = this.store.db
       .prepare("SELECT data FROM doctor_profile WHERE id='local'")
@@ -185,7 +188,7 @@ export class DoctorProfile {
       .all(...args)
       .map((row) => ({
         ...row,
-        revision: habitRevision(this.store.db, row.id),
+        revision: this.revision(row.id),
         pinned: Boolean(row.pinned),
         source: JSON.parse(row.source),
         rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null"),
@@ -199,7 +202,7 @@ export class DoctorProfile {
       )
       .get(id);
     check(row, "NOT_FOUND", "记忆条目不存在", 404);
-    return { ...row, revision: habitRevision(this.store.db, row.id), pinned: Boolean(row.pinned), source: JSON.parse(row.source), rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null") };
+    return { ...row, revision: this.revision(row.id), pinned: Boolean(row.pinned), source: JSON.parse(row.source), rule: JSON.parse(row.rule || "null"), evidence: JSON.parse(row.evidence || "[]"), dryrun: JSON.parse(row.dryrun || "null") };
   }
   addMemory({
     kind = "explicit",
@@ -251,14 +254,14 @@ export class DoctorProfile {
       const terminology = /诊断.{0,10}(全称|缩写)|(?:全称|缩写).{0,6}诊断/.test(text) || /(?:现在|以后).{0,6}缩写.{0,6}(?:可以|也行)/.test(text);
       const resolvedTopic = terminology ? '诊断名称写法' : topic;
       if (resolvedTopic) for (const prior of this.memories({ status: 'confirmed' }).filter(m => m.topic === resolvedTopic || (resolvedTopic === '诊断名称写法' && m.rule?.section === 'diagnoses' && ['term_replace', 'term_style'].includes(m.rule.type)))) {
-        this.store.db.prepare('INSERT INTO habit_history(habit_id,decision,snapshot,created_at) VALUES (?,?,?,?)').run(prior.id, 'superseded', JSON.stringify(prior), nowIso());
+        this.recordHistory(prior.id, 'superseded', prior);
         this.store.db.prepare("UPDATE doctor_memories SET status='dismissed',updated_at=? WHERE id=?").run(nowIso(), prior.id);
       }
       const memory = this.addMemory({ kind: 'explicit', status: 'confirmed', content: text, topic: resolvedTopic, source: { ...source, type: 'stated' } });
       const rule = resolvedTopic === '诊断名称写法' && !/缩写.{0,6}(?:也可以|也行|可以)/.test(text) ? { type: 'term_style', section: 'diagnoses', direction: /(?:不用|不要|不使用)缩写|全称/.test(text) ? 'full' : 'short' } : null;
       this.store.db.prepare('UPDATE doctor_memories SET rule=? WHERE id=?').run(JSON.stringify(rule), memory.id);
       this.store.db.prepare("UPDATE doctor_memories SET origin='stated',evidence=? WHERE id=?").run(JSON.stringify([text]), memory.id);
-      this.store.db.prepare('INSERT INTO habit_history(habit_id,decision,snapshot,created_at) VALUES (?,?,?,?)').run(memory.id, 'stated', JSON.stringify(memory), nowIso());
+      this.recordHistory(memory.id, 'stated', memory);
       return this.memoryRow(memory.id);
     });
   }
@@ -308,9 +311,9 @@ export class DoctorProfile {
   deleteMemory(id) {
     const memory = this.memoryRow(id);
     if (memory.rule || memory.source?.type === 'stated') return sqliteTransaction(this.store.db, () => {
-      this.store.db.prepare('INSERT INTO habit_history(habit_id,decision,snapshot,created_at) VALUES (?,?,?,?)').run(id, 'delete', JSON.stringify(memory), nowIso());
+      this.recordHistory(id, 'delete', memory);
       this.store.db.prepare("UPDATE doctor_memories SET status='deleted',updated_at=? WHERE id=?").run(nowIso(), id);
-      this.store.db.prepare('UPDATE habit_patterns SET suppressed=1 WHERE memory_id=?').run(id);
+      this.suppressPattern(id);
       return { ok: true };
     });
     this.store.db.prepare("DELETE FROM doctor_memories WHERE id=?").run(id);
@@ -392,9 +395,7 @@ export class DoctorProfile {
       this.store.db
         .prepare("UPDATE doctor_memories SET origin='learned',evidence=?,count=? WHERE id=?")
         .run(JSON.stringify(rows.map((row) => row.content).slice(0, 5)), total, memory.id);
-      this.store.db
-        .prepare("INSERT INTO habit_history(habit_id,decision,snapshot,created_at) VALUES (?,?,?,?)")
-        .run(memory.id, "learned", JSON.stringify(memory), time);
+      this.recordHistory(memory.id, "learned", memory);
       created.push(this.memoryRow(memory.id));
       for (const row of rows)
         this.store.db

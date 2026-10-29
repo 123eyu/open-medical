@@ -1,4 +1,4 @@
-import { check, string } from "../errors.mjs";
+import { string } from "../errors.mjs";
 import { scanPatients } from "./patient-scan.mjs";
 import { patientStats } from "./patient-stats.mjs";
 
@@ -16,7 +16,6 @@ export const GLOBAL_ASSISTANT_DISCIPLINE = `
 - 分组提案（patient_grouping_propose）每位患者必须写明分组依据（来自扫描证据或档案事实）；没有依据的患者不列入，宁可少列也不凑数。分组名称用医生的原话，简洁明确。
 - 用 knowledge_read 读取正文后，调用 knowledge_cite 核验支持结论的连续原文，复制返回的 citation 链接，不自行估算行号。
 - 知识库检索先 knowledge_collections 选适用库，再 knowledge_search 指定 collection；2–3 组短术语，英文原文用英文关键词。只有已读正文能支撑结论，证据不足直接说明缺口。
-- 随访安排用 followup_create_propose（只提醒医生本人联系，不会给患者发消息）。
 - 回答简短直接，先给结果再说过程；不确定就问。所有临床内容均为供医生复核的参考，不替代医生判断；不得编造患者数据、诊断或文献。`;
 
 // 花名册摘要注入系统提示，让助手不用首轮工具调用就知道患者规模和在用
@@ -44,7 +43,6 @@ export function configureGlobalAssistantTools(
     patients,
     pending,
     brief,
-    followups,
   },
 ) {
   const register = (name, description, parameters, execute, { readOnly = false } = {}) =>
@@ -155,18 +153,6 @@ export function configureGlobalAssistantTools(
       },
     },
     async (args) => patientStats(patients, args),
-    { readOnly: true },
-  );
-
-  register(
-    "followups_overview",
-    "只读全部患者的在管随访计划概览（按下次到期时间排序）：患者、计划名、频率、状态、到期时间。",
-    { properties: { limit: { type: "integer", description: "返回条数，默认 50" } } },
-    async (args) => {
-      const limit = args.limit === undefined ? 50 : args.limit;
-      check(Number.isInteger(limit) && limit >= 1 && limit <= 200, "INVALID_INPUT", "limit 须为 1–200");
-      return { followups: followups.overview({ limit }) };
-    },
     { readOnly: true },
   );
 

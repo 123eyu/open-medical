@@ -12,6 +12,9 @@
     "start": "node scripts/start-desktop.mjs",
     "platform": "node server/platform.mjs",
     "lint": "eslint .",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.mjs\" \"plugins/*/test/*.test.mjs\"",
+    "test:e2e": "playwright test",
+    "plugin:new": "node scripts/new-plugin.mjs",
     "format": "prettier --write src server shared scripts *.mjs *.md",
     "check": "npm run lint && npm run build",
     "backup": "node scripts/backup.mjs",
@@ -82,6 +85,7 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "1.63.0",
     "electron": "44.2.0",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",

@@ -1,0 +1,76 @@
+{
+  "create": {
+    "status": 201,
+    "body": {
+      "id": "<id>",
+      "patientId": "<uuid>",
+      "title": "迁移快照事项",
+      "kind": "test",
+      "dueAt": "<time>",
+      "note": "快照备注",
+      "status": "waiting_result",
+      "revision": 0,
+      "fingerprint": "<fingerprint>",
+      "createdAt": "<time>",
+      "updatedAt": "<time>",
+      "history": [
+        {
+          "action": "created",
+          "at": "<time>",
+          "note": "快照备注"
+        }
+      ]
+    }
+  },
+  "list": {
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "id": "<id>",
+          "patientId": "<uuid>",
+          "title": "示例·术后血常规报告跟进",
+          "kind": "test",
+          "dueAt": "<time>",
+          "note": "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。",
+          "status": "waiting_result",
+          "revision": 0,
+          "fingerprint": "<fingerprint>",
+          "createdAt": "<time>",
+          "updatedAt": "<time>",
+          "history": [
+            {
+              "action": "created",
+              "at": "<time>",
+              "note": "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。"
+            }
+          ]
+        },
+        {
+          "id": "<id>",
+          "patientId": "<uuid>",
+          "title": "迁移快照事项",
+          "kind": "test",
+          "dueAt": "<time>",
+          "note": "快照备注",
+          "status": "waiting_result",
+          "revision": 0,
+          "fingerprint": "<fingerprint>",
+          "createdAt": "<time>",
+          "updatedAt": "<time>",
+          "history": [
+            {
+              "action": "created",
+              "at": "<time>",
+              "note": "快照备注"
+            }
+          ]
+        }
+      ],
+      "total": 2,
+      "offset": 0,
+      "limit": 20,
+      "hasMore": false
+    }
+  }
+}

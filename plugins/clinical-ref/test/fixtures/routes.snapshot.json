@@ -1,0 +1,1377 @@
+{
+  "/api/scales": {
+    "status": 200,
+    "body": {
+      "scales": [
+        {
+          "id": "cha2ds2-vasc",
+          "name": "CHA₂DS₂-VASc 房颤卒中风险",
+          "category": "心血管",
+          "desc": "非瓣膜性房颤患者的卒中风险分层，指导抗凝决策。",
+          "items": [
+            {
+              "key": "chf",
+              "label": "充血性心衰/左心功能不全",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "htn",
+              "label": "高血压",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "age",
+              "label": "年龄",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "≥75 岁",
+                  "points": 2
+                },
+                {
+                  "label": "65–74 岁",
+                  "points": 1
+                },
+                {
+                  "label": "<65 岁",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "dm",
+              "label": "糖尿病",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "stroke",
+              "label": "既往卒中/TIA/血栓栓塞",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 2
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "vascular",
+              "label": "血管疾病（心梗/外周动脉/主动脉斑块）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "sex",
+              "label": "性别",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "女",
+                  "points": 1
+                },
+                {
+                  "label": "男",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "has-bled",
+          "name": "HAS-BLED 出血风险",
+          "category": "心血管",
+          "desc": "抗凝治疗患者的出血风险分层（≥3 分为高风险，提示加强监测而非拒绝抗凝）。",
+          "items": [
+            {
+              "key": "htn",
+              "label": "高血压（SBP>160mmHg 未控制）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "renal",
+              "label": "肾功能异常（透析/移植/血肌酐≥200μmol/L）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "liver",
+              "label": "肝功能异常（肝硬化/胆红素2倍/转氨酶3倍）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "stroke",
+              "label": "既往卒中史",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "bleeding",
+              "label": "出血史/出血倾向",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "inr",
+              "label": "INR 不稳定",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "elderly",
+              "label": "年龄 ≥65 岁",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "drugs",
+              "label": "联用抗血小板/NSAIDs",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "alcohol",
+              "label": "饮酒（≥8 杯/周）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wells-dvt",
+          "name": "Wells DVT 评分",
+          "category": "血管",
+          "desc": "下肢深静脉血栓形成临床可能性评估。",
+          "items": [
+            {
+              "key": "cancer",
+              "label": "活动性肿瘤（6个月内治疗或姑息）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "paralysis",
+              "label": "下肢瘫痪/近期下肢石膏固定",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "bedridden",
+              "label": "卧床>3天或12周内大手术",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "tenderness",
+              "label": "深静脉走行区压痛",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "swollenLeg",
+              "label": "整条腿肿胀",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "calf",
+              "label": "小腿肿胀比对侧>3cm",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "edema",
+              "label": "症状侧凹陷性水肿",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "collateral",
+              "label": "浅静脉侧支显现",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "priorDvt",
+              "label": "既往DVT病史",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "alternative",
+              "label": "其他诊断可能性≥DVT",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": -2
+                },
+                {
+                  "label": "否",
+                  "points": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "child-pugh",
+          "name": "Child-Pugh 肝功能分级",
+          "category": "消化",
+          "desc": "肝硬化肝功能储备分级（A/B/C 级）。",
+          "items": [
+            {
+              "key": "bilirubin",
+              "label": "总胆红素（μmol/L）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "<34",
+                  "points": 1
+                },
+                {
+                  "label": "34–51",
+                  "points": 2
+                },
+                {
+                  "label": ">51",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "key": "albumin",
+              "label": "白蛋白（g/L）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": ">35",
+                  "points": 1
+                },
+                {
+                  "label": "28–35",
+                  "points": 2
+                },
+                {
+                  "label": "<28",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "key": "inr",
+              "label": "INR",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "<1.7",
+                  "points": 1
+                },
+                {
+                  "label": "1.7–2.3",
+                  "points": 2
+                },
+                {
+                  "label": ">2.3",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "key": "ascites",
+              "label": "腹水",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "无",
+                  "points": 1
+                },
+                {
+                  "label": "轻度",
+                  "points": 2
+                },
+                {
+                  "label": "中-重度",
+                  "points": 3
+                }
+              ]
+            },
+            {
+              "key": "encephalopathy",
+              "label": "肝性脑病",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "无",
+                  "points": 1
+                },
+                {
+                  "label": "I–II 级",
+                  "points": 2
+                },
+                {
+                  "label": "III–IV 级",
+                  "points": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "curb-65",
+          "name": "CURB-65 肺炎严重度",
+          "category": "呼吸",
+          "desc": "社区获得性肺炎严重程度与处置场所评估。",
+          "items": [
+            {
+              "key": "confusion",
+              "label": "意识混乱（新发）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "urea",
+              "label": "尿素氮 >7 mmol/L",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "rr",
+              "label": "呼吸频率 ≥30 次/分",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "bp",
+              "label": "收缩压<90 或 舒张压≤60 mmHg",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "age",
+              "label": "年龄 ≥65 岁",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "gcs",
+          "name": "GCS 格拉斯哥昏迷评分",
+          "category": "神经",
+          "desc": "意识障碍程度评估（睁眼+语言+运动）。",
+          "items": [
+            {
+              "key": "eye",
+              "label": "睁眼反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "自动睁眼 (4)",
+                  "points": 4
+                },
+                {
+                  "label": "呼唤睁眼 (3)",
+                  "points": 3
+                },
+                {
+                  "label": "刺痛睁眼 (2)",
+                  "points": 2
+                },
+                {
+                  "label": "无反应 (1)",
+                  "points": 1
+                }
+              ]
+            },
+            {
+              "key": "verbal",
+              "label": "语言反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "回答切题 (5)",
+                  "points": 5
+                },
+                {
+                  "label": "回答错误 (4)",
+                  "points": 4
+                },
+                {
+                  "label": "答非所问 (3)",
+                  "points": 3
+                },
+                {
+                  "label": "只能发音 (2)",
+                  "points": 2
+                },
+                {
+                  "label": "无反应 (1)",
+                  "points": 1
+                }
+              ]
+            },
+            {
+              "key": "motor",
+              "label": "运动反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "遵嘱动作 (6)",
+                  "points": 6
+                },
+                {
+                  "label": "刺痛定位 (5)",
+                  "points": 5
+                },
+                {
+                  "label": "刺痛躲避 (4)",
+                  "points": 4
+                },
+                {
+                  "label": "刺痛屈曲 (3)",
+                  "points": 3
+                },
+                {
+                  "label": "刺痛过伸 (2)",
+                  "points": 2
+                },
+                {
+                  "label": "无反应 (1)",
+                  "points": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "adr-five-point",
+          "name": "药物不良反应五分法因果评价",
+          "category": "药物警戒",
+          "desc": "中国药物警戒常用的因果评价（肯定有关/很可能有关/可能有关/可能无关/无关），依据时间关系、已知反应、去激发与再激发证据确定。",
+          "items": [
+            {
+              "key": "time",
+              "label": "用药与反应有合理的时间关系",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 0
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                },
+                {
+                  "label": "不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "known",
+              "label": "反应符合该药已知的作用机制/特性/已知不良反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 0
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                },
+                {
+                  "label": "不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "dechallenge",
+              "label": "去激发（停药或减量后反应好转）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "阳性（好转）",
+                  "points": 0
+                },
+                {
+                  "label": "阴性（未好转）",
+                  "points": 0
+                },
+                {
+                  "label": "未做/不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "rechallenge",
+              "label": "再激发（再次用药后反应再现）",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "阳性（再现）",
+                  "points": 0
+                },
+                {
+                  "label": "阴性（未再现）",
+                  "points": 0
+                },
+                {
+                  "label": "未做/不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "otherCause",
+              "label": "有其他合理原因可解释该反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 0
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                },
+                {
+                  "label": "不确定",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "naranjo",
+          "name": "Naranjo 药物不良反应因果评估",
+          "category": "药物警戒",
+          "desc": "判定药物与不良反应的因果关系：≥9 肯定，5–8 很可能，1–4 可能，≤0 可疑。",
+          "items": [
+            {
+              "key": "q1",
+              "label": "既往是否有该反应的确定性报告",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q2",
+              "label": "反应是否发生在用药之后",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 2
+                },
+                {
+                  "label": "否",
+                  "points": -1
+                },
+                {
+                  "label": "不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q3",
+              "label": "停药后反应是否好转",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q4",
+              "label": "再次用药后反应是否再次出现",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 2
+                },
+                {
+                  "label": "否",
+                  "points": -1
+                },
+                {
+                  "label": "未再用药/不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q5",
+              "label": "是否存在其他原因可以解释该反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "否",
+                  "points": 2
+                },
+                {
+                  "label": "是",
+                  "points": -1
+                },
+                {
+                  "label": "不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q6",
+              "label": "安慰剂对照时是否也出现该反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "否",
+                  "points": 1
+                },
+                {
+                  "label": "是",
+                  "points": -1
+                },
+                {
+                  "label": "未测/不确定",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q7",
+              "label": "血/体液中是否检测到该药物",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q8",
+              "label": "是否存在剂量-反应关系",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q9",
+              "label": "既往用同一药是否出现过类似反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            },
+            {
+              "key": "q10",
+              "label": "是否有客观证据确认该反应",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "是",
+                  "points": 1
+                },
+                {
+                  "label": "否",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "egfr",
+          "name": "eGFR 估算肾小球滤过率（CKD-EPI 2021）",
+          "category": "肾脏",
+          "desc": "按血肌酐、年龄、性别估算 eGFR（mL/min/1.73m²），用于 CKD 分期与用药调整。",
+          "items": [
+            {
+              "key": "creatinine",
+              "label": "血肌酐（μmol/L）",
+              "type": "number",
+              "min": 10,
+              "max": 3000
+            },
+            {
+              "key": "age",
+              "label": "年龄（岁）",
+              "type": "number",
+              "min": 1,
+              "max": 120
+            },
+            {
+              "key": "sex",
+              "label": "性别",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "女",
+                  "points": 0
+                },
+                {
+                  "label": "男",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "crcl",
+          "name": "肌酐清除率 CrCl（Cockcroft-Gault）",
+          "category": "肾脏",
+          "desc": "用于经肾排泄药物（如地高辛、抗凝剂、部分抗生素）的剂量调整。",
+          "items": [
+            {
+              "key": "age",
+              "label": "年龄（岁）",
+              "type": "number",
+              "min": 1,
+              "max": 120
+            },
+            {
+              "key": "weight",
+              "label": "体重（kg）",
+              "type": "number",
+              "min": 2,
+              "max": 300
+            },
+            {
+              "key": "creatinine",
+              "label": "血肌酐（μmol/L）",
+              "type": "number",
+              "min": 10,
+              "max": 3000
+            },
+            {
+              "key": "sex",
+              "label": "性别",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "女",
+                  "points": 0
+                },
+                {
+                  "label": "男",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bmi",
+          "name": "BMI 体重指数（中国标准）",
+          "category": "营养",
+          "desc": "体重(kg) ÷ 身高(m)²；按中国成人标准分级。",
+          "items": [
+            {
+              "key": "weight",
+              "label": "体重（kg）",
+              "type": "number",
+              "min": 2,
+              "max": 300
+            },
+            {
+              "key": "height",
+              "label": "身高（cm）",
+              "type": "number",
+              "min": 40,
+              "max": 250
+            }
+          ]
+        },
+        {
+          "id": "bsa",
+          "name": "体表面积 BSA（Mosteller）",
+          "category": "营养",
+          "desc": "√(身高cm × 体重kg / 3600)，用于化疗等按体表面积给药。",
+          "items": [
+            {
+              "key": "weight",
+              "label": "体重（kg）",
+              "type": "number",
+              "min": 2,
+              "max": 300
+            },
+            {
+              "key": "height",
+              "label": "身高（cm）",
+              "type": "number",
+              "min": 40,
+              "max": 250
+            }
+          ]
+        },
+        {
+          "id": "ecog-ps",
+          "name": "ECOG 体力状态评分（PS）",
+          "category": "肿瘤",
+          "desc": "肿瘤患者活动状态 0–5 分（Oken 1982），常作为化疗/临床试验入排标准。",
+          "items": [
+            {
+              "key": "ps",
+              "label": "活动状态",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "0 活动能力完全正常，与起病前活动能力无任何差异",
+                  "points": 0
+                },
+                {
+                  "label": "1 能自由走动及从事轻体力活动，包括一般家务或办公室工作，但不能从事较重的体力活动",
+                  "points": 1
+                },
+                {
+                  "label": "2 能自由走动及生活自理，但已丧失工作能力，日间不少于一半时间可以起床活动",
+                  "points": 2
+                },
+                {
+                  "label": "3 生活仅能部分自理，日间一半以上时间卧床或坐轮椅",
+                  "points": 3
+                },
+                {
+                  "label": "4 卧床不起，生活不能自理",
+                  "points": 4
+                },
+                {
+                  "label": "5 死亡",
+                  "points": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "kps",
+          "name": "Karnofsky 功能状态评分（KPS）",
+          "category": "肿瘤",
+          "desc": "Karnofsky 行为状态 0–100 分（百分制），用于肿瘤患者功能状态与治疗耐受性评估。",
+          "items": [
+            {
+              "key": "kps",
+              "label": "功能状态",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "100 正常，无症状及体征",
+                  "points": 100
+                },
+                {
+                  "label": "90 能进行正常活动，有轻微症状及体征",
+                  "points": 90
+                },
+                {
+                  "label": "80 勉强可进行正常活动，有一些症状或体征",
+                  "points": 80
+                },
+                {
+                  "label": "70 生活可自理，但不能维持正常生活或工作",
+                  "points": 70
+                },
+                {
+                  "label": "60 有时需人扶助，但大多数时间可自理",
+                  "points": 60
+                },
+                {
+                  "label": "50 常需人照料及医疗护理",
+                  "points": 50
+                },
+                {
+                  "label": "40 生活不能自理，需特别照顾及护理",
+                  "points": 40
+                },
+                {
+                  "label": "30 生活严重不能自理，需住院",
+                  "points": 30
+                },
+                {
+                  "label": "20 病重，需住院积极支持治疗",
+                  "points": 20
+                },
+                {
+                  "label": "10 病危，临近死亡",
+                  "points": 10
+                },
+                {
+                  "label": "0 死亡",
+                  "points": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "nrs-pain",
+          "name": "NRS 疼痛数字评定量表",
+          "category": "症状评估",
+          "desc": "0–10 数字评定疼痛强度（0 无痛，10 能想象的最剧烈疼痛），癌痛滴定与随访常用。",
+          "items": [
+            {
+              "key": "pain",
+              "label": "过去 24 小时最重疼痛（0–10）",
+              "type": "number",
+              "min": 0,
+              "max": 10
+            }
+          ]
+        },
+        {
+          "id": "rass",
+          "name": "RASS 镇静躁动评分",
+          "category": "症状评估",
+          "desc": "Richmond 躁动-镇静评分（+4 至 −5），镇痛镇静（ICU/姑息）深度监测标准工具。",
+          "items": [
+            {
+              "key": "rass",
+              "label": "镇静躁动状态",
+              "type": "select",
+              "choices": [
+                {
+                  "label": "+4 有攻击性：明显好斗，有暴力行为，对人员有直接危险",
+                  "points": 4
+                },
+                {
+                  "label": "+3 非常躁动：拔拽管路或导管，有攻击性",
+                  "points": 3
+                },
+                {
+                  "label": "+2 躁动：频繁无意义动作，人机对抗",
+                  "points": 2
+                },
+                {
+                  "label": "+1 不安：焦虑紧张，但动作不剧烈",
+                  "points": 1
+                },
+                {
+                  "label": "0 清醒平静",
+                  "points": 0
+                },
+                {
+                  "label": "−1 嗜睡：不完全警觉，呼唤能清醒≥10 秒",
+                  "points": -1
+                },
+                {
+                  "label": "−2 轻度镇静：呼唤能短暂清醒（<10 秒）",
+                  "points": -2
+                },
+                {
+                  "label": "−3 中度镇静：呼唤或轻摇有任何反应",
+                  "points": -3
+                },
+                {
+                  "label": "−4 深度镇静：呼唤或轻摇无反应，物理刺激有反应",
+                  "points": -4
+                },
+                {
+                  "label": "−5 不能唤醒：物理刺激也无反应",
+                  "points": -5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "/api/scales/cha2ds2-vasc/calculate": {
+    "status": 200,
+    "body": {
+      "scaleId": "cha2ds2-vasc",
+      "scaleName": "CHA₂DS₂-VASc 房颤卒中风险",
+      "score": 4,
+      "level": "高风险，建议抗凝（需评估出血风险）",
+      "interpretation": "高风险，建议抗凝（需评估出血风险）。年卒中率约 3.9%（Friberg 2012 瑞典房颤队列，未调整）",
+      "detail": [
+        {
+          "item": "充血性心衰/左心功能不全",
+          "answer": "是",
+          "points": 1
+        },
+        {
+          "item": "高血压",
+          "answer": "是",
+          "points": 1
+        },
+        {
+          "item": "年龄",
+          "answer": "≥75 岁",
+          "points": 2
+        },
+        {
+          "item": "糖尿病",
+          "answer": "否",
+          "points": 0
+        },
+        {
+          "item": "既往卒中/TIA/血栓栓塞",
+          "answer": "否",
+          "points": 0
+        },
+        {
+          "item": "血管疾病（心梗/外周动脉/主动脉斑块）",
+          "answer": "否",
+          "points": 0
+        },
+        {
+          "item": "性别",
+          "answer": "男",
+          "points": 0
+        }
+      ],
+      "note": "工具按公开公式确定性计算，结果供临床参考，需医生结合患者整体情况判断。"
+    }
+  },
+  "/api/icd9?q=胆囊": {
+    "status": 200,
+    "body": {
+      "codes": [
+        {
+          "code": "51.23",
+          "name": "腹腔镜胆囊切除术"
+        },
+        {
+          "code": "51.22",
+          "name": "开腹胆囊切除术"
+        }
+      ]
+    }
+  },
+  "/api/adr-assess": {
+    "status": 200,
+    "body": {
+      "findings": "干咳",
+      "suspected": [
+        {
+          "medication": "依那普利",
+          "drugClass": "ACEI",
+          "reaction": "干咳",
+          "message": "「依那普利」（ACEI）已知不良反应包含「干咳」，与临床表现相符，建议核查。",
+          "monitoring": [
+            "血钾",
+            "血肌酐"
+          ]
+        }
+      ],
+      "drugProfiles": [
+        {
+          "drugClass": "ACEI",
+          "matchedMedications": [
+            "依那普利"
+          ],
+          "knownReactions": [
+            "干咳",
+            "高钾血症",
+            "血钾升高",
+            "血钾偏高",
+            "血肌酐升高",
+            "血肌酐偏高",
+            "肾功能恶化",
+            "血管性水肿"
+          ],
+          "monitoring": [
+            "血钾",
+            "血肌酐"
+          ]
+        }
+      ],
+      "total": 1,
+      "note": "不良反应筛查为提示性结果，不构成因果判定；请用 Naranjo 量表评估因果关系并按说明书/药物警戒数据库核实。"
+    }
+  }
+}

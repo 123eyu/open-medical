@@ -1,0 +1,8 @@
+/* Research statistics page. The shared .research-table rules remain in
+   style.css because the fixed DRG page also renders a research table. */
+.research-view {
+  width: min(860px, 100%);
+}
+.research-import { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
+.research-import button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.research-import span { font-size: 14px; color: var(--muted); }

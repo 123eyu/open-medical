@@ -1,19 +1,21 @@
+import "./medical-modules.css";
+import "./learning-loop.css";
 import { PatientQuestionStarters } from "./patient-question-starters";
-import { DoctorAgenda } from "./doctor-agenda";
-import { CareInbox } from "./care-inbox";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
-import { AppSettingsView } from "./app-settings";
+// 路由懒加载后仍由固定入口提供这些页面的样式，保持原 CSS 顺序与层叠。
+import "./backup-panel.css";
+import "./doctor-notifications.css";
+import "./message-channels.css";
 import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS } from "./navigation";
 import { DueNotifyWatcher } from "./due-notify";
 import { conversationRunIds } from "../shared/patient-conversations.mjs";
 import { PatientQuestionHistory } from "./patient-question-history";
 import { TaskResult, hasTaskResult } from "./task-result";
-import { SimilarCases } from "./similar-cases";
-import { ProjectDirectory, ToolDirectory, TaskDirectory } from "./work-directory";
+import "./task-context.css";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import { IntakeBackground } from "./intake-background";
 import { MaterialDetails } from "./material-details";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -52,6 +54,7 @@ import {
   streamTurn,
   downloadSession,
   medicalEnabled,
+  PLUGIN_CONFIG_EVENT,
 } from "./agent-runtime";
 import { artifactLines, artifactTitle, INTENTS } from "../shared/medical.mjs";
 import { eventDateWarnings } from "../shared/timeline-display.mjs";
@@ -63,8 +66,10 @@ import "./clinical-workflow.css";
 import { importMaterial, uploadScannedPages, uploadProgressText } from "./import-material";
 import { TaskCenter } from "./task-center";
 import { PatientsView } from "./patients";
-import { WorkspacesView } from "./workspaces";
-import { DemoExperience } from "./demo-experience";
+import "./workspaces.css";
+import "highlight.js/styles/github.css";
+import "./workbench/workbench.css";
+import "./demo-experience.css";
 import { WorkbenchHome, MEDICAL_WORKFLOWS } from "./workbench-home";
 import { CommandPalette, usePaletteHotkey } from "./command-palette";
 import { RichMessage } from "./workbench/message";
@@ -72,16 +77,12 @@ import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
 import { consultationLookupIssue } from "./workbench/run-status";
 import { blockedText, runDerivedStatus } from "./workbench/run-status";
 import { DoctorProfilePanel } from "./doctor-profile";
-import { LiteratureView } from "./literature";
-import { KnowledgeLibraries } from "./knowledge-libraries";
+import "./knowledge-map.css";
+import "./knowledge-workspace.css";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
-import { FollowupsView } from "./followups";
-import { CasesView } from "./cases";
-import { ResearchView } from "./research";
-import { TrialScreeningView } from "./trial-screening";
-import { DrgView } from "./drg";
-import { ClinicalRefView } from "./clinical-ref";
 import { IconButton, Badge, Modal, STATUS } from "./components";
+import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
+import { loadUiPluginModules } from "./plugin-registry";
 import { modelBoundary } from "../shared/model-boundary.mjs";
 import { ModelSettings } from "./model-settings";
 import {
@@ -91,6 +92,27 @@ import {
   StepsFlow,
   modeToRequest,
 } from "./ui";
+// 固定区页面按路由懒加载；首页/对话工作区/患者仍静态进入首屏。
+// CSS 继续由固定入口静态导入，保证加载顺序和层叠关系不变。
+const lazyView = (loader, name) =>
+  lazy(() => loader().then((module) => ({ default: module[name] })));
+const LazyDemoExperience = lazyView(() => import("./demo-experience"), "DemoExperience");
+const LazyAppSettingsView = lazyView(() => import("./app-settings"), "AppSettingsView");
+const LazyProjectDirectory = lazyView(() => import("./work-directory"), "ProjectDirectory");
+const LazyToolDirectory = lazyView(() => import("./work-directory"), "ToolDirectory");
+const LazyTaskDirectory = lazyView(() => import("./work-directory"), "TaskDirectory");
+const LazyWorkspacesView = lazyView(() => import("./workspaces"), "WorkspacesView");
+const LazyDoctorAgenda = lazyView(() => import("./doctor-agenda"), "DoctorAgenda");
+const LazyKnowledgeLibraries = lazyView(() => import("./knowledge-libraries"), "KnowledgeLibraries");
+const LazyCasesView = lazyView(() => import("./cases"), "CasesView");
+const RouteFallback = () => (
+  <main id="main" className="workbench-hub">
+    <div className="loading-state" role="status">
+      <Loader2 className="spin" />
+      正在加载页面…
+    </div>
+  </main>
+);
 const WORKFLOWS = [
   {
     id: "observations",
@@ -174,6 +196,8 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const resultCards = useSlot("chat.resultCards");
+  const customCard = Boolean(artifact && resultCards.some((item) => item.type === artifact.type));
   useEffect(() => {
     setEditing(false);
     setError("");
@@ -282,12 +306,12 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           <p className="muted">尚未检索或评估外部文献。</p>
         </>
       )}
-      {artifact.type !== "similar_cases" && artifact.matches?.map((match, i) => (
+      {!customCard && artifact.matches?.map((match, i) => (
         <blockquote key={i}>
           <p>{match.quote}</p>
           {/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/.test(match.url || "") ?
             <a className="source-link" href={match.url} target="_blank" rel="noreferrer">{match.sourceName} · PubMed</a> :
-            artifact.type === "similar_cases" ? <span>{match.sourceName} · 本地记录</span> :
+            match.evidence?.type === "local-record" ? <span>{match.sourceName} · 本地记录</span> :
             <button className="source-link" onClick={() => onSource({...match, snapshot: artifact.evidenceSources?.find(source => source.id === match.sourceId)})}>{match.sourceName}{match.line ? ` · L${match.line}` : ""}</button>}
           {match.scope && <small>{match.scope}</small>}
           {match.evidence?.text && <details><summary>查看检索时保存的{match.evidence.type === "abstract" ? "摘要" : "记录"}</summary><p>{match.evidence.text}</p></details>}
@@ -311,7 +335,7 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           <span>未进行临床解释</span>
         </div>
       ))}
-      {artifact.type === "similar_cases" && <SimilarCases key={artifact.id} artifact={artifact} variant="teaser" onOpen={onOpen} />}
+      {customCard && <ResultCard key={artifact.id} artifact={artifact} variant="teaser" onOpen={onOpen} />}
       {(artifact.concerns || (!artifact.events &&
         !artifact.pico &&
         !artifact.matches &&
@@ -342,12 +366,12 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           ))}
         </ul>
       )}
-      {artifact.type !== "similar_cases" && artifact.limitations?.map((x) => (
+      {!customCard && artifact.limitations?.map((x) => (
         <p className="boundary" key={x}>
           {x}
         </p>
       ))}
-      {artifact.type !== "similar_cases" && artifact.review && (
+      {!customCard && artifact.review && (
         <div className="review-note">
           <b>复核记录 · {artifact.review.reviewer}</b>
           <p>{artifact.review.note}</p>
@@ -485,6 +509,11 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
 }
 function App() {
   const initialLocation = useRef(readLocation()).current;
+  const resultCards = useSlot("chat.resultCards");
+  const legacyViews = useSlot("legacyViews");
+  const similarCasesEnabled = usePluginEnabled("similar-cases");
+  const followupActive = usePluginActive("followup");
+  const cardForArtifact = (artifact) => resultCards.find((item) => item.type === artifact?.type) || null;
   const [config, setConfig] = useState(null),
     [sessions, setSessions] = useState([]),
     [session, setSession] = useState(null),
@@ -534,6 +563,7 @@ function App() {
     writeLocation(next, location);
     setViewState(next);
   };
+  const legacyView = legacyViews.find((item) => item.type === view) || null;
   const [demoPreferenceBusy, setDemoPreferenceBusy] = useState(false);
   const [demoPreferenceError, setDemoPreferenceError] = useState("");
   const setDemoEntryHidden = async (hidden) => {
@@ -673,7 +703,7 @@ function App() {
     setNotice("");
     setTimeout(() => inputRef.current?.focus(), 0);
   };
-  const completedCaseRun = (r) => r?.status === "completed" && (!r.outcome || r.outcome === "delivered") && r.artifacts?.some(a => a.type === "similar_cases");
+  const completedCaseRun = (r) => r?.status === "completed" && (!r.outcome || r.outcome === "delivered") && r.artifacts?.some(a => cardForArtifact(a) && a.cases);
   const messageMeta = (m) => {
     if (m.role === "user") return "本轮输入";
     const outcome = m.outcome || runOf(m.runId)?.outcome;
@@ -803,6 +833,34 @@ function App() {
   };
   useEffect(() => {
     init();
+  }, []);
+  // Only ready plugins can contribute UI. Re-registering on bootstrap changes
+  // makes enabling/disabling a plugin take effect without a restart.
+  useEffect(() => {
+    let alive = true;
+    loadUiPluginModules()
+      .then((modules) => {
+        if (!alive) return;
+        const ready = (config?.plugins || []).filter(
+          (plugin) => plugin.status === "ready",
+        );
+        registerUiPlugins(
+          modules,
+          ready.map((plugin) => plugin.id),
+          ready
+            .filter((plugin) => plugin.active !== false)
+            .map((plugin) => plugin.id),
+        );
+      })
+      .catch((error) => console.error("插件 UI 加载失败:", error));
+    return () => { alive = false; };
+  }, [config]);
+  useEffect(() => {
+    const update = (event) => {
+      if (event?.detail) setConfig(event.detail);
+    };
+    window.addEventListener(PLUGIN_CONFIG_EVENT, update);
+    return () => window.removeEventListener(PLUGIN_CONFIG_EVENT, update);
   }, []);
   useEffect(() => {
     const restore = () => {
@@ -1587,8 +1645,8 @@ function App() {
                 </div> : <div className="loading-state" role="status">
                   <Loader2 className="spin" />正在连接本地运行时…
                 </div>}
-              </main>) : view === "examples" && medical ? <DemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <AppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
-            <WorkspacesView
+              </main>) : <Suspense fallback={<RouteFallback />}> {legacyView ? <SlotItem contribution={legacyView} view={view} config={config} onNavigate={navigate} onOpenTask={openTask} onOpenPatient={openPatient} onSettings={() => navigate("settings")} /> : view === "examples" && medical ? <LazyDemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <LazyAppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} onPluginsChanged={plugins => setConfig(current => ({ ...current, plugins }))} /> : view === "projects" && config ? <LazyProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <LazyToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <LazyTaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
+            <LazyWorkspacesView
               key={`ws-${homeKey}-${workspaceTarget?.id || ""}-${workspaceTarget?.create || ""}`}
               config={config}
               initialPanel={workspaceTarget?.panel || "files"}
@@ -1608,7 +1666,7 @@ function App() {
                 refreshList().catch(() => {});
               }}
             />
-          ) : view === "care" && medical ? (<CareInbox onOpenPatient={(id) => openPatient({ id, tab: "messages" })} />) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><DoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
+          ) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><LazyDoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
             <PatientsView
               key={`${patientRoute.id || "list"}-${patientRoute.tab || "overview"}-${patientRoute.create || false}-${patientRoute.import || false}-${patientRoute.intakeOpen || ""}-${patientRoute.navigationKey || ""}`}
               config={config}
@@ -1622,22 +1680,19 @@ function App() {
               onView={navigate}
               onChanged={refreshList}
             />
-          ) : view === "literature" ? (
-            <LiteratureView onOpenTask={openTask} />
           ) : view === "knowledge" ? (
-            <KnowledgeLibraries onOpenTask={openTask} />
-          ) : view === "clinical-ref" ? (
-            <ClinicalRefView />
-          ) : view === "followups" && medical ? (
-            <FollowupsView onSettings={()=>{navigate("settings");window.history.replaceState({},"", "?view=settings&settingsTab=followup");}} onOpenTask={openTask} onOpenPatient={(id) => openPatient({ id, tab: "followups" })} />
+            <LazyKnowledgeLibraries onOpenTask={openTask} />
           ) : view === "cases" ? (
-            <CasesView />
-          ) : view === "research" && medical ? (
-            <TrialScreeningView onOpenTask={openTask} onOpenPatient={id=>openPatient({id})} />
-          ) : view === "data-analysis" ? (
-            <ResearchView />
-          ) : view === "drg" ? (
-            <DrgView />
+            <LazyCasesView />
+          ) : TOOL_VIEWS.includes(view) ? (
+            <main id="main" className="module-page" aria-label="功能未启用">
+              <section className="module-card" style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}>
+                <AlertCircle size={28} aria-hidden="true" />
+                <h1>{VIEW_LABELS[view] || "该功能"}</h1>
+                <p className="muted">该功能未启用。</p>
+                <button type="button" className="primary" onClick={() => navigate("tools")}>返回资料与工具</button>
+              </section>
+            </main>
           ) : view !== "workbench" ? (
             <WorkbenchHome
               key={homeKey}
@@ -1916,7 +1971,7 @@ function App() {
                             {m.role === "user" ? (
                               m.content
                             ) : (
-                              runOf(m.runId)?.artifacts?.some(a => a.type === "similar_cases") ? <><SimilarCases key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => a.type === "similar_cases").id)} artifact={runOf(m.runId).artifacts.find(a => a.type === "similar_cases")} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
+                              runOf(m.runId)?.artifacts?.find(a => cardForArtifact(a)) ? <><ResultCard key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => cardForArtifact(a)).id)} artifact={runOf(m.runId).artifacts.find(a => cardForArtifact(a))} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
                             )}
                           </div>
                           {m.role !== "user" && ["delivery_failed","unverified"].includes(m.outcome || runOf(m.runId)?.outcome) &&
@@ -1959,7 +2014,7 @@ function App() {
                             }
                           />
                           {(activeRun?.partial || persistedRunning?.partial) && (
-                            ["patient-assessment", "similar-case-search"].includes(persistedRunning?.policy?.workflow) ? (
+                            (persistedRunning?.policy?.workflow === "patient-assessment" || (similarCasesEnabled && persistedRunning?.policy?.workflow === "similar-case-search")) ? (
                               <details className="message-content streaming execution-notes">
                                 <summary>查看执行过程（非最终结论）</summary>
                                 <RichMessage text={activeRun?.partial || persistedRunning?.partial} />
@@ -1972,7 +2027,7 @@ function App() {
                     {!busy && (!session?.patientId || questionRunId) &&
                       (session?.artifacts.length || 0) > 0 &&
                       session.artifacts
-                        .filter(a => !(a.type === "treatment_review" && session.messages.some(m=>m.role==="assistant" && m.runId===(session.patientId ? questionRun : session.runs.at(-1))?.id)) && (session.patientId ? questionRun : session.runs.at(-1))?.artifacts?.some(current => current.id === a.id) && !(a.type === "similar_cases" && session.messages.some(m => m.role === "assistant" && m.runId === (session.patientId ? questionRun : session.runs.at(-1))?.id)))
+                        .filter(a => !(a.type === "treatment_review" && session.messages.some(m=>m.role==="assistant" && m.runId===(session.patientId ? questionRun : session.runs.at(-1))?.id)) && (session.patientId ? questionRun : session.runs.at(-1))?.artifacts?.some(current => current.id === a.id) && !(cardForArtifact(a) && session.messages.some(m => m.role === "assistant" && m.runId === (session.patientId ? questionRun : session.runs.at(-1))?.id)))
                         .slice(-3)
                         .reverse()
                         .map((a) => (
@@ -1993,7 +2048,7 @@ function App() {
                                   setAcceptId(a.id);
                                 }}
                               >
-                                {a.type === "similar_cases" ? "查看病例详情" : "查看结果"}
+                                {cardForArtifact(a) ? "查看病例详情" : "查看结果"}
                               </button>
                             </div>
                           </div>
@@ -2335,7 +2390,8 @@ function App() {
                   ))}
                 </div>
                 <div className="panel-scroll">
-                  {tab === "results" &&
+                  {followupActive &&
+                    tab === "results" &&
                     session?.patientId &&
                     session.artifacts.length > 0 && (
                       <div className="next-workflow">
@@ -2726,6 +2782,8 @@ function App() {
               </aside>
             </div>
           )}
+          </Suspense>
+          }
         </div>
         <KnowledgeSourcePanel contextKey={`${view}:${activeId}`} />
       </div>

@@ -1,0 +1,178 @@
+{
+  "profile": {
+    "status": 200,
+    "body": {
+      "sourceId": "7d02c721-874d-46be-b15c-a113d18843f2",
+      "sourceName": "示例研究数据.csv",
+      "rows": 12,
+      "columns": {
+        "subject": {
+          "type": "categorical",
+          "n": 12,
+          "levels": [
+            {
+              "level": "D01",
+              "count": 1
+            },
+            {
+              "level": "D02",
+              "count": 1
+            },
+            {
+              "level": "D03",
+              "count": 1
+            },
+            {
+              "level": "D04",
+              "count": 1
+            },
+            {
+              "level": "D05",
+              "count": 1
+            },
+            {
+              "level": "D06",
+              "count": 1
+            },
+            {
+              "level": "D07",
+              "count": 1
+            },
+            {
+              "level": "D08",
+              "count": 1
+            },
+            {
+              "level": "D09",
+              "count": 1
+            },
+            {
+              "level": "D10",
+              "count": 1
+            },
+            {
+              "level": "D11",
+              "count": 1
+            },
+            {
+              "level": "D12",
+              "count": 1
+            }
+          ]
+        },
+        "group": {
+          "type": "categorical",
+          "n": 12,
+          "levels": [
+            {
+              "level": "A",
+              "count": 6
+            },
+            {
+              "level": "B",
+              "count": 6
+            }
+          ]
+        },
+        "age": {
+          "type": "numeric",
+          "n": 12,
+          "missing": 0,
+          "mean": 57.666666666666664,
+          "sd": 6.457319079693189,
+          "min": 48,
+          "p25": 52.5,
+          "median": 58.5,
+          "p75": 62.5,
+          "max": 67
+        },
+        "sbp": {
+          "type": "numeric",
+          "n": 12,
+          "missing": 0,
+          "mean": 143.5,
+          "sd": 7.179516316957191,
+          "min": 132,
+          "p25": 138.75,
+          "median": 143,
+          "p75": 148.5,
+          "max": 156
+        },
+        "adherent": {
+          "type": "categorical",
+          "n": 12,
+          "levels": [
+            {
+              "level": "yes",
+              "count": 8
+            },
+            {
+              "level": "no",
+              "count": 4
+            }
+          ]
+        }
+      },
+      "note": "描述统计为待复核草稿结果，请在解读前核对原始数据。"
+    }
+  },
+  "test": {
+    "status": 200,
+    "body": {
+      "method": "welch-t",
+      "group1": {
+        "n": 6,
+        "mean": 138.83333333333334,
+        "sd": 4.9966655548141965
+      },
+      "group2": {
+        "n": 6,
+        "mean": 148.16666666666666,
+        "sd": 6.013872850889571
+      },
+      "t": -2.923973036915808,
+      "df": 9.675255116423298,
+      "p": 0.015710499042143285,
+      "groups": [
+        {
+          "n": 6,
+          "mean": 138.83333333333334,
+          "sd": 4.9966655548141965
+        },
+        {
+          "n": 6,
+          "mean": 148.16666666666666,
+          "sd": 6.013872850889571
+        }
+      ],
+      "outcome": "sbp",
+      "group": "group",
+      "note": "检验结果为待复核草稿：请核对分组定义、数据质量与方法学假设后再作解读。"
+    }
+  },
+  "sample-size": {
+    "status": 200,
+    "body": {
+      "design": "means",
+      "alpha": 0.05,
+      "power": 0.8,
+      "n1": 36,
+      "n2": 36,
+      "total": 72,
+      "note": "样本量按两独立组正态近似估计，未考虑失访与依从性折减；请按研究设计上浮。"
+    }
+  },
+  "deidentify": {
+    "status": 200,
+    "body": {
+      "sourceId": "7d02c721-874d-46be-b15c-a113d18843f2",
+      "sourceName": "示例研究数据.csv",
+      "rows": 12,
+      "deidentifiedColumns": [
+        "subject"
+      ],
+      "csv": "subject_deid,group,age,sbp,adherent\nSUBJ_1p1hmnr,A,51,138,yes\nSUBJ_1p1hmns,A,62,142,yes\nSUBJ_1p1hmnt,A,57,135,no\nSUBJ_1p1hmnu,A,65,146,yes\nSUBJ_1p1hmnv,A,49,132,yes\nSUBJ_1p1hmnw,A,60,140,no\nSUBJ_1p1hmnx,B,53,148,yes\nSUBJ_1p1hmny,B,64,152,no\nSUBJ_1p1hmnz,B,55,144,yes\nSUBJ_1p1hmol,B,67,156,no\nSUBJ_1p1hmom,B,48,139,yes\nSUBJ_1p1hmon,B,61,150,yes",
+      "note": "确定性伪标识：同一原始值映射到同一编码；编码不可逆向还原，但小基数列仍可能被推断，请谨慎发布。"
+    }
+  }
+}

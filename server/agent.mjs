@@ -1,29 +1,15 @@
-import { literatureRunEvidence } from "./medical/literature-research.mjs";
-import { habitMutation, habitRevision } from './medical/habit-concurrency.mjs';
 import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
-import { PersonalRegression } from './medical/personal-regression.mjs';
-import { PersonalContext, learningPrefs, saveLearningPrefs } from "./medical/personal-context.mjs";
-import { ChatFollowups } from "./chat-followups.mjs";
-import { WecomAibotChannel, chatAibotApi } from "./chat-aibot.mjs";
-import { WechatExpService, wechatExpApi } from "./wechat-exp.mjs";
-import { chatFollowupsApi } from "./chat-followups-api.mjs";
-import { WechatAutoFollow } from "./chat-autofollow.mjs";
-import { chatAutoFollowApi } from "./chat-autofollow-api.mjs";
 import { KnowledgeOrganizer } from "./medical/knowledge-organizer.mjs";
 import { graphSlice } from "../shared/knowledge-graph-search.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
 import { createReadStream } from "node:fs";
-import {TrialEligibilityJobs} from './medical/trial-eligibility-jobs.mjs';
-import { TrialRegistry } from "./medical/trial-registry.mjs";
-import { TrialScreening } from "./medical/trial-screening.mjs";
-import { TrialCandidates } from "./medical/trial-candidates.mjs";
 import { IntakeJobs } from "./medical/intake-jobs.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
 import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { readFile, stat } from "node:fs/promises";
-import { resolve, dirname, extname, join, sep } from "node:path";
+import { resolve, dirname, extname, join, sep, delimiter } from "node:path";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -44,17 +30,8 @@ import {
   composeDigest,
   selectDigestMessages,
 } from "./patients.mjs";
-import { FollowUpManager } from "./followups.mjs";
-import { FollowUpSurveys } from "./followup-surveys.mjs";
-import { WeComConnector } from "./wecom.mjs";
-import { CareEngine } from "./care/engine.mjs";
-import { careTools } from "./care/tools.mjs";
-import { trialTools } from "./medical/trial-tools.mjs";
 import { scheduleTools } from "./medical/schedule-tools.mjs";
-import { careApi } from "./care/api.mjs";
-import { WeChatMacBridge } from "./wechat-bridge.mjs";
 import { DoctorProfile } from "./medical/doctor-profile.mjs";
-import { LiteratureService, literatureTools } from "./medical/literature.mjs";
 import { createKnowledgeQueryExpander } from "./medical/knowledge-query.mjs";
 import { GuidelineLibrary, knowledgeTools, EDUCATION_COLLECTION } from "./medical/guidelines.mjs";
 import { scanGroupSuggestions } from "./medical/patient-grouping.mjs";
@@ -64,31 +41,19 @@ import { PatientImporter } from "./medical/patient-import.mjs";
 import { LabImporter } from "./medical/lab-import.mjs";
 import { Backups } from "./medical/backups.mjs";
 import { DemoPack } from "./medical/demo-pack.mjs";
-import { CareTasks } from "./medical/care-tasks.mjs";
-import { FeishuKnowledgeBot } from "./medical/feishu-knowledge-bot.mjs";
-import { MessageGateway, messagingApi } from "./messaging/gateway.mjs";
-import { DoctorNotifications } from "./medical/doctor-notifications.mjs";
 import { PatientSchedule } from "./medical/patient-schedule.mjs";
 import { Extensions } from "./medical/extensions.mjs";
 import { extensionTools } from "./medical/extension-tools.mjs";
 import { DoctorOverview } from "./medical/doctor-overview.mjs";
 import { buildShareRecord } from "./medical/deidentify.mjs";
-import { RiskEngine } from "./medical/risk-rules.mjs";
 import { onlineCaseTools } from "./medical/online-cases.mjs";
 import { CaseLibrary, caseTools } from "./medical/cases.mjs";
-import {
-  ResearchService,
-  researchTools as researchToolPlugins,
-} from "./medical/research.mjs";
-import { DrgService, drgTools } from "./medical/drg.mjs";
+import { cohortProfileTool } from "./medical/cohort-profile.mjs";
 import {
   evaluateMedicationSafety,
-  assessAdverseReaction,
   specialPopulationCautions,
 } from "./medical/med-safety.mjs";
-import { calculateScale, listScales, scaleTools } from "./medical/scales.mjs";
 import { searchLabKnowledge } from "./medical/lab-knowledge.mjs";
-import { searchIcd9 } from "./medical/icd9.mjs";
 import {
   PendingActions,
   pendingActionTools,
@@ -96,6 +61,7 @@ import {
 import { doctorMemoryTools } from "./medical/doctor-profile.mjs";
 import { knowledgeRunEvidence } from "./medical/knowledge-answer.mjs";
 import { createMedicalWorkspaceDomain } from "./medical/medical-workspace-domain.mjs";
+import { PluginHost } from "./plugin-host/host.mjs";
 import { SessionBridge } from "./session-bridge.mjs";
 import { EmbeddingService } from "./medical/embeddings.mjs";
 import { LanceVectorStore } from "./medical/vector-store.mjs";
@@ -252,6 +218,29 @@ export function createServer(options = {}) {
   };
   const jev = new JevSettings(models.vault);
   let provider = models.provider();
+  // 领域插件宿主先加载声明（技能目录、启停状态），固定区服务就绪后再迁移和
+  // 初始化；单个插件失败只标记 unavailable，不阻断服务启动。
+  const pluginServices = {};
+  const pluginHost = new PluginHost({
+    db: store.db,
+    store,
+    services: pluginServices,
+    ...(options.pluginDirs !== undefined
+      ? { pluginDirs: options.pluginDirs }
+      : process.env.MEDICAL_PLUGIN_DIRS
+        ? {
+            pluginDirs: [
+              resolve(ROOT, "../plugins"),
+              ...process.env.MEDICAL_PLUGIN_DIRS.split(delimiter)
+                .map((dir) => dir.trim())
+                .filter(Boolean),
+            ],
+          }
+        : {}),
+  });
+  pluginHost.load();
+  const pluginService = (id) => pluginHost.pluginServices[id] || null;
+  const pluginActive = (id) => pluginHost.isActive(id);
   // The doctor's own skills (extension center) are materialized here.
   const userSkillsDir = options.userSkillsDir ||
     (databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-my-skills-")) : join(dirname(databasePath), "my-skills"));
@@ -263,18 +252,34 @@ export function createServer(options = {}) {
       ...(process.env.MEDICAL_SKILLS_DIR
         ? process.env.MEDICAL_SKILLS_DIR.split(",")
         : []),
+      ...pluginHost.skillDirs(),
     ]);
-  const doctor = options.doctor || new DoctorProfile(store);
-  const literature = options.literature || new LiteratureService(store);
+  const doctor = options.doctor || new DoctorProfile(store, { ledger: () => pluginActive("learning") ? pluginService("learning")?.ledger || null : null });
+  // Literature now lives in the literature plugin. Fixed modules keep a lazy
+  // facade so online_case_search can use it when the plugin is active and fail
+  // with a normal PLUGIN_SERVICE_UNAVAILABLE error when it is disabled.
+  const requireLiterature = () => {
+    const service = pluginHost.pluginServices.literature || options.literature;
+    check(service, "PLUGIN_SERVICE_UNAVAILABLE", "文献研究插件未启用", 503);
+    return service;
+  };
+  const literature = {
+    search: (...args) => requireLiterature().search(...args),
+    fetchArticle: (...args) => requireLiterature().fetchArticle(...args),
+    materialText: (...args) => requireLiterature().materialText(...args),
+  };
   const embedder = options.embedder || new EmbeddingService();
   const pending = new PendingActions(store, {
     patients: () => patients,
-    followups: () => followups,
     cases: () => cases,
-    care: () => care,
-    trials: () => trialCandidates,
+    trials: () =>
+      pluginActive("trials")
+        ? pluginService("trials")?.candidates || null
+        : null,
     extensions: () => extensions,
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
     doctor: () => doctor,
+    pluginHost: () => pluginHost,
     intakeSources: (id, fileIds) => id ? sessionBridge.get(id).files.filter(file => !fileIds.length || fileIds.includes(file.id)).map(({ id, name, text }) => ({ id, name, text: text || '' })) : [],
     intakeText: id => id ? sessionBridge.get(id).files.map(f => f.text || "").join("\n") : "",
     copySourceMaterials: (sourceId, targetId, fileIds, sourceInput) => {
@@ -372,9 +377,6 @@ export function createServer(options = {}) {
   guidelines.beforeUpdateDocumentText = id => knowledgeOrganizer.assertTextEditable(id);
   guidelines.afterUpdateDocumentText = id => knowledgeOrganizer.invalidateTextAnalysis(id);
   const cases = options.cases || new CaseLibrary(store);
-  const research = options.research || new ResearchService();
-  const drg = options.drg || new DrgService(store);
-  drg.load().catch(() => {});
   const medicationSafetyCheck = (args) => {
     const result = evaluateMedicationSafety(args);
     if (Array.isArray(args?.populations) && args.populations.length)
@@ -412,11 +414,10 @@ export function createServer(options = {}) {
     },
     { ...knowledgeIngest, definition: { ...knowledgeIngest.definition, function: { ...knowledgeIngest.definition.function, name: "guideline_ingest" } } },
     ...doctorMemoryTools(doctor),
-    ...literatureTools(literature),
     ...knowledgeTools(guidelines),
     ...caseTools(cases),
+    cohortProfileTool(),
     ...onlineCaseTools(literature),
-    ...drgTools(drg),
     {
       definition: {
         type: "function",
@@ -438,27 +439,6 @@ export function createServer(options = {}) {
       },
       execute: (args) => medicationSafetyCheck(args),
     },
-    {
-      definition: {
-        type: "function",
-        function: {
-          name: "assess_adverse_reaction",
-          description:
-            "把当前用药清单与临床表现做匹配，筛查可能的药物不良反应（内置常见药组知识表）。提示性筛查，非因果判定。",
-          parameters: {
-            type: "object",
-            properties: {
-              medications: { type: "array", items: { type: "string" } },
-              findings: { type: "string" },
-            },
-            required: ["medications", "findings"],
-            additionalProperties: false,
-          },
-        },
-      },
-      execute: (args) => assessAdverseReaction(args),
-    },
-    ...scaleTools(),
     {
       definition: {
         type: "function",
@@ -522,7 +502,6 @@ export function createServer(options = {}) {
     skills,
     toolPlugins: options.toolPlugins || [
       ...knowledgeToolPlugins,
-      ...localPlugins(researchToolPlugins(research)),
     ],
     doctor,
   });
@@ -533,28 +512,18 @@ export function createServer(options = {}) {
     imageShrink: options.imageShrink || null,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
-      readResearchEvidence: context => literatureRunEvidence(store.db, context),
-      personalContext: (run, workspaceId) => {
-        const service = new PersonalContext({ store, doctor, guidelines, cases: () => cases, extensions: () => extensions, provider: () => provider });
-        const prefs = learningPrefs(store.db);
-        const holdout = Boolean(workspaces.store.get(workspaceId).learningRegression) || (prefs.pilot && (run.learningHoldout ?? Math.random() < prefs.holdoutRate));
-        if (run.learningHoldout === undefined) workspaces.store.update(workspaceId, w => { w.runs.find(r => r.id === run.id).learningHoldout = holdout; });
-        run.learningHoldout = holdout;
-        return { build: notes => service.build(notes, { holdout }), modelView: value => service.modelView(value), prepare: (payload, value) => service.prepare(payload, value, pending) };
-      },
-      trialJobs: {load:id=>trialJobs.get(id),save:(id,checks)=>trialJobs.save(id,checks)},
+      personalContext: (run, workspaceId) =>
+        pluginActive("learning") ? pluginService("learning")?.personalContext(run, workspaceId) : null,
       saveIntakeNotes: (id, runId, notes) => workspaces.store.update(id, w => { w.runs.find(run => run.id === runId).intakeNotes = notes; }),
       saveDisplayResult: (id, runId, value) => workspaces.store.update(id, w => { const run=w.runs.find(r=>r.id===runId);run.displayResults=[...(run.displayResults||[]).filter(r=>r.key!==value.key),value].slice(-12); }),
       readPatientBrief: (patientId) => patientBrief.read(patientId),
+      pluginHost,
       // 全局助手工具面的依赖（访问器延迟解析：注册表在下方才创建）。
       patients: () => patients,
       pending: () => pending,
-      followups: () => followups,
       plugins: [
         ...knowledgeToolPlugins,
         ...localPlugins(pendingActionTools(pending, doctor)),
-        ...localPlugins(careTools(() => care, pending)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -563,10 +532,7 @@ export function createServer(options = {}) {
       // readOnly 约定与旧医疗会话一致）。
       sessionPlugins: [
         ...knowledgeToolPlugins,
-        ...localPlugins(researchToolPlugins(research)),
-        ...localPlugins(pendingActionTools(pending, doctor)),
-        ...localPlugins(careTools(() => care, pending)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
+          ...localPlugins(pendingActionTools(pending, doctor)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -594,12 +560,11 @@ export function createServer(options = {}) {
     patientRecord: id => patients.row(id),
     skills,
     doctor,
+    pluginHost,
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
     plugins: [
       ...knowledgeToolPlugins,
-      ...localPlugins(researchToolPlugins(research)),
       ...localPlugins(pendingActionTools(pending, doctor)),
-      ...localPlugins(careTools(() => care, pending)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -620,7 +585,6 @@ export function createServer(options = {}) {
     ocrStrategy: ocrStrategyResolver,
   });
   const intakeJobs = new IntakeJobs(sessionBridge, pending);
-  const personalRegression = new PersonalRegression({ store, bridge: sessionBridge, jobs: intakeJobs, pending, provider: () => provider });
   const agentRuntime = sessionBridge.dispatcher;
 
   // 能力分层快照（W6/B1）：三态判定与运行事实探测提取到
@@ -654,6 +618,12 @@ export function createServer(options = {}) {
     },
     // schedule 在下方才创建；建档发生在服务就绪后，闭包引用是安全的。
     onCreated: (patient) => schedule.baselinePatient(patient),
+    learning: () => pluginActive("learning") ? pluginService("learning") : null,
+    // Plugin-owned patient data is reached through the host only. Deletion uses
+    // a synchronous transactional hook; list counts use active contributions.
+    hooks: (name, payload) => pluginHost.runHooks(name, payload),
+    summaries: (patientIds, options) =>
+      pluginHost.patientSummaries(patientIds, options),
     createSession: ({ title, patientId }) => {
       const projected = sessionBridge.createSession({ title, patientId });
       return { id: projected.id };
@@ -664,45 +634,79 @@ export function createServer(options = {}) {
       else store.delete(sessionId);
     },
   });
-  const followups = new FollowUpManager(
-    store,
-    agentRuntime,
-    options.followupOptions,
+  // The followup plugin owns followup/care/chat services. Fixed
+  // modules receive stable proxies that resolve the provided service lazily:
+  // setup runs after these constructors, and reads happen after startup.
+  const followupService = () => pluginService("followup");
+  const currentWecom = () =>
+    pluginActive("channel-wecom")
+      ? pluginService("channel-wecom")?.connector || null
+      : null;
+  const requireFollowupActive = () => {
+    if (!pluginActive("followup"))
+      throw new AppError(
+        "FOLLOWUP_INACTIVE",
+        "随访与患者消息尚未启用，请先连接微信或企业微信",
+        409,
+      );
+  };
+  const requireFollowupService = () => {
+    const service = followupService();
+    check(service, "PLUGIN_SERVICE_UNAVAILABLE", "随访插件未启用", 503);
+    return service;
+  };
+  const followups = new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const service = requireFollowupService();
+        const value = service.followups[property];
+        return typeof value === "function"
+          ? value.bind(service.followups)
+          : value;
+      },
+    },
   );
-  const risks = new RiskEngine(store, followups);
+  const careService = () => requireFollowupService().care;
+  // Risk rules are plugin-owned. Fixed patient flows still trigger an
+  // evaluation when the plugin is active; disabled means a no-op.
+  const riskEngine = () =>
+    pluginActive("risk-rules") ? pluginService("risk-rules") : null;
   const schedule = new PatientSchedule(store, patients);
   const doctorOverview = new DoctorOverview(store, sessionBridge, {
     schedule,
-    extensions: () => extensions,
-    // Read lazily: the WeCom connector is created further below.
-    contactMatches: () => wecom.client ? wecom.directory.contacts({ status: "suggested", limit: 1 }).counts.suggested : 0,
-    trialWork: () => trialScreening.list().map((t) => {
-      const { counts } = trialCandidates.candidates(t.id);
-      return { id: t.id, title: t.title.slice(0, 40), awaitingReview: counts.awaitingReview };
-    }),
-  });
-  const trialScreening = new TrialScreening(store, patients);
-  const trialJobs = new TrialEligibilityJobs({store,patients,trials:trialScreening,bridge:sessionBridge,workspaces});
-  const trialCandidates = new TrialCandidates({ store, patients, trials: trialScreening, jobs: trialJobs });
-  const trialRegistry = new TrialRegistry(options.trialRegistryOptions);
-  const patientBrief = new PatientBrief(store, patients);
-  const careTasks = new CareTasks(store, patients, followups, {
-    resolvePatientFile: (patientId, fileId) => {
-      const { sessionId } = patients.row(patientId);
-      const session = sessionBridge.isSessionWorkspace(sessionId) ? sessionBridge.get(sessionId) : store.get(sessionId);
-      const file = session.files.find(file => file.id === fileId);
-      check(file, "NOT_FOUND", "结果资料不存在或不属于当前患者，请重新选择", 404);
-      return { sessionId, fileId: file.id, name: file.name };
+    // Plugin agenda sources are resolved lazily: setup runs once the fixed
+    // services exist (below), while reads only happen after startup.
+    agendaSources: () => pluginHost.agendaSources(),
+    agendaItems: (opts) => pluginHost.agendaItems(opts),
+    // Read lazily: the channel-wecom plugin owns the connector.
+    contactMatches: () => {
+      const connector = currentWecom();
+      return connector?.client
+        ? connector.directory.contacts({ status: "suggested", limit: 1 })
+            .counts.suggested
+        : 0;
+    },
+    trialWork: () => {
+      if (!pluginActive("trials")) return [];
+      const service = pluginService("trials");
+      if (!service?.screening || !service?.candidates) return [];
+      return service.screening.list().map((trial) => {
+        const { counts } = service.candidates.candidates(trial.id);
+        return {
+          id: trial.id,
+          title: trial.title.slice(0, 40),
+          awaitingReview: counts.awaitingReview,
+        };
+      });
     },
   });
-  const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, { getProvider: () => providerConfigured(provider) ? provider : null, ...options.knowledgeBotOptions });
-  const doctorNotifications = new DoctorNotifications(store, models.vault, options.doctorNotificationOptions);
-  const messageGateway = new MessageGateway({ store, vault: models.vault, bridge: sessionBridge, getProvider: () => provider, knowledgeBot, ...options.messageGatewayOptions });
+  const patientBrief = new PatientBrief(store, patients, {
+    briefContributions: (patientId) => pluginHost.patientBrief(patientId),
+  });
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
   const backups = new Backups(databasePath);
-  const demoPack = new DemoPack(patients, followups, store, { sessions: sessionBridge, cases, trials: trialScreening, guidelines, schedule, careTasks, care: () => care });
-  runtime.registerPlugins([...pendingActionTools(pending, doctor), ...careTools(() => care, pending), ...trialTools(() => trialCandidates, pending), ...scheduleTools(() => schedule), ...labDisplayTools(() => patients), ...extensionTools(() => extensions, pending)]);
   const swapProvider = (next) => {
     provider = next;
     runtime.provider = provider;
@@ -711,23 +715,18 @@ export function createServer(options = {}) {
     workspaces.provider = provider;
     workspaces.agent.provider = provider;
   };
-  const wecom = new WeComConnector(store, patients, { vault: models.vault, ...options.wecom });
-  const care = new CareEngine({
-    store, patients, followups, wecom, guidelines, patientBrief,
-    vault: models.vault,
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
-    ...options.care,
-  });
   const extensions = new Extensions({
-    store, patients, schedule, skillsDir: userSkillsDir, care: () => care, sessions: sessionBridge,
+    store, skillsDir: userSkillsDir,
+    automation: () => pluginActive("learning") ? pluginService("learning")?.automation || null : null,
     // Imported skill packs must not shadow existing skills; the shared
     // registry is the authority on what is already installed.
     skillExists: (id) => { try { skills.get(id); return true; } catch { return false; } },
     importer: options.skillImporter,
     proxyResolver: options.skillProxyResolver,
   });
-  sessionBridge.evolution = extensions;
-  const wechat = new WeChatMacBridge({
+  // channel-wechat owns the WeChat desktop reader, wx-cli client, exporter and
+  // retired bridge; the followup plugin constructs its chat service from it.
+  const wechatBridgeOptions = {
     patients,
     enabled: ["1", "on", "true"].includes(
       String(
@@ -740,38 +739,200 @@ export function createServer(options = {}) {
       .filter(Boolean),
     // 测试缝:允许 fixture 注入 darwin 以覆盖桥接逻辑;默认真实平台。
     platform: options.wechatBridgePlatform ?? process.platform,
-  });
-  // 企微智能机器人通道:先建实例再交给 ChatFollowups 注册,start 后按配置自动拉起长连接。
-  // skills 注入群聊自动回复的起草提示词(医生按群勾选技能)。
-  const wecomAibot = options.chatAibot || new WecomAibotChannel({ log: (message) => console.error(`[aibot] ${message}`), provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, skills });
-  const chatFollowups = new ChatFollowups({ store, patients, followups, directory: vaultDir, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, aibot: wecomAibot, ...options.chatFollowups });
-  wecomAibot.attach(chatFollowups);
-  // 微信历史导入:向导式组件下载/备份 + 内置 wx-cli 协议桥接(仅 127.0.0.1)。
-  const wechatExp = options.wechatExp || new WechatExpService({ dataDir: vaultDir, log: (message) => console.error(`[wechat-exp] ${message}`) });
-  wechatExp.start(chatFollowups);
-  // 随访问卷:到期随提醒生成,医生经已验证渠道下发,患者按题号回复由确定性解析回收。
-  const surveys = new FollowUpSurveys(store, followups, {
-    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
-    channels: {
-      async sendWechat(patientId, text) {
-        const binding = chatFollowups.wechatBindingByPatient(patientId);
-        check(binding, "CHAT_CHANNEL", "该患者没有已绑定的微信会话，可改用手动渠道发送", 409);
-        await chatFollowups.sendToBinding({ bindingId: binding.id, text, consent: true, autoLocate: true });
+  };
+  const channelWechatOptions = options.channelWechat || {};
+  // 固定区服务已全部就绪：迁移后依次执行插件 setup。插件只能通过 ctx.services
+  // 调用这些对象，不直接改写固定区实现。
+  // channel-wecom owns connector start/stop; care follows it through the
+  // followup service rather than holding a fixed-region reference.
+  const attachWecomCare = (service) => {
+    const care = followupService()?.care;
+    if (!care) return;
+    care.channels.wecom = service.connector;
+    care.channels.WecomApi = service.WecomApi;
+    care.channels.clients?.clear();
+    service.connector.onEvent = (event) => care.track(care.handleWecomEvent(event));
+  };
+  const detachWecomCare = () => {
+    const care = followupService()?.care;
+    if (!care) return;
+    care.channels.wecom = null;
+    care.channels.clients?.clear();
+  };
+  Object.assign(pluginServices, {
+    store,
+    patients,
+    pending,
+    learningHost: {
+      bridge: sessionBridge,
+      jobs: () => intakeJobs,
+      provider: () => provider,
+    },
+    followups,
+    cases,
+    extensions,
+    doctor,
+    schedule,
+    workspaces,
+    trialHost: {
+      patients,
+      bridge: sessionBridge,
+      workspaces,
+      registryOptions: options.trialRegistryOptions,
+    },
+    careTasksHost: {
+      resolvePatientFile: (patientId, fileId) => {
+        const { sessionId } = patients.row(patientId);
+        const session = sessionBridge.isSessionWorkspace(sessionId)
+          ? sessionBridge.get(sessionId)
+          : store.get(sessionId);
+        const file = session.files.find((item) => item.id === fileId);
+        check(
+          file,
+          "NOT_FOUND",
+          "结果资料不存在或不属于当前患者，请重新选择",
+          404,
+        );
+        return { sessionId, fileId: file.id, name: file.name };
       },
-      async sendAibot(patientId, text) {
-        const channel = chatFollowups.registry.get("wecom-aibot")?.client;
-        check(channel?.live, "CHAT_CHANNEL", "企微机器人长连接不在线，可改用手动渠道发送", 409);
-        const row = chatFollowups.db.prepare("SELECT data FROM chat_bindings WHERE patient_id=? AND channel='wecom-aibot' AND COALESCE(json_extract(data,'$.disabled'),0)=0 ORDER BY rowid DESC LIMIT 1").get(patientId);
-        check(row, "CHAT_CHANNEL", "该患者没有已绑定的企微机器人会话", 409);
-        await channel.socket.push(JSON.parse(row.data).conversation, { msgtype: "text", text: { content: text } });
+    },
+    skills,
+    guidelines,
+    knowledge: guidelines,
+    literatureHost: {
+      service: options.literature || null,
+      options: options.literatureOptions || {},
+      identifier,
+      addMaterial: (sessionId, input) =>
+        sessionBridge.isSessionWorkspace(sessionId)
+          ? sessionBridge.addMaterial(sessionId, input)
+          : runtime.addFile(sessionId, input),
+    },
+    researchHost: {
+      sourcesOf: (sessionId) => {
+        const id = sessionId ? identifier(sessionId) : null;
+        if (!id) return [];
+        if (sessionBridge.isSessionWorkspace(id))
+          return (sessionBridge.materialsOf(id) || []).map(
+            ({ id: fid, name, text, hash, extraction }) => ({
+              id: fid,
+              name,
+              text,
+              hash,
+              extraction,
+            }),
+          );
+        return store.get(id).files;
+      },
+    },
+    knowledgeOrganizer,
+    // Followup plugin inputs. All are fixed-region objects or accessors; the
+    // plugin never receives a reference to the server/request layer.
+    followupHost: {
+      runtime: agentRuntime,
+      patients,
+      vault: models.vault,
+      vaultDir,
+      guidelines,
+      patientBrief,
+      skills,
+      getProvider: () =>
+        providerConfigured(workspaces.provider) ? workspaces.provider : null,
+      options: {
+        followup: options.followupOptions,
+        chatFollowups: options.chatFollowups,
+        chatAutoFollow: options.chatAutoFollow,
+        care: options.care,
+        chatAibot: options.chatAibot,
+      },
+      isActive: (id = "followup") => pluginHost.isActive(id),
+      syncActivation: () => pluginHost.syncActivation(),
+    },
+    risks: { evaluatePatient: (patientId) => riskEngine()?.evaluatePatient(patientId) },
+    // Dependencies for the generic channel plugin. They are fixed-region
+    // objects; the plugin owns the gateway and exposes it back as a service.
+    channelHost: {
+      vault: models.vault,
+      bridge: sessionBridge,
+      getProvider: () => provider,
+      getKnowledgeBot: () => pluginService("feishu-knowledge-bot"),
+      options: options.messageGatewayOptions || {},
+    },
+    // Knowledge-bot plugin inputs. The bot owns its own tables and routes;
+    // the fixed shell only supplies the knowledge library and model access.
+    knowledgeBotHost: {
+      vault: models.vault,
+      library: guidelines,
+      getProvider: () => (providerConfigured(provider) ? provider : null),
+      options: options.knowledgeBotOptions || {},
+    },
+    // Doctor-notifications plugin inputs. Follow-up and care rows are read
+    // through their plugin services, never from the fixed shell.
+    notificationHost: {
+      vault: models.vault,
+      options: options.doctorNotificationOptions || {},
+    },
+    careTasks: () => (pluginActive("care-tasks") ? pluginService("care-tasks") : null),
+    // The plugin constructs the WeCom connector; the followup plugin attaches
+    // it to the care service through this callback.
+    channelWecomHost: {
+      patients,
+      vault: models.vault,
+      env: process.env,
+      options: options.wecom || {},
+      directoryTickMs: options.care?.intervalMs,
+      fetch: options.wecom?.fetch,
+      now: options.wecom?.now,
+      onStart: attachWecomCare,
+      onStop: detachWecomCare,
+      // Keep the old gate: member-task refresh ran only while message
+      // processing (and therefore automatic reply handling) was enabled.
+      shouldRefreshAwaiting: () =>
+        followupService()?.care.settings().processing.enabled === true,
+    },
+    channelWechatHost: {
+      dataDir: vaultDir,
+      vault: models.vault,
+      getChat: () => followupService()?.chatFollowups || null,
+      reader: channelWechatOptions.reader,
+      exp: options.wechatExp || channelWechatOptions.exp,
+      bridge: channelWechatOptions.bridge,
+      wxcli: channelWechatOptions.wxcli,
+      createReader: channelWechatOptions.createReader,
+      createExp: channelWechatOptions.createExp,
+      fetch: channelWechatOptions.fetch,
+      now: channelWechatOptions.now,
+      log: (message) => console.error(`[wechat-exp] ${message}`),
+      options: {
+        ...channelWechatOptions,
+        bridge: wechatBridgeOptions,
+        expPort: options.wechatExp?.port,
       },
     },
   });
-  followups.surveys = surveys;
-  risks.surveyAlertsProvider = (patient) => surveys.alerts(patient);
-  wecomAibot.surveys = surveys;
-  wecomAibot.start();
-  const chatAutoFollow = new WechatAutoFollow({ chat: chatFollowups, followups, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, store, ...options.chatAutoFollow });
+  pluginHost.migrate();
+  pluginHost.setup();
+  const followup = pluginActive("followup") ? followupService() : null;
+  if (followup)
+    if (riskEngine())
+      riskEngine().surveyAlertsProvider = (patient) =>
+        followup.surveys.alerts(patient);
+  const demoPack = new DemoPack(patients, store, {
+    sessions: sessionBridge,
+    cases,
+    guidelines,
+    schedule,
+    host: pluginHost,
+  });
+  // The followup plugin owns its tools; the legacy MedicalRuntime gets the
+  // same definitions through the host instead of importing plugin files.
+  runtime.registerPlugins([
+    ...pendingActionTools(pending, doctor),
+    ...pluginHost.legacyToolPlugins(),
+    ...scheduleTools(() => schedule),
+    ...labDisplayTools(() => patients),
+    ...extensionTools(() => extensions, pending),
+  ]);
   const ingestSecret =
     options.ingestSecret || process.env.MEDICAL_INGEST_SECRET || "";
   const digestMessages = async (pid, bodyData) => {
@@ -895,6 +1056,8 @@ export function createServer(options = {}) {
           }
           raw = Buffer.concat(chunks).toString("utf8");
         }
+        const wecom = currentWecom();
+        check(wecom, "WECOM_UNCONFIGURED", "企业微信回调未配置", 503);
         const response = wecom.callback(url.searchParams, raw);
         res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
         return res.end(response);
@@ -917,8 +1080,8 @@ export function createServer(options = {}) {
         );
         const b = await body(req);
         const ingested = patients.ingest(b.messages);
-        care.discover();
-        care.kick();
+        careService().discover();
+        careService().kick();
         return send(res, 201, ingested);
       }
       // Only the native window can obtain a UI session. Existing API clients
@@ -976,8 +1139,11 @@ export function createServer(options = {}) {
           if (!res.writableEnded) controller.abort(new AppError("REQUEST_ABORTED", "请求已断开", 499));
         };
         res.once("close", disconnected);
-        try { return send(res, 200, {
+        try {
+          await pluginHost.syncActivation();
+          return send(res, 200, {
           token: secret,
+          plugins: pluginHost.list(),
           demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
           // 应用，显式声明医疗能力可用（前端 medicalEnabled 优先读
@@ -1038,7 +1204,7 @@ export function createServer(options = {}) {
           ingestConfigured: Boolean(ingestSecret),
           patientsEnabled: true,
           doctorMemory: runtime.doctor.counts(),
-          literature: { enabled: true, sources: ["pubmed", "europepmc"] },
+          literature: { enabled: pluginActive("literature"), sources: ["pubmed", "europepmc"] },
           knowledge: {
             enabled: true,
             count: guidelines.list().length,
@@ -1048,13 +1214,18 @@ export function createServer(options = {}) {
             enabled: true,
             semantic: embedder.available(),
           },
-          riskAlerts: risks.counts(),
+          riskAlerts: riskEngine()?.counts() || { active: 0, critical: 0 },
           medSafety: { enabled: true },
-          scales: { enabled: true, count: listScales().length },
+          scales: {
+            enabled: pluginActive("clinical-ref"),
+            count: pluginService("clinical-ref")?.scales.list().length || 0,
+          },
           labKnowledge: { enabled: true, count: "常见指标内置" },
-          drg: { enabled: true, ...drg.settings() },
+          drg: pluginActive("drg")
+            ? { enabled: true, ...pluginService("drg").settings() }
+            : { enabled: false },
           cases: cases.counts(),
-          wechat: { enabled: chatFollowups.config("wechat").enabled },
+          wechat: { enabled: followupService()?.chatFollowups.config("wechat").enabled === true },
         }); } finally { res.removeListener("close", disconnected); }
       }
       if (path.startsWith("/api/knowledge/playback/") && ["GET", "HEAD"].includes(req.method)) {
@@ -1075,6 +1246,45 @@ export function createServer(options = {}) {
         res.on("close",()=>stream.destroy());stream.on("error",()=>res.destroy());stream.pipe(res);return;
       }
       if (path.startsWith("/api/")) guard(req, true);
+      // 旧版业务路径由插件声明接管。必须在固定业务路由（尤其
+      // /api/patients/:id/... 分支）之前匹配，且已在 guard 之后。
+      if (
+        (await pluginHost.handleLegacyApi(req, url, {
+          body: () => body(req),
+          send: (status, data) => send(res, status, data),
+          error: (error) => errorResponse(res, error),
+          res,
+        }))
+      )
+        return;
+      // 插件 HTTP 路由只接受 /api/p/<id>/...；鉴权与其它 /api 一致。
+      if (
+        path.startsWith("/api/p/") &&
+        (await pluginHost.handleApi(req, url, {
+          body: () => body(req),
+          send: (status, data) => send(res, status, data),
+          error: (error) => errorResponse(res, error),
+          res,
+        }))
+      )
+        return;
+      if (path === "/api/plugins" && req.method === "GET")
+        return send(res, 200, { plugins: pluginHost.list() });
+      const pluginRoute = /^\/api\/plugins\/([^/]+)$/.exec(path);
+      if (pluginRoute && req.method === "PUT") {
+        const input = await body(req);
+        check(
+          typeof input.enabled === "boolean",
+          "INVALID_INPUT",
+          "enabled 必须为布尔值",
+        );
+        return send(res, 200, {
+          plugin: await pluginHost.setEnabled(
+            decodeURIComponent(pluginRoute[1]),
+            input.enabled,
+          ),
+        });
+      }
       // 医疗领域能力按需启用（W6）：普通项目默认通用工具面；以下显式
       // 入口打开医疗叠层。会话型工作区（首页/患者会话）始终医疗，不经
       // 此路径。这两个入口属于医疗应用组合根，通用平台服务不感知。
@@ -1508,61 +1718,6 @@ export function createServer(options = {}) {
             );
         }
       }
-      if (path.startsWith("/api/care/") && await track(careApi(care, req, url, { body: () => body(req), send: (status, value) => send(res, status, value), pending }))) return;
-      if (path.startsWith("/api/chat-aibot/") && await track(chatAibotApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/wechat-exp/") && await track(wechatExpApi(wechatExp, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/chat-followups/") && await track(chatFollowupsApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/chat-autofollow/") && await track(chatAutoFollowApi(chatAutoFollow, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path === "/api/wecom/status" && req.method === "GET") return send(res, 200, wecom.status());
-      if (path === "/api/wecom/contacts" && req.method === "GET") return send(res, 200, wecom.directory.contacts({ status: url.searchParams.get("status") || undefined, query: url.searchParams.get("q") || undefined }));
-      if (path === "/api/wecom/directory" && req.method === "GET") return send(res, 200, wecom.directory.status());
-      if (path === "/api/wecom/directory/sync" && req.method === "POST") return send(res, 200, await track(wecom.directory.sync()));
-      if (path === "/api/wecom/groups" && req.method === "GET") return send(res, 200, wecom.directory.groups({ query: url.searchParams.get("q") || undefined }));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "groups" && parts.length === 4 && req.method === "GET") return send(res, 200, wecom.directory.group(decodeURIComponent(parts[3])));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "patients" && parts.length === 4 && req.method === "GET") return send(res, 200, wecom.directory.patient(parts[3]));
-      if (path === "/api/wecom/group-tasks" && req.method === "POST") return send(res, 201, wecom.directory.groupDraft(await body(req)));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "group-tasks" && parts.length === 5 && req.method === "POST") {
-        if (parts[4] === "submit") return send(res, 200, await track(wecom.directory.groupSubmit(parts[3], await body(req))));
-        if (parts[4] === "refresh") return send(res, 200, await track(wecom.directory.groupRefresh(parts[3])));
-      }
-      if (path === "/api/wecom/sync" && req.method === "POST") return send(res, 200, await track(wecom.sync(await body(req))));
-      if (path === "/api/wecom/bindings" && req.method === "GET") return send(res, 200, { bindings: wecom.bindings(url.searchParams.get("patientId")) });
-      if (path === "/api/wecom/bindings" && req.method === "POST") return send(res, 201, await track(wecom.directory.link(await body(req))));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "bindings" && parts.length === 4 && req.method === "DELETE") return send(res, 200, wecom.unbind(parts[3]));
-      if (path === "/api/wecom/tasks" && req.method === "GET") return send(res, 200, { tasks: wecom.tasks(url.searchParams.get("patientId")) });
-      if (path === "/api/wecom/tasks" && req.method === "POST") return send(res, 201, wecom.draft(await body(req)));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "tasks" && parts.length === 5 && req.method === "POST") {
-        if (parts[4] === "submit") return send(res, 200, await track(wecom.submit(parts[3], await body(req))));
-        if (parts[4] === "refresh") return send(res, 200, await track(wecom.refresh(parts[3])));
-      }
-      if (path === "/api/wechat/status" && req.method === "GET")
-        return send(res, 200, { enabled: false, available: false, retired: true, reason: "请使用随访 → 聊天随访中的会话核验与读取" });
-      if (["/api/wechat/read", "/api/wechat/send"].includes(path) && req.method === "POST")
-        throw new AppError("WECHAT_LEGACY_RETIRED", "旧微信桥接已停用。请在随访 → 聊天随访中核验并关联会话；发送请在微信中完成。", 410);
-      for (const [base, binding] of [["/api/knowledge-bot/feishu-binding", knowledgeBot.binding], ["/api/doctor-notifications/feishu-binding", doctorNotifications.binding]]) {
-        if (path === base && req.method === "POST") return send(res, 200, await track(binding.begin()));
-        if (path === base && req.method === "DELETE") return send(res, 200, binding.cancel((await body(req)).id));
-        if (path === base + "/status" && req.method === "POST") return send(res, 200, await track(binding.poll((await body(req)).id)));
-      }
-      if (path === "/api/knowledge-bot" && req.method === "DELETE") return send(res, 200, await track(knowledgeBot.disconnect((await body(req)).expectedRevision)));
-      if (path === "/api/knowledge-bot/reset-context" && req.method === "POST") return send(res, 200, await track(knowledgeBot.resetContext((await body(req)).expectedRevision)));
-      if (path === "/api/knowledge-bot" && req.method === "GET") return send(res, 200, knowledgeBot.settings());
-      if (path === "/api/knowledge-bot" && req.method === "PUT") {
-        const input = await body(req);
-        check(!input.enabled || !messageGateway.rows('message_channels').some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
-        return send(res, 200, await track(knowledgeBot.save(input)));
-      }
-      if (path.startsWith('/api/message-channels') && await track(messagingApi(messageGateway, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path === "/api/doctor-notifications" && req.method === "GET") return send(res, 200, doctorNotifications.settings());
-      if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 3 && req.method === "PUT") return send(res, 200, doctorNotifications.save(parts[2], await body(req)));
-      if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 4 && req.method === "POST") {
-        const channel = parts[2], action = parts[3], input = await body(req);
-        if (action === "test") return send(res, 200, await track(doctorNotifications.test(channel)));
-        if (action === "send") return send(res, 200, await track(doctorNotifications.send(channel, input)));
-        if (action === "disconnect") return send(res, 200, doctorNotifications.disconnect(channel, input.expectedRevision));
-        if (channel === "wechat" && action === "qrcode") return send(res, 200, await track(doctorNotifications.startQr()));
-        if (channel === "wechat" && action === "qrcode-status") return send(res, 200, await track(doctorNotifications.pollQr(input.id)));
-      }
       if (path === "/api/doctor/overview" && req.method === "GET")
         return send(res, 200, doctorOverview.read({
           kind: url.searchParams.get("kind") || "all", query: url.searchParams.get("q") || "",
@@ -1571,52 +1726,6 @@ export function createServer(options = {}) {
           excludeRiskAlerts: Boolean(url.searchParams.get("patientId")) && url.searchParams.get("excludeRiskAlerts") === "1",
           offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 12),
         }));
-      if (path === "/api/followup-plans" && req.method === "GET")
-        return send(res, 200, { plans: followups.listPlans() });
-      if (path === "/api/followup-plans" && req.method === "POST")
-        return send(res, 201, followups.createPlan(await body(req)));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "followup-plans" &&
-        parts.length === 3 &&
-        req.method === "DELETE"
-      )
-        return send(res, 200, followups.removePlan(parts[2]));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "followups" &&
-        parts[2] === "overview" &&
-        req.method === "GET"
-      )
-        return send(res, 200, followups.overviewPage({
-          limit: url.searchParams.has("limit") ? Number(url.searchParams.get("limit")) : undefined,
-          offset: url.searchParams.has("offset") ? Number(url.searchParams.get("offset")) : undefined,
-        }));
-      if (path === "/api/risk-alerts" && req.method === "GET")
-        return send(res, 200, {
-          alerts: risks.list({
-            patientId: url.searchParams.get("patientId") || undefined,
-            status: url.searchParams.get("status") || undefined,
-          }),
-          counts: risks.counts(),
-        });
-      if (path === "/api/risk-alerts/evaluate" && req.method === "POST")
-        return send(res, 200, risks.evaluateAll());
-      if (
-        parts[0] === "api" &&
-        parts[1] === "risk-alerts" &&
-        parts.length === 4 &&
-        ["ack", "resolve", "reopen"].includes(parts[3]) &&
-        req.method === "POST"
-      ) {
-        const status =
-          parts[3] === "ack"
-            ? "acknowledged"
-            : parts[3] === "resolve"
-              ? "resolved"
-              : "active";
-        return send(res, 200, risks.setStatus(parts[2], status));
-      }
       if (path === "/api/cases" && req.method === "GET")
         return send(
           res,
@@ -1640,63 +1749,7 @@ export function createServer(options = {}) {
       }
       if (path === "/api/med-safety" && req.method === "POST")
         return send(res, 200, medicationSafetyCheck(await body(req)));
-      if (path === "/api/adr-assess" && req.method === "POST")
-        return send(res, 200, assessAdverseReaction(await body(req)));
-      if (path === '/api/learning/regression') {
-        if (req.method === 'GET') return send(res, 200, personalRegression.get());
-        if (req.method === 'POST') return send(res, 202, personalRegression.start(await body(req)));
-        if (req.method === 'DELETE') return send(res, 200, personalRegression.cancel());
-      }
-      if (path === '/api/learning/events' && req.method === 'POST') {
-        const input = await body(req);
-        check(['similar-expanded', 'similar-collapsed', 'similar-disabled', 'similar-opened', 'references-expanded', 'habit-viewed'].includes(input.type), 'INVALID_INPUT', '事件无效');
-        store.db.prepare('INSERT INTO learning_events(type,subject,data,created_at) VALUES (?,?,?,?)').run(input.type, String(input.subject || '').slice(0, 100), '{}', new Date().toISOString());
-        return send(res, 200, { ok: true });
-      }
-      if (parts[1] === 'learning' && parts[2] === 'similar' && parts.length === 4 && req.method === 'GET') {
-        const p = patients.row(parts[3]), enabled = learningPrefs(store.db).similarCards;
-        const query = p.diagnoses.map(d => d.name).join(' ');
-        return send(res, 200, { enabled, matches: enabled && query ? cases.similar({ caseText: query.slice(0, 4000), diagnosis: p.diagnoses[0]?.name, excludePatientId: p.id, limit: 3 }).matches.filter(m => m.score >= 2) : [] });
-      }
-      if (path === '/api/learning/changes' && req.method === 'GET') return send(res, 200, { changes: store.db.prepare('SELECT id,habit_id,decision,created_at FROM habit_history ORDER BY id DESC LIMIT 30').all().map(change => ({ ...change, revision: habitRevision(store.db, change.habit_id) })) });
-      if (path === '/api/learning/month' && req.method === 'GET') {
-        const now = new Date(), start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString(), end = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const learned = store.db.prepare("SELECT COUNT(*) n FROM doctor_memories WHERE status='confirmed' AND created_at>=? AND created_at<?").get(start, end).n;
-        const stats = pending.reviewLog.stats('90d');
-        return send(res, 200, { show: now.getDate() === 1 && learned > 0, learned, fewerEdits: stats.previousAverage == null ? null : stats.previousAverage - stats.recentAverage });
-      }
-      if (path === '/api/learning/settings') {
-        if (req.method === 'GET') return send(res, 200, learningPrefs(store.db));
-        if (req.method === 'PUT') return send(res, 200, saveLearningPrefs(store.db, await body(req)));
-      }
-      if (path === '/api/learning/export' && req.method === 'GET') return send(res, 200, pending.reviewLog.stats('365d'));
-      if (path === '/api/learning/habits' && req.method === 'GET') return send(res, 200, { habits: doctor.memories().filter(m => ['confirmed', 'paused', 'deleted'].includes(m.status)).map(m => ({ ...m, ledger: pending.reviewLog.ledger(m.id) })) });
-      if (path === '/api/learning/feedback' && req.method === 'POST') {
-        const input = await body(req), action = pending.row(input.actionId);
-        check(action.payload.personalization?.habits?.some(h => h.id === input.habitId), 'INVALID_INPUT', '此草稿未采用该习惯');
-        return send(res, 200, pending.reviewLog.feedback(input.habitId, input.actionId, 'notApplicable'));
-      }
-      if (path === "/api/review-stats" && req.method === "GET") return send(res, 200, pending.reviewLog.stats(url.searchParams.get('range') || '90d'));
-      if (path === "/api/review-details" && req.method === "GET") return send(res, 200, { diffs: pending.reviewLog.details(url.searchParams.get('section'), url.searchParams.get('field')) });
-      if (path === "/api/learning/clear" && req.method === "POST") {
-        const input = await body(req);
-        check(input.confirmed === true, 'CONFIRM_REQUIRED', '请确认清空学习记录');
-        check(!personalRegression.active, 'RUN_ACTIVE', '请先停止历史档案评测，再清空学习记录', 409);
-        return send(res, 200, pending.reviewLog.clear({ includeStated: input.includeStated === true }));
-      }
       if (parts[1] === 'pending-actions' && parts.length === 4 && parts[3] === 'review-draft' && req.method === 'PATCH') return send(res, 200, pending.saveReview(parts[2], await body(req)));
-      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 4 && req.method === 'GET') {
-        const memory = doctor.memoryRow(Number(parts[3]));
-        const all = store.db.prepare('SELECT id,source FROM doctor_memories').all();
-        const descendants = new Set([memory.id]);
-        for (let changed = true; changed;) {
-          changed = false;
-          for (const row of all) if (!descendants.has(row.id) && descendants.has(JSON.parse(row.source || '{}').replaces)) { descendants.add(row.id); changed = true; }
-        }
-        const related = doctor.memories().filter(m => ['confirmed', 'paused', 'deleted'].includes(m.status) && (descendants.has(m.id) || (memory.topic && m.topic === memory.topic)));
-        return send(res, 200, { ...memory, related });
-      }
-      if (parts[1] === 'learning' && parts[2] === 'habits' && parts.length === 5 && parts[4] === 'decision' && req.method === 'POST') { const input = await body(req); return send(res, 200, habitMutation(store.db, Number(parts[3]), input.decision, input, () => pending.habitLearner.decide(Number(parts[3]), input.decision, { ...input, requestId: undefined }), { required: true })); }
       if (path === "/api/pending-actions" && req.method === "GET") {
         const limit = Number(url.searchParams.get("limit") ?? 100), offset = Number(url.searchParams.get("offset") ?? 0);
         const actions = pending.list({
@@ -1724,10 +1777,13 @@ export function createServer(options = {}) {
         // 请求体可空：托盘普通确认发 {}，带反馈说明时发 { note }。
         const feedback = await body(req).catch(() => ({}));
         const result = parts[3] === 'confirm' ? pending.confirm(parts[2], feedback) : pending.reject(parts[2], feedback);
-        if (parts[3] === 'confirm' && result.action.type === 'patient-create' && learningPrefs(store.db).habits) {
-          const sourceId = result.action.payload.sourceSessionId;
-          try { const consent = Boolean(sourceId && intakeJobs.get(sourceId)?.startedAt); result.habitSuggestions.push(...await track(pending.habitLearner.consolidateStyle(provider, { consent }))); }
-          catch { result.learningNotice = '档案已保存，摘要风格归纳暂未完成，原始修改仍在本机保留。'; }
+        if (parts[3] === 'confirm' && result.action.type === 'patient-create') {
+          const learning = pluginActive("learning") ? pluginService("learning") : null;
+          if (learning?.prefs()?.habits) {
+            const sourceId = result.action.payload.sourceSessionId;
+            try { const consent = Boolean(sourceId && intakeJobs.get(sourceId)?.startedAt); result.habitSuggestions.push(...await track(learning.consolidateStyle(provider, { consent }))); }
+            catch { result.learningNotice = '档案已保存，摘要风格归纳暂未完成，原始修改仍在本机保留。'; }
+          }
         }
         return send(res, 200, result);
       }
@@ -1835,18 +1891,6 @@ export function createServer(options = {}) {
           ocrSettings.save({ clearService: true });
         return send(res, 200, paddleLocal.status());
       }
-      if (path === "/api/scales" && req.method === "GET")
-        return send(res, 200, { scales: listScales() });
-      if (
-        parts[0] === "api" &&
-        parts[1] === "scales" &&
-        parts.length === 4 &&
-        parts[3] === "calculate" &&
-        req.method === "POST"
-      ) {
-        const b = await body(req);
-        return send(res, 200, calculateScale(parts[2], b.answers || {}));
-      }
       if (path === "/api/lab-knowledge" && req.method === "GET")
         return send(
           res,
@@ -1858,57 +1902,6 @@ export function createServer(options = {}) {
               : undefined,
           }),
         );
-      if (path === "/api/icd9" && req.method === "GET")
-        return send(res, 200, {
-          codes: searchIcd9(url.searchParams.get("q"), {
-            limit: url.searchParams.get("limit")
-              ? Number(url.searchParams.get("limit"))
-              : undefined,
-          }),
-        });
-      if (parts[0] === "api" && parts[1] === "drg") {
-        await drg.load();
-        if (parts[2] === "group" && req.method === "POST")
-          return send(res, 200, await drg.group(await body(req)));
-        if (parts[2] === "batch" && req.method === "POST")
-          return send(res, 200, await drg.batchAnalyze(await body(req)));
-        if (parts[2] === "settings") {
-          if (req.method === "GET") return send(res, 200, drg.settings());
-          if (req.method === "POST")
-            return send(res, 200, drg.updateSettings(await body(req)));
-        }
-        if (parts[2] === "import" && req.method === "POST")
-          return send(res, 200, drg.importWeights((await body(req)).weights));
-      }
-      if (
-        parts[0] === "api" &&
-        parts[1] === "research" &&
-        req.method === "POST"
-      ) {
-        const b = await body(req);
-        const researchSessionId = b.sessionId ? identifier(b.sessionId) : null;
-        const sources = researchSessionId
-          ? sessionBridge.isSessionWorkspace(researchSessionId)
-            ? (sessionBridge.materialsOf(researchSessionId) || []).map(
-                ({ id: fid, name, text, hash, extraction }) => ({
-                  id: fid,
-                  name,
-                  text,
-                  hash,
-                  extraction,
-                }),
-              )
-            : store.get(researchSessionId).files
-          : [];
-        if (parts[2] === "profile")
-          return send(res, 200, research.profile({ ...b, sources }));
-        if (parts[2] === "test")
-          return send(res, 200, research.test({ ...b, sources }));
-        if (parts[2] === "sample-size")
-          return send(res, 200, research.sampleSize(b));
-        if (parts[2] === "deidentify")
-          return send(res, 200, research.deidentify({ ...b, sources }));
-      }
       if (
         parts[0] === "api" &&
         parts[1] === "cases" &&
@@ -1960,7 +1953,7 @@ export function createServer(options = {}) {
         });
       if (path === "/api/patients" && req.method === "POST") {
         const patient = patients.create(await body(req));
-        risks.evaluatePatient(patient.id);
+        riskEngine()?.evaluatePatient(patient.id);
         return send(res, 201, patient);
       }
       if (path === "/api/patients/group-suggestions" && req.method === "POST")
@@ -1975,14 +1968,17 @@ export function createServer(options = {}) {
         });
         return send(res, 201, action);
       }
-      if (path === "/api/inbox" && req.method === "GET")
+      if (path === "/api/inbox" && req.method === "GET") {
+        requireFollowupActive();
         return send(res, 200, { messages: patients.unassigned() });
+      }
       if (
         parts[0] === "api" &&
         parts[1] === "inbox" &&
         parts[3] === "assign" &&
         req.method === "POST"
       ) {
+        requireFollowupActive();
         const b = await body(req);
         return send(
           res,
@@ -1999,29 +1995,6 @@ export function createServer(options = {}) {
             offset: Number(url.searchParams.get("offset") || 0),
             limit: Number(url.searchParams.get("limit") || 100),
           }));
-      if (parts[0] === "api" && parts[1] === "reminders" && parts.length === 4 && parts[3] === "addendum" && req.method === "POST")
-        return send(res, 200, followups.addContactAddendum(identifier(parts[2]), await body(req)));
-      if (
-        parts[0] === "api" &&
-        parts[1] === "reminders" &&
-        parts.length === 4 &&
-        parts[3] === "complete" &&
-        req.method === "POST"
-      ) {
-        const reminder = followups.completeReminder(
-          identifier(parts[2]),
-          await body(req),
-        );
-        risks.evaluatePatient(reminder.patientId);
-        return send(res, 200, reminder);
-      }
-      if (
-        parts[0] === "api" &&
-        parts[1] === "reminders" &&
-        parts[3] === "ack" &&
-        req.method === "POST"
-      )
-        return send(res, 200, followups.ackReminder(identifier(parts[2])));
       if (parts[0] === "api" && parts[1] === "extensions") {
         if (parts.length === 2 && req.method === "GET") return send(res, 200, extensions.overview());
         if (parts.length === 2 && req.method === "POST") { const b = await body(req); return send(res, 201, extensions.save({ kind: b.kind, spec: b.spec, source: { via: "manual" } })); }
@@ -2050,38 +2023,8 @@ export function createServer(options = {}) {
           if (req.method === "GET") return send(res, 200, patients.labDisplay(pid));
           if (req.method === "PATCH") return send(res, 200, patients.updateLabDisplay(pid, await body(req)));
         }
-        if (parts[3] === "lab-monitors") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, { monitors: risks.listMonitors(pid) });
-          if (parts.length === 4 && req.method === "POST") {
-            const monitor = risks.createMonitor(pid, await body(req));
-            risks.evaluatePatient(pid);
-            return send(res, 201, monitor);
-          }
-          if (parts.length === 5 && req.method === "PATCH") {
-            const monitor = risks.updateMonitor(pid, identifier(parts[4]), await body(req));
-            risks.evaluatePatient(pid);
-            return send(res, 200, monitor);
-          }
-          if (parts.length === 5 && req.method === "DELETE") {
-            risks.removeMonitor(pid, identifier(parts[4]), (await body(req)).revision);
-            risks.evaluatePatient(pid);
-            return send(res, 200, { ok: true });
-          }
-        }
-        if (parts[3] === "care-tasks") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, careTasks.list(pid, {
-            status: url.searchParams.get("status") || "active", offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 20),
-          }));
-          if (parts.length === 4 && req.method === "POST") return send(res, 201, careTasks.create(pid, await body(req)));
-          if (parts.length === 5 && req.method === "PATCH") return send(res, 200, careTasks.update(pid, identifier(parts[4]), await body(req)));
-        }
         if (parts.length === 4 && parts[3] === "brief" && req.method === "GET")
           return send(res, 200, patientBrief.read(pid));
-        if (parts.length === 4 && parts[3] === "followup-records" && req.method === "POST") {
-          const record = followups.recordContact(pid, await body(req));
-          risks.evaluatePatient(pid);
-          return send(res, 201, record);
-        }
         if (parts[3] === "export" && req.method === "GET")
           return send(res, 200, patients.exportDeidentified(pid));
         if (parts[3] === "share" && req.method === "POST")
@@ -2090,7 +2033,7 @@ export function createServer(options = {}) {
           if (req.method === "GET") return send(res, 200, patients.get(pid));
           if (req.method === "PATCH") {
             const updated = patients.update(pid, await body(req));
-            risks.evaluatePatient(pid);
+            riskEngine()?.evaluatePatient(pid);
             return send(res, 200, updated);
           }
           if (req.method === "DELETE") {
@@ -2117,133 +2060,6 @@ export function createServer(options = {}) {
             );
           if (parts[4] === "digest" && req.method === "POST")
             return send(res, 200, await digestMessages(pid, await body(req)));
-        }
-        if (parts[3] === "followup-surveys") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, { surveys: surveys.list(pid, { reminderId: url.searchParams.get("reminderId"), surveyId: url.searchParams.get("surveyId") }) });
-          if (parts.length === 6 && req.method === "POST") {
-            const surveyId = identifier(parts[4]);
-            if (parts[5] === "send") return send(res, 200, await surveys.send(pid, surveyId, await body(req)));
-            if (parts[5] === "collect") {
-              const row = surveys.collect(pid, surveyId, await body(req));
-              risks.evaluatePatient(pid);
-              return send(res, 200, row);
-            }
-            if (parts[5] === "cancel") return send(res, 200, surveys.cancel(pid, surveyId, await body(req)));
-            if (parts[5] === "ai-parse") return send(res, 200, await surveys.aiParse(pid, surveyId));
-          }
-        }
-        if (parts[3] === "followups") {
-          if (parts.length === 4 && req.method === "GET")
-            return send(res, 200, { jobs: followups.list(pid) });
-          if (parts.length === 4 && req.method === "POST")
-            return send(res, 201, followups.create(pid, await body(req)));
-          if (
-            parts.length === 5 &&
-            parts[4] === "apply" &&
-            req.method === "POST"
-          )
-            return send(
-              res,
-              201,
-              followups.applyTemplate(pid, await body(req)),
-            );
-          if (parts.length === 5) {
-            const job = followups.row(parts[4]);
-            check(
-              job.patientId === pid,
-              "NOT_FOUND",
-              "随访计划不属于当前患者",
-              404,
-            );
-            if (req.method === "PATCH")
-              return send(res, 200, followups.update(job.id, await body(req)));
-            if (req.method === "DELETE") {
-              followups.remove(job.id, (await body(req)).revision);
-              return send(res, 200, { ok: true });
-            }
-          }
-        }
-      }
-      if (parts[0] === "api" && parts[1] === "literature") {
-        const numberParam = (key) => {
-          const raw = url.searchParams.get(key);
-          return raw === null || raw === "" ? undefined : Number(raw);
-        };
-        if (parts[2] === "search" && req.method === "GET")
-          return send(
-            res,
-            200,
-            await literature.search({
-              query: url.searchParams.get("query") || undefined,
-              source: url.searchParams.get("source") || undefined,
-              yearFrom: numberParam("yearFrom"),
-              yearTo: numberParam("yearTo"),
-              limit: numberParam("limit"),
-              sort: url.searchParams.get("sort") || undefined,
-            }),
-          );
-        if (parts[2] === "article" && req.method === "GET")
-          return send(
-            res,
-            200,
-            await literature.fetchArticle({
-              pmid: url.searchParams.get("pmid") || undefined,
-              doi: url.searchParams.get("doi") || undefined,
-            }),
-          );
-        if (parts[2] === "import" && req.method === "POST") {
-          const b = await body(req);
-          const article = await literature.fetchArticle({
-            pmid: b.pmid,
-            doi: b.doi,
-          });
-          const name = article.pmid
-            ? `PMID-${article.pmid}.md`
-            : `DOI-${String(article.doi)
-                .replace(/[^A-Za-z0-9.-]/g, "_")
-                .slice(0, 80)}.md`;
-          const sessionId = identifier(b.sessionId);
-          const materialInput = {
-            name,
-            text: literature.materialText(article),
-          };
-          const file = sessionBridge.isSessionWorkspace(sessionId)
-            ? sessionBridge.addMaterial(sessionId, materialInput)
-            : runtime.addFile(sessionId, materialInput);
-          return send(res, 201, { file, article });
-        }
-      }
-      if (parts[0] === "api" && parts[1] === "trials") {
-        if(parts.length===6 && parts[3]==='screenings' && parts[5]==='ai') {
-          const trialId=identifier(parts[2]),patientId=identifier(parts[4]);
-          trialScreening.get(trialId);patients.get(patientId);
-          if(req.method==='GET')return send(res,200,{jobs:trialJobs.list(trialId,patientId).map(j=>trialJobs.public(j))});
-          if(req.method==='POST')return send(res,202,trialJobs.start(trialId,patientId,await body(req)));
-        }
-        if(parts.length===7 && parts[3]==='screenings' && parts[5]==='ai' && req.method==='DELETE') {
-          const job=trialJobs.get(identifier(parts[6]));
-          check(job.trialId===parts[2]&&job.patientId===parts[4],'NOT_FOUND','初筛任务不存在',404);
-          return send(res,200,trialJobs.cancel(job.id));
-        }
-        if (parts.length === 4 && parts[2] === "registry" && req.method === "GET") return send(res,200,await trialRegistry.lookup(parts[3]));
-        if (parts.length === 4 && parts[3] === "candidates" && req.method === "GET") return send(res,200,trialCandidates.candidates(parts[2], { stage: url.searchParams.get("stage") || undefined, status: url.searchParams.get("status") || undefined }));
-        if (parts.length === 4 && parts[3] === "batches" && req.method === "POST") return send(res,202,trialCandidates.startBatch(parts[2], await body(req)));
-        if (parts.length === 6 && parts[3] === "batches" && parts[5] === "cancel" && req.method === "POST") {
-          const batch = trialCandidates.getBatch(parts[4]);
-          check(batch.trialId === parts[2], "NOT_FOUND", "批量初筛不存在", 404);
-          return send(res,200,trialCandidates.cancelBatch(batch.id));
-        }
-        if (parts.length === 5 && parts[3] === "enrollments") {
-          if (req.method === "GET") return send(res,200,trialCandidates.enrollment(identifier(parts[2]), identifier(parts[4])));
-          if (req.method === "PUT") return send(res,200,trialCandidates.setEnrollment(parts[2], parts[4], await body(req)));
-        }
-        if (parts.length === 2 && req.method === "GET") return send(res,200,{trials:trialScreening.list()});
-        if (parts.length === 2 && req.method === "POST") return send(res,201,trialScreening.create(await body(req)));
-        if (parts.length === 3 && req.method === "GET") return send(res,200,trialScreening.get(identifier(parts[2])));
-        if (parts.length === 5 && parts[3] === "screenings") {
-          const trialId=identifier(parts[2]),patientId=identifier(parts[4]);
-          if(req.method === "GET") return send(res,200,trialScreening.screening(trialId,patientId));
-          if(req.method === "PUT") return send(res,200,trialScreening.save(trialId,patientId,await body(req)));
         }
       }
       const knowledgeRoutes =
@@ -2368,24 +2184,26 @@ export function createServer(options = {}) {
               runtime.doctor.addMemory({ ...b, kind: "explicit" }),
             );
           }
+          const mutateMemory = (id, operation, input, execute) =>
+            pluginService("learning")?.mutateMemory(id, operation, input, execute) ?? execute();
           if (parts.length === 4 && req.method === "DELETE") {
             const id = Number(parts[3]);
             const input = await body(req);
-            return send(res, 200, habitMutation(store.db, id, "memory-delete", input, () => runtime.doctor.deleteMemory(id), { required: true }));
+            return send(res, 200, mutateMemory(id, "memory-delete", input, () => runtime.doctor.deleteMemory(id)));
           }
           if (parts.length === 5) {
             const id = Number(parts[3]);
             if (req.method === "POST" && parts[4] === "confirm") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "dismiss") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "pin") {
               const input = await body(req);
-              return send(res, 200, habitMutation(store.db, id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true), { required: true }));
+              return send(res, 200, mutateMemory(id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true)));
             }
           }
         }
@@ -2584,6 +2402,7 @@ export function createServer(options = {}) {
     });
   });
   server.pending = pending;
+  server.pluginHost = pluginHost;
   server.store = store;
   server.runtime = runtime;
   // 供测试与诊断日志直接调用；HTTP 入口为
@@ -2595,70 +2414,93 @@ export function createServer(options = {}) {
   server.token = secret;
   server.scheduler = scheduler;
   server.patients = patients;
-  server.followups = followups;
-  server.surveys = surveys;
   server.doctor = runtime.doctor;
-  server.knowledgeBot = knowledgeBot;
-  server.doctorNotifications = doctorNotifications;
-  server.messageGateway = messageGateway;
-  server.literature = literature;
+  Object.defineProperty(server, "knowledgeBot", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("feishu-knowledge-bot"),
+  });
+  Object.defineProperty(server, "doctorNotifications", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("doctor-notifications"),
+  });
+  Object.defineProperty(server, "literature", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("literature") || options.literature || literature,
+  });
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
-  server.risks = risks;
-  server.drg = drg;
   server.cases = cases;
-  server.wechat = wechat;
-  server.wecom = wecom;
-  server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
-  server.chatFollowups = chatFollowups;
-  server.chatAutoFollow = chatAutoFollow;
-  server.care = care;
   server.pendingActions = pending;
   server.labImporter = labImporter;
+  // Tests and diagnostics still reach migrated services through these
+  // properties. Every value is a live getter over pluginHost, never a second
+  // instance or a fixed-region copy.
+  const exposePluginService = (name, read) =>
+    Object.defineProperty(server, name, {
+      enumerable: true,
+      configurable: true,
+      get: read,
+    });
+  exposePluginService("followups", () => followups);
+  exposePluginService("surveys", () => followupService()?.surveys || null);
+  exposePluginService(
+    "chatFollowups",
+    () => followupService()?.chatFollowups || null,
+  );
+  exposePluginService(
+    "chatAutoFollow",
+    () => followupService()?.chatAutoFollow || null,
+  );
+  exposePluginService("care", () => followupService()?.care || null);
+  exposePluginService(
+    "trialCandidates",
+    () => pluginService("trials")?.candidates || null,
+  );
+  exposePluginService(
+    "messageGateway",
+    () => pluginService("channel")?.gateway || null,
+  );
+  exposePluginService(
+    "wechat",
+    () => pluginService("channel-wechat")?.bridge || null,
+  );
+  exposePluginService("wecom", () => currentWecom());
+  exposePluginService("channelWecom", () => pluginService("channel-wecom"));
+  exposePluginService("channelWechat", () => pluginService("channel-wechat"));
   server.once("listening", () => {
     scheduler.start();
     workspaces.scheduler.start();
     workspaces.recovery.start();
-    followups.start();
-    doctorNotifications.start();
-    knowledgeBot.binding.start();
-    knowledgeBot.start();
-    messageGateway.start();
-    chatFollowups.start();
-    care.start();
-    extensions.start();
+    // 与迁移前 messageGateway.start() 的位置一致：监听开始后、聊天随访前。
+    // 插件生命周期统一由 host 按依赖拓扑启动，单个插件失败已隔离。
+    pluginHost.startAll().catch((error) => {
+      console.error("插件启动失败:", error);
+    });
   });
   server.shutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     guidelines.stopStatusQueries?.();
     shutdownPromise = (async () => {
-    await personalRegression.stop();
     workspaces.stopping = true;
     scheduler.stop();
     paddleLocal.stop();
     workspaces.scheduler.stop();
     workspaces.recovery.stop();
-    followups.stop();
-    await doctorNotifications.stop();
-    await knowledgeBot.binding.stop();
-    await knowledgeBot.stop();
-    await messageGateway.stop();
-    await chatFollowups.stop();
-    wecomAibot.stop();
-    wechatExp.stop();
-    care.stop();
-    extensions.stop();
+    // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
+    await pluginHost.stopAll();
+    await pluginHost.drainAll();
     if (databasePath === ":memory:" && !options.userSkillsDir) rmSync(userSkillsDir, { recursive: true, force: true });
     for (const id of workspaces.active.keys()) workspaces.interrupt(id);
     for (const id of runtime.active.keys()) runtime.cancel(id);
     for (const id of workspaces.active.keys())
       if (sessionBridge.isSessionWorkspace(id)) workspaces.cancel(id);
     await intakeJobs.stop();
-    await trialCandidates.stop();
-    await trialJobs.stop();
     await knowledgeOrganizer.stop();
     await Promise.allSettled([...guidelines.indexTasks.values()]);
     for (const ws of sockets.clients) ws.terminate();
@@ -2669,8 +2511,6 @@ export function createServer(options = {}) {
     await workspaces.scheduler.drain();
     await workspaces.recovery.drain();
     await workspaces.extensions.close();
-    await followups.drain();
-    await care.drain();
     try {
       const vectorClosures = await Promise.allSettled([vectorStore.close(), materialVectors.close()]);
       const failed = vectorClosures.find(result => result.status === "rejected");

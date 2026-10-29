@@ -57,8 +57,8 @@ const pack = () => [
 ];
 
 export class DemoPack {
-  constructor(patients, followups, store, services = {}) {
-    Object.assign(this, { patients, followups, store, ...services });
+  constructor(patients, store, services = {}) {
+    Object.assign(this, { patients, store, ...services });
     store.db.exec("CREATE TABLE IF NOT EXISTS demo_resources (key TEXT PRIMARY KEY, kind TEXT NOT NULL, id TEXT NOT NULL)");
     // Adopt only the old built-in pack, never arbitrary patients bearing a tag.
     for (const p of patients.all()) {
@@ -70,10 +70,20 @@ export class DemoPack {
   }
   resources() { return this.store.db.prepare("SELECT * FROM demo_resources").all(); }
   exists(kind, id) {
-    const tables = { patient: "patients", knowledge: "guideline_docs", case: "case_library", trial: "trial_protocols", appointment: "appointments", reply: "care_replies", alert: "care_alerts", tracking: "care_tasks" };
+    // Only fixed-region tables are named here. Plugin-owned demo resources are
+    // resolved by their plugin through the host, never by fixed SQL.
+    const tables = { patient: "patients", knowledge: "guideline_docs", case: "case_library", appointment: "appointments" };
     if (kind === "collection") return Boolean(this.store.db.prepare("SELECT 1 FROM knowledge_collections WHERE name=?").get(id));
     if (kind === "session") return this.sessions.isSessionWorkspace(id);
-    return Boolean(this.store.db.prepare(`SELECT 1 FROM ${tables[kind]} WHERE id=?`).get(id));
+    if (tables[kind]) return Boolean(this.store.db.prepare(`SELECT 1 FROM ${tables[kind]} WHERE id=?`).get(id));
+    return Boolean(this.host?.demoExists(kind, id, this));
+  }
+  patient(index) {
+    const saved = this.resources().find(r => r.key === `patient:${index}`);
+    return saved && this.exists(saved.kind, saved.id) ? this.patients.row(saved.id) : null;
+  }
+  pluginResources(kind) {
+    return this.resources().filter(r => r.kind === kind && this.exists(r.kind, r.id));
   }
   own(key, kind, create) {
     const saved = this.resources().find(r => r.key === key);
@@ -118,18 +128,7 @@ export class DemoPack {
           if (!this.sessions.get(patient.sessionId).files.some(f => f.name === source.name)) this.sessions.addMaterial(patient.sessionId, source);
         }
       }
-      if (index === 1 && !this.followups.list(id).some(job => job.questionnaire)) {
-        const job = this.followups.create(id, { name: "示例·血糖控制季度随访", once: false, intervalDays: 90, firstDueAt: new Date(Date.now() + 60000).toISOString(), checklist: ["近期血糖记录", "用药依从性"], questionnaire: {
-          title: "示例·复诊资料回收", questions: [{ id: "q1", type: "single", text: "是否已准备近期测量记录？", options: [{label:"已准备"},{label:"尚未准备"}] }, { id: "q2", type: "text", text: "这次希望医生帮助核对什么？" }],
-        } });
-        const overdue = Date.now() - 2 * DAY;
-        // Materialize one occurrence with the normal workflow, then leave the next
-        // occurrence in the future so the scheduler cannot duplicate this survey.
-        job.nextDue = overdue;
-        await this.followups.execute(job);
-      }
       if (this.schedule && index === 0) this.own("appointment", "appointment", () => this.schedule.create(id, { date: this.schedule.today(), time: "10:00", reason: "示例·携带测量记录复诊", place: "演示门诊" }));
-      if (this.careTasks && index === 2) this.own("tracking", "tracking", () => this.careTasks.create(id, { title: "示例·术后血常规报告跟进", kind: "test", dueAt: new Date(Date.now() + DAY).toISOString(), note: "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。" }));
       if (this.cases) this.own(`case:${index}`, "case", () => this.cases.addCase({ patientId: id, patientName: input.name, sessionId: patient.sessionId, diagnosis: input.diagnoses[0].name, icd10: input.diagnoses[0].code, summary: input.clinicalSummary.text, tags: ["虚构示例"], lessons: "练习保留资料出处，区分已记录事实与待补充信息。", starred: index === 0 }));
     }
     if (this.sessions) {
@@ -138,7 +137,6 @@ export class DemoPack {
         if (!this.sessions.get(id).files.some(f => f.name === file.name)) this.sessions.addMaterial(id, file);
       }
     }
-    if (this.trials) this.own("trial", "trial", () => this.trials.create({ title: "示例·糖尿病随访观察方案（虚构）", version: "演示 v1", recruitment: "虚构练习，不招募", inclusion: "年龄 18–75 岁\n病历已记录2型糖尿病\n愿意提供近期血糖记录", exclusion: "拒绝参与随访\n资料不足以核对患者身份", protocolText: "本方案仅用于练习逐条筛选。未知信息必须标记待补充，不推断符合；不存在真实招募或试验注册。" }));
     if (this.guidelines && !this.guidelines.collections().some(c => c.name === "示例体验资料库")) {
       this.guidelines.saveCollection("示例体验资料库", { expectedRevision: 0, description: "虚构的门诊资料核对手册与复诊准备清单。", whenToUse: "体验知识检索、原文引用、患教改写和流程图生成。", limitations: "仅用于功能练习，不是临床指南。" });
       this.store.db.prepare("INSERT OR REPLACE INTO demo_resources VALUES (?,?,?)").run("collection", "collection", "示例体验资料库");
@@ -151,13 +149,9 @@ export class DemoPack {
         this.store.db.prepare("INSERT OR REPLACE INTO demo_resources VALUES (?,?,?)").run(key, "knowledge", created.id);
       }
     }
-    const patient = this.status().patients.find(p => p.index === 1 && !p.archived);
-    if (this.care && patient) {
-      const care = this.care();
-      const message = care.ingest({ patientId: patient.id, text: "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？", channel: "manual", externalId: `demo:${patient.id}:message`, historical: true });
-      this.own("reply", "reply", () => care.createReply({ patientId: patient.id, messageId: message.id, channel: "manual", mode: "manual", text: "【示例草稿】复诊前请准备上次就诊记录、近期检验报告和当前用药清单；测量记录请保留日期、数值和单位。", reason: "内置虚构草稿，供编辑和复核体验" }));
-      this.own("alert", "alert", () => care.createAlert({ patientId: patient.id, messageId: message.id, level: "attention", reason: "示例·复诊资料需要医生核对", localOnly: true }));
-    }
+    // Plugin-owned demo data is installed by the owning plugin. Disabled or
+    // unavailable plugins contribute nothing, matching their runtime state.
+    await this.host?.demoInstall(this);
     return this.status();
   }
   async clear() {
@@ -174,17 +168,17 @@ export class DemoPack {
     const ids = this.demoIds();
     const sessionIds = [...ids.map(id => this.patients.row(id).sessionId), ...resources.filter(r => r.kind === "session").map(r => r.id)];
     for (const id of sessionIds) check(!this.patients.runtime.active.has(id) && !this.sessions?.service.active.has(id), "RUN_ACTIVE", "示例任务正在执行，请先停止再删除", 409);
+    // Let plugins clear their own demo rows first; fixed SQL only touches fixed
+    // tables. The ledger is removed below after each resource is gone.
+    await this.host?.demoClear(this);
     // Remove dependencies before their charts; keep the ledger if any step fails.
     for (const r of resources.filter(r => r.kind !== "patient" && r.kind !== "collection")) {
       if (this.exists(r.kind, r.id)) {
         if (r.kind === "knowledge") await this.guidelines.removeDocument(r.id, { expectedRevision: this.guidelines.docRow(r.id).revision || 0 });
         else if (r.kind === "case") this.cases.removeCase(r.id, { expectedRevision: this.cases.get(r.id).revision || 0, requestId: randomUUID() });
         else if (r.kind === "session") this.sessions.removeSession(r.id);
-        else if (r.kind === "trial") {
-          for (const table of ["trial_screenings", "trial_enrollments", "trial_batches"]) this.store.db.prepare(`DELETE FROM ${table} WHERE trial_id=?`).run(r.id);
-          this.store.db.prepare("DELETE FROM trial_protocols WHERE id=?").run(r.id);
-        }
-        // Appointments, replies and alerts cascade with their owned patients.
+        // Appointments, plugin replies/alerts and patient-linked rows are
+        // removed by their owner or cascade with their owned patients.
       }
       this.store.db.prepare("DELETE FROM demo_resources WHERE key=?").run(r.key);
     }
@@ -194,7 +188,6 @@ export class DemoPack {
       this.store.db.prepare("DELETE FROM demo_resources WHERE key=?").run(r.key);
     }
     for (const r of resources.filter(r => r.kind === "patient")) {
-      this.store.db.prepare("DELETE FROM followup_surveys WHERE patient_id=?").run(r.id);
       if (this.exists(r.kind, r.id)) this.patients.remove(r.id);
       this.store.db.prepare("DELETE FROM demo_resources WHERE key=?").run(r.key);
     }

@@ -1,0 +1,2 @@
+-- channel-wechat owns no new tables during T7.2. Connection/binding/draft data
+-- remains in the legacy chat_* tables declared via legacyTables until T7.3.

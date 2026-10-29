@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { api } from "./agent-runtime";
-import { requestCareTab } from "./care-inbox";
-import { requestTrial } from "./trial-screening";
+import { requestPluginIntent } from "./plugin-navigation";
 import { requestSettingsTab } from "./extension-center";
+import { usePluginActive } from "./plugin-slots";
 import "./patient-attention.css";
 
 export function PatientAttention(props) {
@@ -13,6 +13,7 @@ export function PatientAttention(props) {
 }
 
 function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
+  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null);
   const [pages, setPages] = useState(1);
   const [refresh, setRefresh] = useState(0);
@@ -60,13 +61,13 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
         });
       else if (action.view) {
         if (action.view === "care")
-          requestCareTab({
+          requestPluginIntent("followup", "care-tab", {
             tab: action.tab || "alerts",
             patientId: patient.id,
             patientName: patient.name,
           });
         if (action.view === "research" && action.trialId)
-          requestTrial(action.trialId);
+          requestPluginIntent("trials", "open-trial", { trialId: action.trialId });
         if (action.view === "settings" && action.settingsTab)
           requestSettingsTab(action.settingsTab);
         await onView(action.view);
@@ -101,7 +102,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
     {actionError && <p role="alert" className="form-error">{actionError}，可重新打开。</p>}
     {loading && <p role="status">{data ? "正在刷新…" : "正在读取患者事项…"}</p>}
     {data?.criticalCount > 0 && <div className="attention-urgent"><h3>优先查看 · {data.criticalCount} 项</h3><div className="agenda-items">{critical.map(row)}</div>{data.criticalCount > critical.length && more}</div>}
-    {routineCount > 0 && <details className="attention-routine"><summary>后续事项 <span>{routineCount}</span><small>随访、检验与消息</small></summary><div className="agenda-items">{routine.map(row)}</div>{more}</details>}
+    {routineCount > 0 && <details className="attention-routine"><summary>后续事项 <span>{routineCount}</span><small>{followupActive ? "随访、检验与消息" : "检验与复诊"}</small></summary><div className="agenda-items">{routine.map(row)}</div>{more}</details>}
     {!loading && !error && data?.total === 0 && <span className="overview-meta">暂无后续事项</span>}
     {data && <div className="attention-refresh"><span className="overview-meta">更新于 <time dateTime={new Date(data.receivedAt).toISOString()}>{new Date(data.receivedAt).toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})}</time></span><button type="button" className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新</button></div>}
   </section>;

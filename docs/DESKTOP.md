@@ -1,6 +1,6 @@
 # Open Medical 桌面应用
 
-Open Medical 通过 macOS / Windows 桌面窗口提供工作台。应用打包 Chromium、Node.js、UI、本地医疗运行时和技能，启动时自动运行本地服务；使用安装包不需要另装 Node.js、npm 或项目源码。
+Open Medical 通过 macOS / Windows 桌面窗口提供工作台。应用打包 Chromium、Node.js、UI、本地医疗运行时、领域插件和技能，启动时自动运行本地服务；使用安装包不需要另装 Node.js、npm 或项目源码。
 
 ## 安装与启动
 

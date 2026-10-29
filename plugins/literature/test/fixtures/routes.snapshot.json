@@ -1,0 +1,108 @@
+{
+  "/api/literature/search?query=hypertension&source=pubmed&limit=2": {
+    "status": 200,
+    "body": {
+      "source": "pubmed",
+      "requestedSource": "pubmed",
+      "query": "hypertension",
+      "count": 1,
+      "articles": [
+        {
+          "pmid": "12345678",
+          "doi": "10.1000/demo",
+          "title": "Hypertension management in primary care",
+          "journal": "Demo Journal",
+          "year": 2024,
+          "authors": [
+            "Demo A"
+          ],
+          "authorCount": 1,
+          "pubTypes": [
+            "Review"
+          ],
+          "hints": [
+            "综述"
+          ]
+        }
+      ],
+      "note": "fixture"
+    }
+  },
+  "/api/literature/article?pmid=12345678": {
+    "status": 200,
+    "body": {
+      "pmid": "12345678",
+      "doi": null,
+      "title": "Hypertension management in primary care",
+      "journal": "Demo Journal",
+      "year": 2024,
+      "authors": [
+        "Demo A"
+      ],
+      "abstract": "Demo abstract.",
+      "meshTerms": [
+        "Hypertension"
+      ],
+      "pubTypes": [
+        "Review"
+      ],
+      "hints": [
+        "综述"
+      ],
+      "note": "fixture"
+    }
+  },
+  "/api/literature/search?query=a": {
+    "status": 200,
+    "body": {
+      "source": "pubmed",
+      "requestedSource": "pubmed",
+      "query": "a",
+      "count": 1,
+      "articles": [
+        {
+          "pmid": "12345678",
+          "doi": "10.1000/demo",
+          "title": "Hypertension management in primary care",
+          "journal": "Demo Journal",
+          "year": 2024,
+          "authors": [
+            "Demo A"
+          ],
+          "authorCount": 1,
+          "pubTypes": [
+            "Review"
+          ],
+          "hints": [
+            "综述"
+          ]
+        }
+      ],
+      "note": "fixture"
+    }
+  },
+  "/api/literature/article": {
+    "status": 200,
+    "body": {
+      "pmid": null,
+      "doi": null,
+      "title": "Hypertension management in primary care",
+      "journal": "Demo Journal",
+      "year": 2024,
+      "authors": [
+        "Demo A"
+      ],
+      "abstract": "Demo abstract.",
+      "meshTerms": [
+        "Hypertension"
+      ],
+      "pubTypes": [
+        "Review"
+      ],
+      "hints": [
+        "综述"
+      ],
+      "note": "fixture"
+    }
+  }
+}

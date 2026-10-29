@@ -594,6 +594,14 @@
 .app-settings-content p { line-height: 1.7; }
 .settings-project-picker { display: flex; flex-direction: column; gap: 8px; margin: 24px 0; max-width: 480px; }
 .settings-project-picker select { width: 100%; }
+.plugin-settings-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.plugin-settings-item { padding: 16px 18px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.plugin-settings-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.plugin-settings-summary > div { display: grid; gap: 4px; min-width: 0; }
+.plugin-settings-summary b { font-size: var(--body-size, 16px); }
+.plugin-settings-summary small { color: var(--muted); font-size: var(--meta-size, 14px); }
+.plugin-settings-summary p { margin: 4px 0 0; }
+.plugin-settings-panel { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 @media (max-width: 700px) {
   .app-settings-page { padding: 24px 18px; }
   .app-settings-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }

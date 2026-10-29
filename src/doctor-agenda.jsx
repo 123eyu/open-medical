@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, CheckCheck, Search, RotateCw, UserPlus } from "lucide-react";
 import { api } from "./agent-runtime";
-import { requestCareTab } from "./care-inbox";
-import { requestTrial } from "./trial-screening";
+import { requestPluginIntent } from "./plugin-navigation";
 import { requestSettingsTab } from "./extension-center";
+import { usePluginActive } from "./plugin-slots";
 
-const kinds = { all: "全部", risk: "高危风险", visit: "复诊", followup: "随访", tracking: "检查检验", messages: "患者消息", trial: "试验入组", custom: "我的规则" };
+// The server returns the enabled agenda kinds (including "all") in display
+// order. Keep this fallback only for the first paint before that response.
+const defaultKinds = [
+  { kind: "all", label: "全部" },
+  { kind: "risk", label: "高危风险" },
+  { kind: "visit", label: "复诊" },
+  { kind: "followup", label: "随访" },
+  { kind: "tracking", label: "检查检验" },
+  { kind: "messages", label: "患者消息" },
+  { kind: "trial", label: "试验入组" },
+  { kind: "custom", label: "我的规则" },
+];
 const workKinds = { evolve: "进化", proposal: "待确认", review: "待复核", failure: "未完成" };
 // 非当年的日期带上年份，避免「9/13」分不清是今年还是往年。
 const date = (value) => {
@@ -17,6 +28,7 @@ const date = (value) => {
 };
 
 export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
+  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null);
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
@@ -27,9 +39,17 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(null);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!followupActive && ["followup", "messages"].includes(kind)) setKind("all");
+  }, [followupActive, kind]);
   const [hasUpdates, setHasUpdates] = useState(false);
   const displayed = useRef(null);
   const loadedScope = useRef("");
+  const allKinds = data?.kinds?.length ? data.kinds : defaultKinds;
+  const kindOptions = followupActive
+    ? allKinds
+    : allKinds.filter((item) => !["followup", "messages"].includes(item.kind));
+  const kindLabels = Object.fromEntries(kindOptions.map((item) => [item.kind, item.label]));
   useEffect(() => {
     // 分组筛选项来自患者列表的在用分组（全局助手确认的分组会出现在这里）。
     api("/api/patients?summary=1&archived=1")
@@ -80,8 +100,8 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       else if (item.action.type === "patient") await onPatient({ id: item.patientId, tab: item.action.tab });
       else if (item.action.type === "patients") await onPatient({});
       else {
-        if (item.action.view === "care" && item.action.tab) requestCareTab(item.action.tab);
-        if (item.action.view === "research" && item.action.trialId) requestTrial(item.action.trialId);
+        if (item.action.view === "care" && item.action.tab) requestPluginIntent("followup", "care-tab", item.action.tab);
+        if (item.action.view === "research" && item.action.trialId) requestPluginIntent("trials", "open-trial", { trialId: item.action.trialId });
         if (item.action.view === "settings" && item.action.settingsTab) requestSettingsTab(item.action.settingsTab);
         await onView(item.action.view);
       }
@@ -100,7 +120,7 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       </div>
       <p className="agenda-context">{data?.criticalCount > 0 ? `${data.criticalCount} 项高优先级事项排在最前。` : "按事项优先级排列。"}点击事项即可继续处理。</p>
       <div className="agenda-toolbar">
-        <div className="agenda-filters" aria-label="待办分类">{Object.entries(kinds).filter(([key]) => key === "all" || key === kind || !data || data.counts[key] > 0).map(([key, label]) => <button key={key} aria-pressed={kind === key} data-zero={data && !data.counts[key] ? "" : undefined} className={kind === key ? "active" : ""} onClick={() => { setKind(key); setOffset(0); }}>{label}<span>{data?.counts[key] ?? "—"}</span></button>)}</div>
+        <div className="agenda-filters" aria-label="待办分类">{kindOptions.filter((item) => item.kind === "all" || item.kind === kind || !data || data.counts[item.kind] > 0).map((item) => <button key={item.kind} aria-pressed={kind === item.kind} data-zero={data && !data.counts[item.kind] ? "" : undefined} className={kind === item.kind ? "active" : ""} onClick={() => { setKind(item.kind); setOffset(0); }}>{item.label}<span>{data?.counts[item.kind] ?? "—"}</span></button>)}</div>
         <label className="agenda-search"><Search size={14} /><input aria-label="搜索今日待办" placeholder="患者或事项" value={query} onChange={(e) => { setQuery(e.target.value); setOffset(0); }} /></label>
         {groups.length > 0 && <label className="agenda-search agenda-group-filter"><select aria-label="按分组筛选待办" value={group} onChange={(e) => { setGroup(e.target.value); setOffset(0); }}>
           <option value="">全部分组</option>
@@ -109,6 +129,7 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       </div>
       {error && <p className="form-error" role="alert">{error}<button className="text-button" onClick={() => setRefreshKey((value) => value + 1)}>重试</button></p>}
       {hasUpdates && <p className="notice" role="status">今日待办有更新。<button className="text-button" disabled={loading} onClick={() => setRefreshKey(value => value + 1)}>刷新查看更新</button></p>}
+      {data?.errors?.length > 0 && <p className="muted agenda-source-errors" role="status">部分待办暂时无法读取（{data.errors.map((item) => kindLabels[item.kind] || item.kind).join("、")}），其余事项照常显示。</p>}
       {!data && !error && <div className="agenda-loading" role="status">正在整理今日待办…</div>}
       {data && !data.items.length && <div className="agenda-empty">
         <CheckCheck size={24} />
@@ -119,7 +140,7 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       </div>}
       <div className="agenda-items">{data?.items.map((item) => {
         const row = <button className={`agenda-item ${item.severity === "critical" ? "urgent" : ""}`} key={item.id} disabled={Boolean(opening) || loading} onClick={() => open(item)}>
-          <span className="agenda-kind">{kinds[item.kind]}<small>{item.at ? date(item.at) : ""}</small></span>
+          <span className="agenda-kind">{kindLabels[item.kind] || item.kind}<small>{item.at ? date(item.at) : ""}</small></span>
           <span className="agenda-person"><b>{item.patientName}</b><small>{item.patientNumber || "未编号"}{item.birthYear ? ` · ${item.birthYear} 年生` : ""}</small></span>
           <span className="agenda-content"><b>{item.title}</b><small>{item.detail}</small></span>
           <span className="agenda-action">{opening === item.id ? "打开中…" : item.action.label}<ArrowUpRight size={14} /></span>

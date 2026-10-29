@@ -1,0 +1,1454 @@
+{
+  "cases": {
+    "body": {
+      "cases": [
+        {
+          "age": null,
+          "diagnosis": "原发性高血压",
+          "gender": null,
+          "icd10": "I10",
+          "keyLabs": [],
+          "lessons": "先核对家庭血压记录，再判断是否需要调整用药。",
+          "outcome": "门诊随访中",
+          "patientName": "示例·张沪生",
+          "starred": false,
+          "summary": "血压波动，肾功能稳定，调整用药后复查。",
+          "tags": [
+            "升级兼容",
+            "虚构数据"
+          ],
+          "text": "原发性高血压\nI10\n血压波动，肾功能稳定，调整用药后复查。\n门诊随访中",
+          "treatments": []
+        },
+        {
+          "age": null,
+          "diagnosis": "急性阑尾炎",
+          "gender": null,
+          "icd10": "K35",
+          "keyLabs": [],
+          "lessons": "练习保留资料出处，区分已记录事实与待补充信息。",
+          "outcome": "",
+          "patientName": "示例·王建国",
+          "starred": false,
+          "summary": "阑尾切除术后一个月，恢复可，待复查血常规。示例数据。",
+          "tags": [
+            "虚构示例"
+          ],
+          "text": "急性阑尾炎\nK35\n阑尾切除术后一个月，恢复可，待复查血常规。示例数据。",
+          "treatments": []
+        },
+        {
+          "age": null,
+          "diagnosis": "2型糖尿病",
+          "gender": null,
+          "icd10": "E11.9",
+          "keyLabs": [],
+          "lessons": "练习保留资料出处，区分已记录事实与待补充信息。",
+          "outcome": "",
+          "patientName": "示例·李婉珍",
+          "starred": false,
+          "summary": "2 型糖尿病 6 年，HbA1c 波动于 7–8.5%，依从性一般。示例数据。",
+          "tags": [
+            "虚构示例"
+          ],
+          "text": "2型糖尿病\nE11.9\n2 型糖尿病 6 年，HbA1c 波动于 7–8.5%，依从性一般。示例数据。",
+          "treatments": []
+        },
+        {
+          "age": null,
+          "diagnosis": "原发性高血压",
+          "gender": null,
+          "icd10": "I10",
+          "keyLabs": [],
+          "lessons": "练习保留资料出处，区分已记录事实与待补充信息。",
+          "outcome": "",
+          "patientName": "示例·张沪生",
+          "starred": true,
+          "summary": "高血压 8 年余，近期血压波动，肾功能稳定。示例数据，可用于体验各页面。",
+          "tags": [
+            "虚构示例"
+          ],
+          "text": "原发性高血压\nI10\n高血压 8 年余，近期血压波动，肾功能稳定。示例数据，可用于体验各页面。",
+          "treatments": []
+        }
+      ],
+      "count": 4
+    },
+    "status": 200
+  },
+  "demoPack": {
+    "body": {
+      "count": 3,
+      "installed": true,
+      "patients": [
+        {
+          "archived": false,
+          "index": 0,
+          "name": "示例·张沪生"
+        },
+        {
+          "archived": false,
+          "index": 1,
+          "name": "示例·李婉珍"
+        },
+        {
+          "archived": false,
+          "index": 2,
+          "name": "示例·王建国"
+        }
+      ],
+      "resources": {
+        "alert": 1,
+        "appointment": 1,
+        "case": 3,
+        "collection": 1,
+        "knowledge": 2,
+        "patient": 3,
+        "reply": 1,
+        "session": 1,
+        "tracking": 1,
+        "trial": 1
+      },
+      "tag": "示例患者"
+    },
+    "status": 200
+  },
+  "doctorMemories": {
+    "body": {
+      "memories": [
+        {
+          "content": "书写病历时保留检验单位和日期，不使用缩写。",
+          "count": 1,
+          "dryrun": null,
+          "evidence": [],
+          "kind": "explicit",
+          "origin": "stated",
+          "pinned": false,
+          "rule": null,
+          "source": {
+            "type": "stated"
+          },
+          "status": "confirmed",
+          "topic": "病历文风偏好"
+        }
+      ]
+    },
+    "status": 200
+  },
+  "doctorOverview": {
+    "body": {
+      "counts": {
+        "all": 6,
+        "custom": 0,
+        "followup": 1,
+        "messages": 3,
+        "risk": 0,
+        "tracking": 1,
+        "trial": 0,
+        "visit": 1
+      },
+      "criticalCount": 0,
+      "hasMore": false,
+      "items": [
+        {
+          "action": {
+            "label": "查看预约",
+            "tab": "appointments",
+            "type": "patient"
+          },
+          "birthYear": 1952,
+          "detail": "2026-10-29 10:00，示例·携带测量记录复诊 · 演示门诊，提前查看档案和近期结果",
+          "kind": "visit",
+          "patientName": "示例·张沪生",
+          "patientNumber": "",
+          "title": "今天复诊",
+          "weight": 2
+        },
+        {
+          "action": {
+            "label": "查看消息",
+            "tab": "alerts",
+            "type": "view",
+            "view": "care"
+          },
+          "birthYear": 1966,
+          "detail": "示例·复诊资料需要医生核对",
+          "kind": "messages",
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "title": "患者消息需要医生回复",
+          "weight": 3
+        },
+        {
+          "action": {
+            "label": "查看结果",
+            "tab": "labs",
+            "type": "patient"
+          },
+          "birthYear": 1952,
+          "count": 1,
+          "detail": "前白蛋白 268mg/L（最近日期 2025-01-16），查看后点「标记已阅」",
+          "kind": "tracking",
+          "patientName": "示例·张沪生",
+          "patientNumber": "",
+          "title": "待阅检验结果 1 项",
+          "weight": 4
+        },
+        {
+          "action": {
+            "label": "核对发送",
+            "tab": "drafts",
+            "type": "view",
+            "view": "care"
+          },
+          "birthYear": 1966,
+          "count": 1,
+          "detail": "已起草回复，核对后发给患者",
+          "kind": "messages",
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "title": "回复待发送",
+          "weight": 4
+        },
+        {
+          "action": {
+            "label": "登记随访",
+            "tab": "followups",
+            "type": "patient"
+          },
+          "birthYear": 1966,
+          "detail": "联系患者后登记随访结果",
+          "kind": "followup",
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "title": "随访：示例·血糖控制季度随访",
+          "weight": 5
+        },
+        {
+          "action": {
+            "label": "处理消息",
+            "tab": "messages",
+            "type": "patient"
+          },
+          "birthYear": 1966,
+          "count": 1,
+          "detail": "查看原文，决定是否回复或记入档案",
+          "kind": "messages",
+          "patientName": "示例·李婉珍",
+          "patientNumber": "",
+          "title": "1 条聊天记录待整理",
+          "weight": 6
+        }
+      ],
+      "limit": 100,
+      "offset": 0,
+      "patientCount": 3,
+      "total": 6,
+      "work": {
+        "items": [
+          {
+            "action": {
+              "label": "确认提案",
+              "tab": "overview",
+              "type": "patient"
+            },
+            "birthYear": 1966,
+            "detail": "AI 提议，确认后才生效",
+            "kind": "proposal",
+            "patientName": "示例·李婉珍",
+            "patientNumber": "",
+            "title": "导入检验结果 1 项（载脂蛋白A1）"
+          }
+        ],
+        "total": 1
+      }
+    },
+    "status": 200
+  },
+  "doctorProfile": {
+    "body": {
+      "counts": {
+        "active": 1,
+        "openSignals": 0,
+        "pending": 0
+      },
+      "digest": "医生偏好档案（本机保存，供个性化输出参考；与安全规则冲突时以安全规则为准）：\n- 科室：全科医学科\n- 补充说明：升级兼容测试使用的虚构医生档案。\n- 常用药物与剂量习惯：优先记录通用名与剂量\n- 常用检查组合：血常规 + 肝肾功能\n- 随访偏好：一周内电话随访\n- 记忆偏好：书写病历时保留检验单位和日期，不使用缩写。",
+      "fields": {
+        "examPanels": [
+          "血常规 + 肝肾功能"
+        ],
+        "followupPreferences": [
+          "一周内电话随访"
+        ],
+        "medicationHabits": [
+          "优先记录通用名与剂量"
+        ],
+        "note": "升级兼容测试使用的虚构医生档案。",
+        "specialty": "全科医学科"
+      }
+    },
+    "status": 200
+  },
+  "followupOverview": {
+    "body": {
+      "hasMore": false,
+      "jobs": [
+        {
+          "checklist": [
+            "家庭血压记录",
+            "当前用药核对"
+          ],
+          "hasSurvey": false,
+          "intervalDays": null,
+          "name": "升级兼容·血压复查随访",
+          "once": true,
+          "patientName": "示例·张沪生",
+          "status": "active"
+        },
+        {
+          "checklist": [
+            "近期血糖记录",
+            "用药依从性"
+          ],
+          "hasSurvey": true,
+          "intervalDays": 90,
+          "name": "示例·血糖控制季度随访",
+          "once": false,
+          "patientName": "示例·李婉珍",
+          "status": "active"
+        }
+      ],
+      "limit": 100,
+      "offset": 0,
+      "total": 2
+    },
+    "status": 200
+  },
+  "followupPlans": {
+    "body": {
+      "plans": [
+        {
+          "builtin": true,
+          "disease": "I10 原发性高血压",
+          "name": "高血压慢病随访",
+          "nodes": [
+            {
+              "items": [
+                "家庭血压记录",
+                "服药依从性",
+                "不良反应"
+              ],
+              "offsetDays": 30,
+              "questionnaire": {
+                "questions": [
+                  {
+                    "alertIf": {
+                      "op": "gt",
+                      "value": 180
+                    },
+                    "required": true,
+                    "text": "最近一周晨起自测收缩压平均值是多少？",
+                    "type": "number",
+                    "unit": "mmHg"
+                  },
+                  {
+                    "options": [
+                      {
+                        "label": "经常",
+                        "score": 2
+                      },
+                      {
+                        "label": "偶尔",
+                        "score": 1
+                      },
+                      {
+                        "label": "没有",
+                        "score": 0
+                      }
+                    ],
+                    "required": true,
+                    "text": "近一周是否有头晕或头痛？",
+                    "type": "single"
+                  },
+                  {
+                    "options": [
+                      {
+                        "label": "规律服用",
+                        "score": 0
+                      },
+                      {
+                        "label": "偶尔漏服",
+                        "score": 1
+                      },
+                      {
+                        "label": "经常漏服",
+                        "score": 2
+                      }
+                    ],
+                    "required": true,
+                    "text": "降压药是否按医嘱服用？",
+                    "type": "single"
+                  }
+                ],
+                "replyWindowHours": 72,
+                "scoring": {
+                  "alert": {
+                    "message": "随访自测症状与依从性评分偏高，建议尽快复核血压管理与用药依从性。",
+                    "op": "gte",
+                    "severity": "warning",
+                    "value": 3
+                  }
+                },
+                "title": "高血压月度自测"
+              },
+              "title": "1 个月随访"
+            },
+            {
+              "items": [
+                "血压达标评估",
+                "血钾与肾功能",
+                "血脂"
+              ],
+              "offsetDays": 90,
+              "title": "3 个月随访"
+            },
+            {
+              "items": [
+                "年度心血管风险评估",
+                "靶器官损害筛查"
+              ],
+              "offsetDays": 180,
+              "title": "6 个月评估"
+            }
+          ]
+        },
+        {
+          "builtin": true,
+          "disease": "E11 2 型糖尿病",
+          "name": "2 型糖尿病随访",
+          "nodes": [
+            {
+              "items": [
+                "血糖监测记录",
+                "用药与低血糖事件"
+              ],
+              "offsetDays": 30,
+              "title": "1 个月随访"
+            },
+            {
+              "items": [
+                "糖化血红蛋白",
+                "体重与腰围"
+              ],
+              "offsetDays": 90,
+              "title": "3 个月随访"
+            },
+            {
+              "items": [
+                "眼底检查",
+                "尿微量白蛋白",
+                "足部检查"
+              ],
+              "offsetDays": 180,
+              "title": "6 个月并发症筛查"
+            }
+          ]
+        },
+        {
+          "builtin": true,
+          "disease": "外科术后通用",
+          "name": "术后随访",
+          "nodes": [
+            {
+              "items": [
+                "伤口愈合情况",
+                "体温与疼痛"
+              ],
+              "offsetDays": 7,
+              "title": "术后 1 周"
+            },
+            {
+              "items": [
+                "血常规与生化复查",
+                "功能恢复评估"
+              ],
+              "offsetDays": 30,
+              "title": "术后 1 个月"
+            },
+            {
+              "items": [
+                "影像学复查",
+                "肿瘤标志物（如适用）"
+              ],
+              "offsetDays": 90,
+              "title": "术后 3 个月"
+            }
+          ]
+        }
+      ]
+    },
+    "status": 200
+  },
+  "patients": {
+    "body": {
+      "patients": [
+        {
+          "archived": 0,
+          "birthYear": 1952,
+          "counts": {
+            "activeFollowups": 1,
+            "dueFollowups": 0,
+            "pendingReminders": 0,
+            "unprocessedMessages": 0
+          },
+          "diagnoses": [
+            {
+              "code": "I10",
+              "date": "2018-11-20",
+              "name": "原发性高血压",
+              "note": "长期服药，近期波动。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "",
+              "date": "2026-07-26",
+              "name": "胆囊切除术后状态",
+              "note": "术后恢复顺利。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "diagnosisSummary": "原发性高血压 · 胆囊切除术后状态",
+          "gender": "male",
+          "groups": [
+            "示例·高血压"
+          ],
+          "name": "示例·张沪生",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "visits": [
+            {
+              "date": "2026-10-19",
+              "note": "血压 148/86，调整用药待观察。患者自述近期踝部轻度肿胀，发生时间与用药先后待核对。",
+              "reason": "门诊复查",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        {
+          "archived": 0,
+          "birthYear": 1978,
+          "counts": {
+            "activeFollowups": 0,
+            "dueFollowups": 0,
+            "pendingReminders": 0,
+            "unprocessedMessages": 0
+          },
+          "diagnoses": [
+            {
+              "code": "K35",
+              "date": "2026-09-27",
+              "name": "急性阑尾炎",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "",
+              "date": "2026-09-29",
+              "name": "腹腔镜阑尾切除术后",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "diagnosisSummary": "急性阑尾炎 · 腹腔镜阑尾切除术后",
+          "gender": "male",
+          "groups": [],
+          "name": "示例·王建国",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "visits": [
+            {
+              "date": "2026-09-29",
+              "note": "腹腔镜阑尾切除，顺利。",
+              "reason": "急诊手术",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        {
+          "archived": 0,
+          "birthYear": 1966,
+          "counts": {
+            "activeFollowups": 1,
+            "dueFollowups": 0,
+            "pendingReminders": 1,
+            "unprocessedMessages": 1
+          },
+          "diagnoses": [
+            {
+              "code": "E11.9",
+              "date": "2021-01-28",
+              "name": "2型糖尿病",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "diagnosisSummary": "2型糖尿病",
+          "gender": "female",
+          "groups": [
+            "示例·糖尿病"
+          ],
+          "name": "示例·李婉珍",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "visits": [
+            {
+              "date": "2026-10-14",
+              "note": "控制欠佳，加强饮食运动指导。",
+              "reason": "季度复查",
+              "source": "示例数据包"
+            }
+          ]
+        }
+      ]
+    },
+    "status": 200
+  },
+  "patientsDetail": {
+    "示例·张沪生": {
+      "brief": {
+        "body": {
+          "allergies": [
+            "青霉素"
+          ],
+          "allergyStatus": "recorded",
+          "careTasks": [
+            {
+              "note": "转诊检查结果回收后由医生核对。",
+              "source": "待跟进事项 care_upgrade-referral",
+              "status": "waiting_result",
+              "title": "升级兼容·检查转诊跟进"
+            }
+          ],
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "高血压 8 年余，近期血压波动，肾功能稳定。示例数据，可用于体验各页面。"
+          },
+          "counts": {
+            "activeFollowups": 1,
+            "activeRisks": 0,
+            "careTasks": 1,
+            "diagnoses": 2,
+            "dueFollowups": 0,
+            "labGroups": 1,
+            "medications": 2,
+            "pendingReminders": 0,
+            "pendingReviews": 0,
+            "unprocessedMessages": 0,
+            "visits": 1
+          },
+          "diagnoses": [
+            {
+              "code": "",
+              "date": "2026-07-26",
+              "name": "胆囊切除术后状态",
+              "note": "术后恢复顺利。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "I10",
+              "date": "2018-11-20",
+              "name": "原发性高血压",
+              "note": "长期服药，近期波动。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gaps": [],
+          "identity": {
+            "birthYear": 1952,
+            "gender": "male",
+            "name": "示例·张沪生",
+            "patientNumber": ""
+          },
+          "labs": [
+            {
+              "conflict": false,
+              "count": 1,
+              "date": "2025-01-16",
+              "delta": null,
+              "item": "前白蛋白",
+              "observations": [
+                {
+                  "date": "2025-01-16",
+                  "item": "前白蛋白",
+                  "source": "患者档案 · 检验",
+                  "unit": "mg/L",
+                  "value": 268
+                }
+              ],
+              "previous": null,
+              "sameDateCount": 1,
+              "source": "患者档案 · 检验",
+              "unit": "mg/L",
+              "value": 268
+            }
+          ],
+          "medications": [
+            {
+              "dose": "5mg",
+              "frequency": "qd",
+              "name": "氨氯地平片",
+              "source": "示例数据包",
+              "status": "active"
+            },
+            {
+              "dose": "100mg",
+              "frequency": "qd",
+              "name": "阿司匹林肠溶片",
+              "source": "示例数据包",
+              "status": "active"
+            }
+          ],
+          "messages": [],
+          "outcomes": [],
+          "visits": [
+            {
+              "date": "2026-10-19",
+              "note": "血压 148/86，调整用药待观察。患者自述近期踝部轻度肿胀，发生时间与用药先后待核对。",
+              "reason": "门诊复查",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "careTasks": {
+        "body": {
+          "hasMore": false,
+          "items": [
+            {
+              "history": [
+                {
+                  "action": "created",
+                  "note": "转诊检查结果回收后由医生核对。"
+                }
+              ],
+              "kind": "referral",
+              "note": "转诊检查结果回收后由医生核对。",
+              "status": "waiting_result",
+              "title": "升级兼容·检查转诊跟进"
+            }
+          ],
+          "limit": 100,
+          "offset": 0,
+          "total": 1
+        },
+        "status": 200
+      },
+      "detail": {
+        "body": {
+          "allergies": [
+            "青霉素"
+          ],
+          "allergyStatus": "recorded",
+          "archived": false,
+          "birthYear": 1952,
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "高血压 8 年余，近期血压波动，肾功能稳定。示例数据，可用于体验各页面。"
+          },
+          "counts": {
+            "activeFollowups": 1,
+            "dueFollowups": 0,
+            "pendingReminders": 0,
+            "unprocessedMessages": 0
+          },
+          "diagnoses": [
+            {
+              "code": "I10",
+              "date": "2018-11-20",
+              "name": "原发性高血压",
+              "note": "长期服药，近期波动。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "",
+              "date": "2026-07-26",
+              "name": "胆囊切除术后状态",
+              "note": "术后恢复顺利。",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gender": "male",
+          "groups": [
+            "示例·高血压"
+          ],
+          "labs": [
+            {
+              "date": "2025-01-16",
+              "item": "前白蛋白",
+              "unit": "mg/L",
+              "value": 268
+            }
+          ],
+          "medications": [
+            {
+              "dose": "5mg",
+              "frequency": "qd",
+              "name": "氨氯地平片",
+              "source": "示例数据包",
+              "status": "active"
+            },
+            {
+              "dose": "100mg",
+              "frequency": "qd",
+              "name": "阿司匹林肠溶片",
+              "source": "示例数据包",
+              "status": "active"
+            }
+          ],
+          "name": "示例·张沪生",
+          "note": "这是示例患者（虚构数据），随时可在首页一键删除，不影响真实档案。",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "visits": [
+            {
+              "date": "2026-10-19",
+              "note": "血压 148/86，调整用药待观察。患者自述近期踝部轻度肿胀，发生时间与用药先后待核对。",
+              "reason": "门诊复查",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "followups": {
+        "body": {
+          "jobs": [
+            {
+              "checklist": [
+                "家庭血压记录",
+                "当前用药核对"
+              ],
+              "externalConsent": false,
+              "history": [],
+              "intervalDays": null,
+              "name": "升级兼容·血压复查随访",
+              "once": true,
+              "questionnaire": null,
+              "status": "active"
+            }
+          ]
+        },
+        "status": 200
+      }
+    },
+    "示例·李婉珍": {
+      "brief": {
+        "body": {
+          "allergies": [],
+          "allergyStatus": "unknown",
+          "careTasks": [],
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "2 型糖尿病 6 年，HbA1c 波动于 7–8.5%，依从性一般。示例数据。"
+          },
+          "counts": {
+            "activeFollowups": 1,
+            "activeRisks": 0,
+            "careTasks": 0,
+            "diagnoses": 1,
+            "dueFollowups": 0,
+            "labGroups": 2,
+            "medications": 1,
+            "pendingReminders": 1,
+            "pendingReviews": 1,
+            "unprocessedMessages": 1,
+            "visits": 1
+          },
+          "diagnoses": [
+            {
+              "code": "E11.9",
+              "date": "2021-01-28",
+              "name": "2型糖尿病",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gaps": [
+            {
+              "field": "allergies",
+              "label": "过敏史未记录",
+              "tab": "clinical"
+            }
+          ],
+          "identity": {
+            "birthYear": 1966,
+            "gender": "female",
+            "name": "示例·李婉珍",
+            "patientNumber": ""
+          },
+          "labs": [
+            {
+              "conflict": false,
+              "count": 3,
+              "date": "2026-10-14",
+              "delta": 0.8,
+              "item": "HbA1c",
+              "observations": [
+                {
+                  "date": "2026-10-14",
+                  "item": "HbA1c",
+                  "source": "示例数据包",
+                  "unit": "%",
+                  "value": 8.4
+                }
+              ],
+              "previous": {
+                "date": "2026-07-16",
+                "item": "HbA1c",
+                "source": "示例数据包",
+                "unit": "%",
+                "value": 7.6
+              },
+              "sameDateCount": 1,
+              "source": "示例数据包",
+              "unit": "%",
+              "value": 8.4
+            },
+            {
+              "conflict": false,
+              "count": 1,
+              "date": "2026-10-14",
+              "delta": null,
+              "item": "空腹血糖",
+              "observations": [
+                {
+                  "date": "2026-10-14",
+                  "item": "空腹血糖",
+                  "source": "示例数据包",
+                  "unit": "mmol/L",
+                  "value": 8.9
+                }
+              ],
+              "previous": null,
+              "sameDateCount": 1,
+              "source": "示例数据包",
+              "unit": "mmol/L",
+              "value": 8.9
+            }
+          ],
+          "medications": [
+            {
+              "dose": "0.5g",
+              "frequency": "bid",
+              "name": "二甲双胍",
+              "source": "示例数据包",
+              "status": "active"
+            }
+          ],
+          "messages": [
+            {
+              "rawSpeaker": "",
+              "rawTime": "",
+              "source": "患者消息 1",
+              "speaker": "unknown",
+              "text": "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？",
+              "timeUnknown": false
+            }
+          ],
+          "outcomes": [],
+          "visits": [
+            {
+              "date": "2026-10-14",
+              "note": "控制欠佳，加强饮食运动指导。",
+              "reason": "季度复查",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "careTasks": {
+        "body": {
+          "hasMore": false,
+          "items": [],
+          "limit": 100,
+          "offset": 0,
+          "total": 0
+        },
+        "status": 200
+      },
+      "detail": {
+        "body": {
+          "allergies": [],
+          "allergyStatus": "unknown",
+          "archived": false,
+          "birthYear": 1966,
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "2 型糖尿病 6 年，HbA1c 波动于 7–8.5%，依从性一般。示例数据。"
+          },
+          "counts": {
+            "activeFollowups": 1,
+            "dueFollowups": 0,
+            "pendingReminders": 1,
+            "unprocessedMessages": 1
+          },
+          "diagnoses": [
+            {
+              "code": "E11.9",
+              "date": "2021-01-28",
+              "name": "2型糖尿病",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gender": "female",
+          "groups": [
+            "示例·糖尿病"
+          ],
+          "labs": [
+            {
+              "date": "2026-10-14",
+              "item": "HbA1c",
+              "source": "示例数据包",
+              "unit": "%",
+              "value": 8.4
+            },
+            {
+              "date": "2026-07-16",
+              "item": "HbA1c",
+              "source": "示例数据包",
+              "unit": "%",
+              "value": 7.6
+            },
+            {
+              "date": "2026-04-17",
+              "item": "HbA1c",
+              "source": "示例数据包",
+              "unit": "%",
+              "value": 7.1
+            },
+            {
+              "date": "2026-10-14",
+              "item": "空腹血糖",
+              "source": "示例数据包",
+              "unit": "mmol/L",
+              "value": 8.9
+            }
+          ],
+          "medications": [
+            {
+              "dose": "0.5g",
+              "frequency": "bid",
+              "name": "二甲双胍",
+              "source": "示例数据包",
+              "status": "active"
+            }
+          ],
+          "name": "示例·李婉珍",
+          "note": "这是示例患者（虚构数据），随时可在首页一键删除，不影响真实档案。",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "visits": [
+            {
+              "date": "2026-10-14",
+              "note": "控制欠佳，加强饮食运动指导。",
+              "reason": "季度复查",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "followups": {
+        "body": {
+          "jobs": [
+            {
+              "checklist": [
+                "近期血糖记录",
+                "用药依从性"
+              ],
+              "externalConsent": false,
+              "history": [
+                {
+                  "digest": false,
+                  "status": "completed"
+                }
+              ],
+              "intervalDays": 90,
+              "name": "示例·血糖控制季度随访",
+              "once": false,
+              "questionnaire": {
+                "questions": [
+                  {
+                    "options": [
+                      {
+                        "label": "已准备",
+                        "score": 0
+                      },
+                      {
+                        "label": "尚未准备",
+                        "score": 0
+                      }
+                    ],
+                    "required": false,
+                    "text": "是否已准备近期测量记录？",
+                    "type": "single"
+                  },
+                  {
+                    "required": false,
+                    "text": "这次希望医生帮助核对什么？",
+                    "type": "text"
+                  }
+                ],
+                "replyWindowHours": 72,
+                "scoring": null,
+                "title": "示例·复诊资料回收"
+              },
+              "status": "active"
+            }
+          ]
+        },
+        "status": 200
+      }
+    },
+    "示例·王建国": {
+      "brief": {
+        "body": {
+          "allergies": [],
+          "allergyStatus": "unknown",
+          "careTasks": [
+            {
+              "note": "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。",
+              "source": "待跟进事项 care_<uuid>",
+              "status": "waiting_result",
+              "title": "示例·术后血常规报告跟进"
+            }
+          ],
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "阑尾切除术后一个月，恢复可，待复查血常规。示例数据。"
+          },
+          "counts": {
+            "activeFollowups": 0,
+            "activeRisks": 0,
+            "careTasks": 1,
+            "diagnoses": 2,
+            "dueFollowups": 0,
+            "labGroups": 1,
+            "medications": 0,
+            "pendingReminders": 0,
+            "pendingReviews": 0,
+            "unprocessedMessages": 0,
+            "visits": 1
+          },
+          "diagnoses": [
+            {
+              "code": "",
+              "date": "2026-09-29",
+              "name": "腹腔镜阑尾切除术后",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "K35",
+              "date": "2026-09-27",
+              "name": "急性阑尾炎",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gaps": [
+            {
+              "field": "allergies",
+              "label": "过敏史未记录",
+              "tab": "clinical"
+            },
+            {
+              "field": "medications",
+              "label": "尚无用药记录",
+              "tab": "clinical"
+            }
+          ],
+          "identity": {
+            "birthYear": 1978,
+            "gender": "male",
+            "name": "示例·王建国",
+            "patientNumber": ""
+          },
+          "labs": [
+            {
+              "conflict": false,
+              "count": 2,
+              "date": "2026-10-13",
+              "delta": -4.6,
+              "item": "白细胞计数",
+              "observations": [
+                {
+                  "date": "2026-10-13",
+                  "item": "白细胞计数",
+                  "source": "示例数据包",
+                  "unit": "10^9/L",
+                  "value": 7.2
+                }
+              ],
+              "previous": {
+                "date": "2026-09-29",
+                "item": "白细胞计数",
+                "source": "示例数据包",
+                "unit": "10^9/L",
+                "value": 11.8
+              },
+              "sameDateCount": 1,
+              "source": "示例数据包",
+              "unit": "10^9/L",
+              "value": 7.2
+            }
+          ],
+          "medications": [],
+          "messages": [],
+          "outcomes": [],
+          "visits": [
+            {
+              "date": "2026-09-29",
+              "note": "腹腔镜阑尾切除，顺利。",
+              "reason": "急诊手术",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "careTasks": {
+        "body": {
+          "hasMore": false,
+          "items": [
+            {
+              "history": [
+                {
+                  "action": "created",
+                  "note": "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。"
+                }
+              ],
+              "kind": "test",
+              "note": "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。",
+              "status": "waiting_result",
+              "title": "示例·术后血常规报告跟进"
+            }
+          ],
+          "limit": 100,
+          "offset": 0,
+          "total": 1
+        },
+        "status": 200
+      },
+      "detail": {
+        "body": {
+          "allergies": [],
+          "allergyStatus": "unknown",
+          "archived": false,
+          "birthYear": 1978,
+          "clinicalSummary": {
+            "source": "示例数据包",
+            "text": "阑尾切除术后一个月，恢复可，待复查血常规。示例数据。"
+          },
+          "counts": {
+            "activeFollowups": 0,
+            "dueFollowups": 0,
+            "pendingReminders": 0,
+            "unprocessedMessages": 0
+          },
+          "diagnoses": [
+            {
+              "code": "K35",
+              "date": "2026-09-27",
+              "name": "急性阑尾炎",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            },
+            {
+              "code": "",
+              "date": "2026-09-29",
+              "name": "腹腔镜阑尾切除术后",
+              "source": "示例数据包",
+              "sources": [
+                "示例数据包"
+              ],
+              "status": "confirmed"
+            }
+          ],
+          "gender": "male",
+          "groups": [],
+          "labs": [
+            {
+              "date": "2026-09-29",
+              "item": "白细胞计数",
+              "source": "示例数据包",
+              "unit": "10^9/L",
+              "value": 11.8
+            },
+            {
+              "date": "2026-10-13",
+              "item": "白细胞计数",
+              "source": "示例数据包",
+              "unit": "10^9/L",
+              "value": 7.2
+            }
+          ],
+          "medications": [],
+          "name": "示例·王建国",
+          "note": "这是示例患者（虚构数据），随时可在首页一键删除，不影响真实档案。",
+          "patientNumber": "",
+          "phone": "",
+          "tags": [
+            "示例患者"
+          ],
+          "treatmentPlan": {
+            "assessmentDate": "2026-10-13",
+            "goal": "整理术后复查资料并核对恢复记录",
+            "interventions": "携带病历与血常规报告复诊\n记录切口情况与患者反馈，交给医生核对",
+            "prognosis": "虚构记录：患者自述无腹痛，切口无渗液；进一步评估待复诊。",
+            "reviewDate": "2026-11-05",
+            "source": "示例出院与复查记录",
+            "startDate": "2026-10-04",
+            "status": "active",
+            "title": "示例·术后复诊资料核对"
+          },
+          "visits": [
+            {
+              "date": "2026-09-29",
+              "note": "腹腔镜阑尾切除，顺利。",
+              "reason": "急诊手术",
+              "source": "示例数据包"
+            }
+          ]
+        },
+        "status": 200
+      },
+      "followups": {
+        "body": {
+          "jobs": []
+        },
+        "status": 200
+      }
+    }
+  },
+  "pendingActions": {
+    "body": {
+      "actions": [
+        {
+          "baseRevision": 0,
+          "payload": {
+            "labs": [
+              {
+                "date": "2025-01-18",
+                "item": "载脂蛋白A1",
+                "unit": "g/L",
+                "value": 1.42
+              }
+            ]
+          },
+          "reviewDraft": null,
+          "reviewRevision": 0,
+          "status": "pending",
+          "summary": "导入检验结果 1 项（载脂蛋白A1）",
+          "type": "patient-update"
+        }
+      ],
+      "counts": {
+        "pending": 1
+      }
+    },
+    "status": 200
+  },
+  "reminders": {
+    "body": {
+      "counts": {
+        "done": 0,
+        "pending": 1
+      },
+      "hasMore": false,
+      "limit": 100,
+      "offset": 0,
+      "reminders": [
+        {
+          "checklist": [
+            "近期血糖记录",
+            "用药依从性"
+          ],
+          "detail": "按计划到期，随访问卷待下发",
+          "kind": "followup",
+          "patientName": "示例·李婉珍",
+          "status": "pending",
+          "title": "随访：示例·血糖控制季度随访"
+        }
+      ],
+      "total": 1
+    },
+    "status": 200
+  }
+}

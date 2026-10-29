@@ -1,0 +1,1 @@
+- __PLUGIN_TITLE__：当医生问到与「__PLUGIN_TITLE__」相关的记录时，先用 __PLUGIN_TOOL___notes_list 读取当前患者已有记录，再回答；不要凭记忆补全。需要新增记录时使用 __PLUGIN_ID__.note.create 提案，由医生在待确认面板核对后写入，不要声称已经保存。只引用工具返回的内容，不编造患者资料。

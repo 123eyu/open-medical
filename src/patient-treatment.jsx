@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Activity, ArrowUpRight, CalendarDays, Check, ClipboardList, Plus, Pill, ShieldAlert } from 'lucide-react';
 import { api } from './agent-runtime';
 import { useClinicalDraft } from './clinical-drafts';
+import { usePluginActive } from './plugin-slots';
 import { localCalendarDate, isCalendarDate } from '../shared/calendar-date.mjs';
 import { diagnosisSources } from '../shared/diagnoses.mjs';
 import './patient-treatment.css';
@@ -11,6 +12,7 @@ const planStates = { active: '进行中', paused: '已暂停', completed: '已�
 const emptyPlan = { title: '', goal: '', interventions: '', startDate: '', reviewDate: '', status: 'active', prognosis: '', assessmentDate: '', source: '' };
 
 export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNavigate, onChanged, files = [], followups = [], citedFileName = () => null }) {
+  const followupActive = usePluginActive("followup");
   const plan = patient.treatmentPlan;
   const reviewReminder = followups.find(job => job.source?.kind === 'treatment-review' && job.source.reviewDate === plan?.reviewDate);
   const interventions = (plan?.interventions || '').split('\n').filter(line => line.trim());
@@ -107,7 +109,7 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
           <header><div><h3>用药管理 <small>{meds.length} 种记录</small></h3></div><button className="text-button" onClick={onEditMedications}>管理用药 <ArrowUpRight size={15}/></button></header>
           <div className="treatment-filters" aria-label="筛选用药状态">{[['active',`正在使用 ${counts.active}`],['unknown',`未记录状态 ${counts.unknown}`],['stopped',`已停用 ${counts.stopped}`],['all','全部']].map(([id,label])=><button key={id} aria-pressed={filter===id} className={filter===id?'selected':''} onClick={()=>setFilter(id)}>{label}</button>)}</div>
           {visibleMeds.length ? <ul className="treatment-medications">{visibleMeds.map((med,i)=><li key={i}><div className="treatment-pill-icon"><Pill size={19}/></div><div className="treatment-med-content"><div className="treatment-med-name"><h4>{med.name}</h4><span className={`treatment-med-state ${med.status || 'unknown'}`}>{medicationStates[med.status] || medicationStates.unknown}</span></div><dl><div><dt>剂量</dt><dd>{med.dose || '未记录'}</dd></div><div><dt>频次 / 用法</dt><dd>{med.frequency || '未记录'}</dd></div></dl>{med.note && <p>{med.note}</p>}{diagnosisSources(med).length ? <details className="treatment-provenance"><summary>资料来源</summary>{diagnosisSources(med).map(source=><p key={source}>{source}{sourceFiles(source).length === 1 && <button className="text-button" onClick={()=>onNavigate('library', {focusFile:sourceFiles(source)[0].id})}>查看原始资料</button>}{sourceFiles(source).length > 1 && <button className="text-button" onClick={()=>onNavigate('library')}>同名资料有多份，到资料库核对</button>}</p>)}</details> : <p className="treatment-muted">用药来源未记录</p>}</div></li>)}</ul> : <div className="treatment-empty compact"><Pill size={25}/><p>{meds.length ? `暂无「${medicationStates[filter] || '全部'}」用药记录` : '尚无用药记录。'}</p><button className="text-button" onClick={onEditMedications}>添加用药</button></div>}
-          <footer className="treatment-med-footer"><span>服药执行情况需通过随访核对</span><button className="text-button" onClick={()=>onNavigate('followups')}>安排用药随访 <ArrowUpRight size={14}/></button></footer>
+          {followupActive && <footer className="treatment-med-footer"><span>服药执行情况需通过随访核对</span><button className="text-button" onClick={()=>onNavigate('followups')}>安排用药随访 <ArrowUpRight size={14}/></button></footer>}
         </section>
       </div>
       <aside className="treatment-aside">
@@ -124,8 +126,9 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
         <section className="treatment-card treatment-review" aria-label="治疗与复评时间线">
           <header><h3>治疗与复评</h3><CalendarDays size={18}/></header>
           <ol><li><span>方案开始</span><time>{plan?.startDate || '尚未记录'}</time></li><li><span>最近评估</span><time>{plan?.assessmentDate || '尚未记录'}</time></li><li className={due?'is-due':''}><span>下次复评{due && ' · 已到期'}</span><time>{plan?.reviewDate || '尚未安排'}</time></li></ol>
-          {reviewReminder ? <p className="treatment-muted">复评日期 {plan.reviewDate} 已安排提醒{reviewReminder.status === 'completed' ? '，提醒已触发' : ''}。<button className="text-button" onClick={()=>onNavigate('followups', {focusFollowupId:reviewReminder.id})}>查看现有计划</button></p> : plan?.status === 'active' && !patient.archived && isCalendarDate(plan?.reviewDate) ? <button className="text-button" onClick={()=>onNavigate('followups', {patientId:patient.id,reviewDate:plan.reviewDate,title:plan.title})}>按复评日期安排随访 <ArrowUpRight size={14}/></button> : !plan?.reviewDate && !patient.archived ? <button className="text-button" onClick={openEditor}>填写复评日期</button> : null}
-          <button className="text-button" onClick={()=>onNavigate('followups')}>管理随访提醒 <ArrowUpRight size={14}/></button>
+          {followupActive && (reviewReminder ? <p className="treatment-muted">复评日期 {plan.reviewDate} 已安排提醒{reviewReminder.status === 'completed' ? '，提醒已触发' : ''}。<button className="text-button" onClick={()=>onNavigate('followups', {focusFollowupId:reviewReminder.id})}>查看现有计划</button></p> : plan?.status === 'active' && !patient.archived && isCalendarDate(plan?.reviewDate) ? <button className="text-button" onClick={()=>onNavigate('followups', {patientId:patient.id,reviewDate:plan.reviewDate,title:plan.title})}>按复评日期安排随访 <ArrowUpRight size={14}/></button> : !plan?.reviewDate && !patient.archived ? <button className="text-button" onClick={openEditor}>填写复评日期</button> : null)}
+          {!followupActive && !plan?.reviewDate && !patient.archived && <button className="text-button" onClick={openEditor}>填写复评日期</button>}
+          {followupActive && <button className="text-button" onClick={()=>onNavigate('followups')}>管理随访提醒 <ArrowUpRight size={14}/></button>}
         </section>
       </aside>
     </div>
