@@ -1,4 +1,4 @@
-import { AppError, check, string } from "../errors.mjs";
+import { AppError, check, string } from "../../../server/errors.mjs";
 
 // Medical literature search over free public APIs: PubMed E-utilities and
 // Europe PMC. Only the query terms leave the machine — never patient

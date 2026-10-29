@@ -71,7 +71,6 @@ import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
 import { consultationLookupIssue } from "./workbench/run-status";
 import { blockedText, runDerivedStatus } from "./workbench/run-status";
 import { DoctorProfilePanel } from "./doctor-profile";
-import { LiteratureView } from "./literature";
 import { KnowledgeLibraries } from "./knowledge-libraries";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
 import { CasesView } from "./cases";
@@ -1658,8 +1657,6 @@ function App() {
               onView={navigate}
               onChanged={refreshList}
             />
-          ) : view === "literature" ? (
-            <LiteratureView onOpenTask={openTask} />
           ) : view === "knowledge" ? (
             <KnowledgeLibraries onOpenTask={openTask} />
           ) : view === "clinical-ref" ? (
@@ -1672,6 +1669,15 @@ function App() {
             <ResearchView />
           ) : view === "drg" ? (
             <DrgView />
+          ) : TOOL_VIEWS.includes(view) ? (
+            <main id="main" className="module-page" aria-label="功能未启用">
+              <section className="module-card" style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}>
+                <AlertCircle size={28} aria-hidden="true" />
+                <h1>{VIEW_LABELS[view] || "该功能"}</h1>
+                <p className="muted">该功能未启用。</p>
+                <button type="button" className="primary" onClick={() => navigate("tools")}>返回资料与工具</button>
+              </section>
+            </main>
           ) : view !== "workbench" ? (
             <WorkbenchHome
               key={homeKey}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./agent-runtime";
+import { api } from "../../../src/agent-runtime";
+import "./literature.css";
 import { Search, Loader2, FilePlus, Copy, ExternalLink, Check } from "lucide-react";
 
 // Literature search view: queries PubMed / Europe PMC through the local

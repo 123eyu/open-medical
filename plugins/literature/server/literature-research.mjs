@@ -1,4 +1,4 @@
-import { check } from '../errors.mjs';
+import { check } from '../../../server/errors.mjs';
 
 export const LITERATURE_RESEARCH_GUIDANCE = `
 当前任务是文献研究：完成检索、阅读、比较、综合回答，不能以搜索结果列表或检索计划作为最终交付。

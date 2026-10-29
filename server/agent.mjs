@@ -1,4 +1,3 @@
-import { literatureRunEvidence } from "./medical/literature-research.mjs";
 import { habitMutation, habitRevision } from './medical/habit-concurrency.mjs';
 import { ModelChoices } from "./core/model-choices.mjs";
 import { labDisplayTools } from "./medical/lab-display-tools.mjs";
@@ -41,7 +40,6 @@ import {
 import { trialTools } from "./medical/trial-tools.mjs";
 import { scheduleTools } from "./medical/schedule-tools.mjs";
 import { DoctorProfile } from "./medical/doctor-profile.mjs";
-import { LiteratureService, literatureTools } from "./medical/literature.mjs";
 import { createKnowledgeQueryExpander } from "./medical/knowledge-query.mjs";
 import { GuidelineLibrary, knowledgeTools, EDUCATION_COLLECTION } from "./medical/guidelines.mjs";
 import { scanGroupSuggestions } from "./medical/patient-grouping.mjs";
@@ -274,7 +272,19 @@ export function createServer(options = {}) {
       ...pluginHost.skillDirs(),
     ]);
   const doctor = options.doctor || new DoctorProfile(store);
-  const literature = options.literature || new LiteratureService(store);
+  // Literature now lives in the literature plugin. Fixed modules keep a lazy
+  // facade so online_case_search can use it when the plugin is active and fail
+  // with a normal PLUGIN_SERVICE_UNAVAILABLE error when it is disabled.
+  const requireLiterature = () => {
+    const service = pluginHost.pluginServices.literature || options.literature;
+    check(service, "PLUGIN_SERVICE_UNAVAILABLE", "文献研究插件未启用", 503);
+    return service;
+  };
+  const literature = {
+    search: (...args) => requireLiterature().search(...args),
+    fetchArticle: (...args) => requireLiterature().fetchArticle(...args),
+    materialText: (...args) => requireLiterature().materialText(...args),
+  };
   const embedder = options.embedder || new EmbeddingService();
   const pending = new PendingActions(store, {
     patients: () => patients,
@@ -420,7 +430,6 @@ export function createServer(options = {}) {
     },
     { ...knowledgeIngest, definition: { ...knowledgeIngest.definition, function: { ...knowledgeIngest.definition.function, name: "guideline_ingest" } } },
     ...doctorMemoryTools(doctor),
-    ...literatureTools(literature),
     ...knowledgeTools(guidelines),
     ...caseTools(cases),
     ...onlineCaseTools(literature),
@@ -541,7 +550,6 @@ export function createServer(options = {}) {
     imageShrink: options.imageShrink || null,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
-      readResearchEvidence: context => literatureRunEvidence(store.db, context),
       personalContext: (run, workspaceId) => {
         const service = new PersonalContext({ store, doctor, guidelines, cases: () => cases, extensions: () => extensions, provider: () => provider });
         const prefs = learningPrefs(store.db);
@@ -823,7 +831,15 @@ export function createServer(options = {}) {
     skills,
     guidelines,
     knowledge: guidelines,
-    literature,
+    literatureHost: {
+      service: options.literature || null,
+      options: options.literatureOptions || {},
+      identifier,
+      addMaterial: (sessionId, input) =>
+        sessionBridge.isSessionWorkspace(sessionId)
+          ? sessionBridge.addMaterial(sessionId, input)
+          : runtime.addFile(sessionId, input),
+    },
     knowledgeOrganizer,
     // Followup plugin inputs. All are fixed-region objects or accessors; the
     // plugin never receives a reference to the server/request layer.
@@ -1189,7 +1205,7 @@ export function createServer(options = {}) {
           ingestConfigured: Boolean(ingestSecret),
           patientsEnabled: true,
           doctorMemory: runtime.doctor.counts(),
-          literature: { enabled: true, sources: ["pubmed", "europepmc"] },
+          literature: { enabled: pluginActive("literature"), sources: ["pubmed", "europepmc"] },
           knowledge: {
             enabled: true,
             count: guidelines.list().length,
@@ -2235,55 +2251,6 @@ export function createServer(options = {}) {
             return send(res, 200, await digestMessages(pid, await body(req)));
         }
       }
-      if (parts[0] === "api" && parts[1] === "literature") {
-        const numberParam = (key) => {
-          const raw = url.searchParams.get(key);
-          return raw === null || raw === "" ? undefined : Number(raw);
-        };
-        if (parts[2] === "search" && req.method === "GET")
-          return send(
-            res,
-            200,
-            await literature.search({
-              query: url.searchParams.get("query") || undefined,
-              source: url.searchParams.get("source") || undefined,
-              yearFrom: numberParam("yearFrom"),
-              yearTo: numberParam("yearTo"),
-              limit: numberParam("limit"),
-              sort: url.searchParams.get("sort") || undefined,
-            }),
-          );
-        if (parts[2] === "article" && req.method === "GET")
-          return send(
-            res,
-            200,
-            await literature.fetchArticle({
-              pmid: url.searchParams.get("pmid") || undefined,
-              doi: url.searchParams.get("doi") || undefined,
-            }),
-          );
-        if (parts[2] === "import" && req.method === "POST") {
-          const b = await body(req);
-          const article = await literature.fetchArticle({
-            pmid: b.pmid,
-            doi: b.doi,
-          });
-          const name = article.pmid
-            ? `PMID-${article.pmid}.md`
-            : `DOI-${String(article.doi)
-                .replace(/[^A-Za-z0-9.-]/g, "_")
-                .slice(0, 80)}.md`;
-          const sessionId = identifier(b.sessionId);
-          const materialInput = {
-            name,
-            text: literature.materialText(article),
-          };
-          const file = sessionBridge.isSessionWorkspace(sessionId)
-            ? sessionBridge.addMaterial(sessionId, materialInput)
-            : runtime.addFile(sessionId, materialInput);
-          return send(res, 201, { file, article });
-        }
-      }
       if (parts[0] === "api" && parts[1] === "trials") {
         if(parts.length===6 && parts[3]==='screenings' && parts[5]==='ai') {
           const trialId=identifier(parts[2]),patientId=identifier(parts[4]);
@@ -2670,7 +2637,11 @@ export function createServer(options = {}) {
   server.doctor = runtime.doctor;
   server.knowledgeBot = knowledgeBot;
   server.doctorNotifications = doctorNotifications;
-  server.literature = literature;
+  Object.defineProperty(server, "literature", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("literature") || options.literature || literature,
+  });
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
   server.risks = risks;

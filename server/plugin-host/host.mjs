@@ -788,6 +788,19 @@ export class PluginHost {
     };
   }
 
+  // Verification hooks run at the domain's beforeComplete seam. The plugin
+  // decides from the run policy whether it applies; disabled plugins are
+  // skipped entirely because _isActive() is false.
+  beforeComplete(args) {
+    for (const record of this.ordered) {
+      if (!this._isActive(record) || !record.spec?.workflows) continue;
+      for (const hooks of Object.values(record.spec.workflows)) {
+        if (typeof hooks.beforeComplete !== "function") continue;
+        hooks.beforeComplete(this.contextFor(record), args);
+      }
+    }
+  }
+
   registerTools(registry, workspace, run = null) {
     for (const record of this.ordered) {
       if (!this._isActive(record) || !record.spec?.tools) continue;
@@ -921,6 +934,7 @@ export class PluginHost {
         guidance: hooks.guidance,
         configure: hooks.configure,
         prepared: hooks.prepared,
+        beforeComplete: hooks.beforeComplete,
         answer: hooks.answer,
       });
     }

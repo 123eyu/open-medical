@@ -95,13 +95,6 @@
   .conversation > .conversation-head { min-height:46px; padding-block:6px; }
   .conversation .composer > textarea { min-height:38px; height:42px; }
 }
-.literature-view .literature-form { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
-.literature-view textarea.literature-query { flex-basis:100%; width:100%; box-sizing:border-box; min-height:130px; resize:vertical; padding:16px; font:inherit; line-height:1.8; border:1px solid var(--border); border-radius:8px; }
-.literature-modes { display:flex; gap:12px; margin:22px 0; }
-.literature-modes button[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep); }
-.literature-options { flex:1; }
-.literature-options summary { cursor:pointer; color:var(--muted); font-size:14px; }
-.literature-options>div { display:flex; flex-wrap:wrap; gap:10px; padding-top:12px; }
 
 /* Patient questions have one navigation row and one place to compose. */
 .patient-conversation > .conversation-head { min-height:58px; box-sizing:border-box; flex-wrap:nowrap; }

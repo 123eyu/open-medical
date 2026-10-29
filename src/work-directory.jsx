@@ -158,14 +158,6 @@ const catalog = [
     FileText,
     "任务内使用",
   ],
-  [
-    "literature",
-    "文献研究",
-    "围绕问题检索、阅读和比较文献，形成有来源的总结。",
-    "信息查找",
-    Search,
-    "联网检索",
-  ],
   ["research", "临床试验", "管理试验方案，按入排标准开展患者初筛。", "科研工具", BookOpen, "试验初筛"],
   [
     "clinical-ref",
@@ -223,7 +215,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       .filter(
         (x) =>
           (medical ||
-            !["literature", "research", "clinical-ref", "cases", "drg", "data-analysis"].includes(
+            !["research", "clinical-ref", "cases", "drg", "data-analysis"].includes(
               x[0],
             )) &&
           matches(

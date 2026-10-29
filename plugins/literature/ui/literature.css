@@ -1,0 +1,12 @@
+/* Literature research page. Shared .literature-* primitives remain in
+   style.css because the fixed case library still uses them. */
+.literature-view {
+  width: min(760px, 100%);
+}
+.literature-view .literature-form { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+.literature-view textarea.literature-query { flex-basis:100%; width:100%; box-sizing:border-box; min-height:130px; resize:vertical; padding:16px; font:inherit; line-height:1.8; border:1px solid var(--border); border-radius:8px; }
+.literature-modes { display:flex; gap:12px; margin:22px 0; }
+.literature-modes button[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep); }
+.literature-options { flex:1; }
+.literature-options summary { cursor:pointer; color:var(--muted); font-size:14px; }
+.literature-options>div { display:flex; flex-wrap:wrap; gap:10px; padding-top:12px; }

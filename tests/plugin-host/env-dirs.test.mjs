@@ -46,6 +46,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.equal(byId["channel-wechat"].status, "ready");
   assert.equal(byId.followup.status, "ready");
   assert.equal(byId["legacy-agenda"].status, "ready");
+  assert.equal(byId.literature.status, "ready");
   assert.equal(byId["similar-cases"].status, "ready");
 
   const list = await app.request("/api/plugins");
@@ -59,6 +60,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "followup",
       "hello",
       "legacy-agenda",
+      "literature",
       "needs-missing",
       "similar-cases",
     ],
