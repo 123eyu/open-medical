@@ -2,8 +2,8 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ExternalContact, WecomApiError } from 'wecom';
 import { decrypt, getSignature } from '@wecom/crypto';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import { AppError, check, identifier, string } from './errors.mjs';
-import { sqliteTransaction } from './sqlite-transaction.mjs';
+import { AppError, check, identifier, string } from '../../../server/errors.mjs';
+import { sqliteTransaction } from '../../../server/sqlite-transaction.mjs';
 import { WecomDirectory } from './wecom-directory.mjs';
 
 const parser = new XMLParser({ ignoreAttributes: true, parseTagValue: false, processEntities: false });

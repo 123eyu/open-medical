@@ -4,7 +4,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { CredentialVault } from './core/oauth.mjs';
 import { check, string, identifier, AppError } from './errors.mjs';
 import { sqliteTransaction } from './sqlite-transaction.mjs';
-import { WecomArchiveClient, collectorUrl } from './chat-connectors/wecom-archive.mjs';
+import { collectorUrl } from './chat-connectors/archive-endpoint.mjs';
 import { ChatConnectorRegistry } from './chat-connectors/registry.mjs';
 import { WechatReader, validateRegion } from './chat-connectors/wechat-reader.mjs';
 import { flatName } from './chat-connectors/wechat-windows.mjs';
@@ -13,11 +13,11 @@ const hash = value => createHash('sha256').update(JSON.stringify(value)).digest(
 const json = row => row ? JSON.parse(row.data) : null;
 const now = () => new Date().toISOString();
 export class ChatFollowups {
-  constructor({ store, patients, followups, directory, provider, wechat, archive, wxcli, aibot, plugins = [] }) {
+  constructor({ store, patients, followups, directory, provider, wechat, archive, archiveClass, wxcli, aibot, plugins = [] }) {
     Object.assign(this, { store, db: store.db, patients, followups, provider });
     this.vault = new CredentialVault(this.db, directory);
-    this.wechat = wechat || new WechatReader(); this.archive = archive || new WecomArchiveClient();
-    this.registry = new ChatConnectorRegistry({ wechat: this.wechat, archive: this.archive, wxcli, plugins });
+    this.wechat = wechat || new WechatReader(); this.archive = archive || null;
+    this.registry = new ChatConnectorRegistry({ wechat: this.wechat, archive: this.archive, archiveClass, wxcli, plugins });
     if (aibot) this.registry.register({ id: "wecom-aibot", name: "企业微信 · 智能机器人", protocol: "aibot-ws", builtin: true, client: aibot, defaultEndpoint: aibot.endpoint });
     this.aibot = aibot || null;
     this.pendingAI = new Map(); this.stopped = false; this.ticking = false; this.active = new Map(); this.probes = new Map(); this.imports = new Map(); this.previews = new Map(); this.timer = null;

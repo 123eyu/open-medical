@@ -1,5 +1,4 @@
 import { AppError, check } from "../errors.mjs";
-import { WecomApi } from "./wecom-api.mjs";
 
 const VAULT_KEY = "care:channels:v1";
 export const CHANNEL_IDS = Object.freeze(["wecom-kf", "wecom-contact", "manual"]);
@@ -13,10 +12,11 @@ const LABELS = { "wecom-kf": "微信客服", "wecom-contact": "企业微信客�
 // cannot deliver unattended reports autoSend=false and the engine keeps
 // its replies as drafts or member-confirmed tasks.
 export class CareChannels {
-  constructor({ vault, wecom, env = process.env, fetch: fetchImpl = fetch, now = Date.now }) {
+  constructor({ vault, wecom, wecomApi = null, env = process.env, fetch: fetchImpl = fetch, now = Date.now }) {
     this.vault = vault;
     this.now = now;
     this.wecom = wecom;
+    this.WecomApi = wecomApi;
     this.env = env;
     this.fetch = fetchImpl;
     this.clients = new Map();
@@ -64,7 +64,10 @@ export class CareChannels {
     const c = this.config();
     const secret = kind === "kf" ? c.kfSecret : c.appSecret;
     const key = `${kind}:${c.corpId}:${secret}`;
-    if (!this.clients.has(key)) this.clients.set(key, new WecomApi({ corpId: c.corpId, secret, fetch: this.fetch }));
+    if (!this.clients.has(key)) {
+      check(this.WecomApi, "WECOM_UNCONFIGURED", "企业微信连接实现不可用", 503);
+      this.clients.set(key, new this.WecomApi({ corpId: c.corpId, secret, fetch: this.fetch }));
+    }
     return this.clients.get(key);
   }
   canAutoSend(id) { return id === "wecom-kf" && this.kfReady(); }
@@ -116,7 +119,8 @@ export class CareChannels {
       catch (error) { results.push({ id, label, ok: false, detail: error.message, ...(error.errcode ? { errcode: error.errcode } : {}), ...(error.ip ? { ip: error.ip } : {}) }); }
     };
     await run("contact", "客户联系", Boolean(c.corpId && this.wecom?.corpSecret), async () => {
-      const api = new WecomApi({ corpId: c.corpId, secret: this.wecom.corpSecret, fetch: this.fetch });
+      check(this.WecomApi, "WECOM_UNCONFIGURED", "企业微信连接实现不可用", 503);
+      const api = new this.WecomApi({ corpId: c.corpId, secret: this.wecom.corpSecret, fetch: this.fetch });
       const body = await api.get("/externalcontact/get_follow_user_list");
       const members = body.follow_user || [];
       return members.length ? `可用；已开通客户联系的成员：${members.slice(0, 10).join("、")}${members.length > 10 ? " 等" : ""}` : "凭据可用，但还没有成员开通客户联系";

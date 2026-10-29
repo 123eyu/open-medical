@@ -46,7 +46,7 @@ function localDue(startDate, dayOffset, time) {
 // follow-up campaigns. Deterministic code owns every side effect; the model
 // only classifies, drafts and summarizes.
 export class CareEngine {
-  constructor({ store, patients, followups, wecom, vault, guidelines, patientBrief, provider = () => null,
+  constructor({ store, patients, followups, wecom, wecomApi = null, vault, guidelines, patientBrief, provider = () => null,
     fetch: fetchImpl = fetch, now = Date.now, intervalMs = 20000, kfPollMs = 60000, directorySync = true, env = process.env } = {}) {
     this.store = store;
     this.db = store.db;
@@ -62,7 +62,7 @@ export class CareEngine {
     // Customers and groups of 客户联系 members are pulled every few hours.
     this.directorySync = directorySync;
     this.kf = { lastSyncAt: null, lastError: null, nextAt: 0, failures: 0, running: null };
-    this.channels = new CareChannels({ vault, wecom, env, fetch: fetchImpl, now });
+    this.channels = new CareChannels({ vault, wecom, wecomApi, env, fetch: fetchImpl, now });
     this.pendingWork = new Set();
     this.lastTickAt = null;
     this.lastError = null;
@@ -946,7 +946,10 @@ export class CareEngine {
     const kfPull = this.pollKf();
     if (kfPull) await kfPull;
     const directory = this.channels.wecom?.directory;
-    if (this.directorySync && directory?.due()) this.track(directory.sync().catch(() => {}));
+    if (this.directorySync) {
+      if (directory?.due()) this.track(directory.sync().catch(() => {}));
+      await directory?.refreshAwaiting();
+    }
     this.discover();
     const processing = this.settings().processing.enabled;
     if (processing) {
@@ -960,7 +963,6 @@ export class CareEngine {
         await this.sendReply(row.id, { auto: true });
       }
       await this.refreshMemberTasks();
-      await directory?.refreshAwaiting();
       await this.runCampaigns();
       await this.escalate();
     }

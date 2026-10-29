@@ -10,7 +10,6 @@
 import { randomUUID } from "node:crypto";
 import { check, AppError, identifier, string } from "./errors.mjs";
 import { detectRedFlags, SAFETY_REPLY, AI_DISCLAIMER, screenOutbound } from "./care/red-flags.mjs";
-import { AIBOT_WS_URL, AibotSocket, toChatMessage } from "./chat-connectors/wecom-aibot-ws.mjs";
 import { EDUCATION_COLLECTION } from "./medical/guidelines.mjs";
 
 export const AIBOT_CHANNEL = "wecom-aibot";
@@ -21,8 +20,8 @@ const clip = (value, n) => {
 };
 
 export class WecomAibotChannel {
-  constructor({ url = AIBOT_WS_URL, socketFactory = null, log = () => {}, now = () => new Date().toISOString(), provider, guidelines, patientBrief, skills = null } = {}) {
-    Object.assign(this, { url, socketFactory, log, now });
+  constructor({ url = "", socketFactory = null, createSocket = null, toChatMessage = null, log = () => {}, now = () => new Date().toISOString(), provider, guidelines, patientBrief, skills = null } = {}) {
+    Object.assign(this, { url, socketFactory, createSocket, toChatMessage, log, now });
     // provider 兼容函数/对象两种形态(与 WechatAutoFollow 一致,测试可直接注入)。
     const providerFn = typeof provider === "function" ? provider : () => provider;
     Object.assign(this, { provider: providerFn, guidelines, patientBrief, skills });
@@ -120,9 +119,16 @@ export class WecomAibotChannel {
     this.signature = signature;
     this.secret = want ? secret : "";
     if (!want) return;
-    this.socket = this.socketFactory
+    const socket = this.socketFactory
       ? this.socketFactory({ botId: c.accountId, secret, url: this.url })
-      : new AibotSocket({ botId: c.accountId, secret, url: this.url, log: this.log });
+      : this.createSocket
+        ? this.createSocket({ botId: c.accountId, secret, url: this.url, log: this.log })
+        : null;
+    if (!socket) {
+      this.log("企微智能机器人连接实现不可用");
+      return;
+    }
+    this.socket = socket;
     this.socket.on("message", (frame) => this.onMessage(frame));
     this.socket.on("authError", (code, message) => {
       this.log(`机器人认证失败(${code}):${message}`);
@@ -134,7 +140,7 @@ export class WecomAibotChannel {
   onMessage(frame) {
     const body = frame?.body || {};
     this.log(`收到消息:chat=${body.chattype || "?"} from=${body.from?.userid || "?"} text=${String(body.text?.content || body.msgtype || "").slice(0, 60)}`);
-    const message = toChatMessage(body, this.now());
+    const message = this.toChatMessage?.(body, this.now());
     if (!message) return;
     this.noteSeen(body);
     const f = this.followups;
@@ -547,7 +553,10 @@ export class WecomAibotChannel {
     return new Promise((resolve) => {
       const socket = this.socketFactory
         ? this.socketFactory({ botId, secret, url: this.url })
-        : new AibotSocket({ botId, secret, url: this.url, log: () => {} });
+        : this.createSocket
+          ? this.createSocket({ botId, secret, url: this.url, log: () => {} })
+          : null;
+      if (!socket) return resolve(false);
       const done = (value) => {
         socket.close();
         resolve(value);

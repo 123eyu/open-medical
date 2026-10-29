@@ -1,12 +1,7 @@
-import { check, AppError } from '../errors.mjs';
+import { check, AppError } from '../../../server/errors.mjs';
+import { collectorUrl } from '../../../server/chat-connectors/archive-endpoint.mjs';
 
-export function collectorUrl(value) {
-  let url;
-  try { url = new URL(value); } catch { throw new AppError('CHAT_CONFIG', '请填写采集器地址'); }
-  check(!url.username && !url.password && !url.search && !url.hash, 'CHAT_CONFIG', '采集器地址不能包含密码、查询参数或片段');
-  check(url.protocol === 'https:' || (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)), 'CHAT_CONFIG', '远程采集器必须使用 HTTPS，本机可使用回环 HTTP');
-  return url.href.replace(/\/$/, '');
-}
+export { collectorUrl };
 export function sequence(value) {
   check(typeof value === 'string' && /^(0|[1-9][0-9]{0,19})$/.test(value) && BigInt(value) <= 18446744073709551615n, 'ARCHIVE_PROTOCOL', '采集器游标须为 uint64 十进制字符串', 502);
   return value;

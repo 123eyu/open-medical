@@ -59,6 +59,9 @@ export function createChannelService({ gateway } = {}) {
       adapters.set(adapter.id, { adapter, capabilities });
       return describe(adapter, capabilities);
     },
+    unregister(id) {
+      return adapters.delete(id);
+    },
     list() {
       return [...adapters.values()]
         .sort((left, right) => left.adapter.id.localeCompare(right.adapter.id))

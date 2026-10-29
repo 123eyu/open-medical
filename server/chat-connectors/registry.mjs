@@ -1,11 +1,12 @@
 import { check, string } from "../errors.mjs";
 import { WxCliClient } from "./wx-cli.mjs";
-import { WecomArchiveClient } from "./wecom-archive.mjs";
 
 const ID = /^[a-z][a-z0-9-]{0,39}$/;
 export class ChatConnectorRegistry {
-  constructor({ wechat, archive, wxcli, plugins = [] } = {}) {
+  constructor({ wechat, archive, archiveClass = null, wxcli, plugins = [] } = {}) {
     this.entries = new Map();
+    this.archiveClass = archiveClass;
+    const archiveClient = () => archive || (archiveClass ? new archiveClass() : {});
     this.register({
       id: "wechat",
       name: "微信桌面",
@@ -18,7 +19,7 @@ export class ChatConnectorRegistry {
       name: "企业微信存档",
       protocol: "archive-v1",
       builtin: true,
-      client: archive || new WecomArchiveClient(),
+      client: archiveClient(),
     });
     this.register({
       id: "wx-cli",
@@ -98,7 +99,9 @@ export class ChatConnectorRegistry {
       client:
         manifest.protocol === "wx-cli"
           ? new WxCliClient()
-          : new WecomArchiveClient(),
+          : this.archiveClass
+            ? new this.archiveClass()
+            : {},
     });
     return manifest;
   }

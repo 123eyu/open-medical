@@ -1,4 +1,4 @@
-import { AppError, check } from "../errors.mjs";
+import { AppError, check } from "../../../server/errors.mjs";
 
 const BASE = "https://qyapi.weixin.qq.com/cgi-bin";
 // Common configuration mistakes, explained in terms of the admin console.

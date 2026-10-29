@@ -46,7 +46,6 @@ import {
 } from "./patients.mjs";
 import { FollowUpManager } from "./followups.mjs";
 import { FollowUpSurveys } from "./followup-surveys.mjs";
-import { WeComConnector } from "./wecom.mjs";
 import { CareEngine } from "./care/engine.mjs";
 import { careTools } from "./care/tools.mjs";
 import { trialTools } from "./medical/trial-tools.mjs";
@@ -696,14 +695,17 @@ export function createServer(options = {}) {
   );
   const risks = new RiskEngine(store, followups);
   const schedule = new PatientSchedule(store, patients);
+  // Assigned only while channel-wecom is enabled and started. Fixed modules
+  // read the plugin service through this reference, never by importing it.
+  let wecom = null;
   const doctorOverview = new DoctorOverview(store, sessionBridge, {
     schedule,
     // Plugin agenda sources are resolved lazily: setup runs once the fixed
     // services exist (below), while reads only happen after startup.
     agendaSources: () => pluginHost.agendaSources(),
     agendaItems: (opts) => pluginHost.agendaItems(opts),
-    // Read lazily: the WeCom connector is created further below.
-    contactMatches: () => wecom.client ? wecom.directory.contacts({ status: "suggested", limit: 1 }).counts.suggested : 0,
+    // Read lazily: the channel-wecom plugin owns the connector.
+    contactMatches: () => wecom?.client ? wecom.directory.contacts({ status: "suggested", limit: 1 }).counts.suggested : 0,
     trialWork: () => trialScreening.list().map((t) => {
       const { counts } = trialCandidates.candidates(t.id);
       return { id: t.id, title: t.title.slice(0, 40), awaitingReview: counts.awaitingReview };
@@ -749,13 +751,26 @@ export function createServer(options = {}) {
     workspaces.provider = provider;
     workspaces.agent.provider = provider;
   };
-  const wecom = new WeComConnector(store, patients, { vault: models.vault, ...options.wecom });
   const care = new CareEngine({
-    store, patients, followups, wecom, guidelines, patientBrief,
+    store, patients, followups, wecom: null, guidelines, patientBrief,
     vault: models.vault,
     provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
     ...options.care,
+    // The channel-wecom plugin lifecycle owns directory due/refresh timing.
+    directorySync: false,
   });
+  const attachWecom = (service) => {
+    wecom = service.connector;
+    care.channels.wecom = service.connector;
+    care.channels.WecomApi = service.WecomApi;
+    care.channels.clients?.clear();
+    service.connector.onEvent = (event) => care.track(care.handleWecomEvent(event));
+  };
+  const detachWecom = () => {
+    wecom = null;
+    care.channels.wecom = null;
+    care.channels.clients?.clear();
+  };
   const extensions = new Extensions({
     store, patients, schedule, skillsDir: userSkillsDir, care: () => care, sessions: sessionBridge,
     // Imported skill packs must not shadow existing skills; the shared
@@ -793,9 +808,31 @@ export function createServer(options = {}) {
       getKnowledgeBot: () => knowledgeBot,
       options: options.messageGatewayOptions || {},
     },
+    // The plugin constructs the WeCom connector; the fixed shell only
+    // attaches it to CareEngine while the plugin lifecycle is active.
+    channelWecomHost: {
+      patients,
+      vault: models.vault,
+      env: process.env,
+      options: options.wecom || {},
+      directoryTickMs: options.care?.intervalMs,
+      fetch: options.wecom?.fetch,
+      now: options.wecom?.now,
+      onStart: attachWecom,
+      onStop: detachWecom,
+      // Keep the old gate: member-task refresh ran only while message
+      // processing (and therefore automatic reply handling) was enabled.
+      shouldRefreshAwaiting: () => care.settings().processing.enabled,
+    },
   });
   pluginHost.migrate();
   pluginHost.setup();
+  const wecomService = pluginHost.pluginServices["channel-wecom"] || null;
+  const wecomStatus = pluginHost
+    .list()
+    .find((plugin) => plugin.id === "channel-wecom");
+  if (wecomService && wecomStatus?.enabled && wecomStatus?.available)
+    attachWecom(wecomService);
   const wechat = new WeChatMacBridge({
     patients,
     enabled: ["1", "on", "true"].includes(
@@ -812,9 +849,33 @@ export function createServer(options = {}) {
   });
   // 企微智能机器人通道:先建实例再交给 ChatFollowups 注册,start 后按配置自动拉起长连接。
   // skills 注入群聊自动回复的起草提示词(医生按群勾选技能)。
-  const wecomAibot = options.chatAibot || new WecomAibotChannel({ log: (message) => console.error(`[aibot] ${message}`), provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, skills });
-  const chatFollowups = new ChatFollowups({ store, patients, followups, directory: vaultDir, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, aibot: wecomAibot, ...options.chatFollowups });
+  const wecomAibot = options.chatAibot || new WecomAibotChannel({
+    url: wecomService?.AIBOT_WS_URL || "",
+    createSocket: wecomService
+      ? (input) => wecomService.createAibotSocket(input)
+      : null,
+    toChatMessage: wecomService?.toChatMessage || null,
+    log: (message) => console.error(`[aibot] ${message}`),
+    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
+    guidelines,
+    patientBrief,
+    skills,
+  });
+  const chatFollowups = new ChatFollowups({
+    store,
+    patients,
+    followups,
+    directory: vaultDir,
+    provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
+    aibot: wecomAibot,
+    archive: wecomService?.archive || null,
+    archiveClass: wecomService?.WecomArchiveClient || null,
+    ...options.chatFollowups,
+  });
   wecomAibot.attach(chatFollowups);
+  // The socket implementation moved into channel-wecom; lifecycle.start/stop
+  // still owns when the aibot connection is installed and torn down.
+  wecomService?.attachAibot(wecomAibot);
   // 微信历史导入:向导式组件下载/备份 + 内置 wx-cli 协议桥接(仅 127.0.0.1)。
   const wechatExp = options.wechatExp || new WechatExpService({ dataDir: vaultDir, log: (message) => console.error(`[wechat-exp] ${message}`) });
   wechatExp.start(chatFollowups);
@@ -839,7 +900,7 @@ export function createServer(options = {}) {
   followups.surveys = surveys;
   risks.surveyAlertsProvider = (patient) => surveys.alerts(patient);
   wecomAibot.surveys = surveys;
-  wecomAibot.start();
+  // Started by channel-wecom lifecycle after the HTTP server is listening.
   const chatAutoFollow = new WechatAutoFollow({ chat: chatFollowups, followups, provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null, guidelines, patientBrief, store, ...options.chatAutoFollow });
   const ingestSecret =
     options.ingestSecret || process.env.MEDICAL_INGEST_SECRET || "";
@@ -964,6 +1025,7 @@ export function createServer(options = {}) {
           }
           raw = Buffer.concat(chunks).toString("utf8");
         }
+        check(wecom, "WECOM_UNCONFIGURED", "企业微信回调未配置", 503);
         const response = wecom.callback(url.searchParams, raw);
         res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
         return res.end(response);
@@ -1622,28 +1684,6 @@ export function createServer(options = {}) {
       if (path.startsWith("/api/wechat-exp/") && await track(wechatExpApi(wechatExp, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       if (path.startsWith("/api/chat-followups/") && await track(chatFollowupsApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       if (path.startsWith("/api/chat-autofollow/") && await track(chatAutoFollowApi(chatAutoFollow, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path === "/api/wecom/status" && req.method === "GET") return send(res, 200, wecom.status());
-      if (path === "/api/wecom/contacts" && req.method === "GET") return send(res, 200, wecom.directory.contacts({ status: url.searchParams.get("status") || undefined, query: url.searchParams.get("q") || undefined }));
-      if (path === "/api/wecom/directory" && req.method === "GET") return send(res, 200, wecom.directory.status());
-      if (path === "/api/wecom/directory/sync" && req.method === "POST") return send(res, 200, await track(wecom.directory.sync()));
-      if (path === "/api/wecom/groups" && req.method === "GET") return send(res, 200, wecom.directory.groups({ query: url.searchParams.get("q") || undefined }));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "groups" && parts.length === 4 && req.method === "GET") return send(res, 200, wecom.directory.group(decodeURIComponent(parts[3])));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "patients" && parts.length === 4 && req.method === "GET") return send(res, 200, wecom.directory.patient(parts[3]));
-      if (path === "/api/wecom/group-tasks" && req.method === "POST") return send(res, 201, wecom.directory.groupDraft(await body(req)));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "group-tasks" && parts.length === 5 && req.method === "POST") {
-        if (parts[4] === "submit") return send(res, 200, await track(wecom.directory.groupSubmit(parts[3], await body(req))));
-        if (parts[4] === "refresh") return send(res, 200, await track(wecom.directory.groupRefresh(parts[3])));
-      }
-      if (path === "/api/wecom/sync" && req.method === "POST") return send(res, 200, await track(wecom.sync(await body(req))));
-      if (path === "/api/wecom/bindings" && req.method === "GET") return send(res, 200, { bindings: wecom.bindings(url.searchParams.get("patientId")) });
-      if (path === "/api/wecom/bindings" && req.method === "POST") return send(res, 201, await track(wecom.directory.link(await body(req))));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "bindings" && parts.length === 4 && req.method === "DELETE") return send(res, 200, wecom.unbind(parts[3]));
-      if (path === "/api/wecom/tasks" && req.method === "GET") return send(res, 200, { tasks: wecom.tasks(url.searchParams.get("patientId")) });
-      if (path === "/api/wecom/tasks" && req.method === "POST") return send(res, 201, wecom.draft(await body(req)));
-      if (parts[0] === "api" && parts[1] === "wecom" && parts[2] === "tasks" && parts.length === 5 && req.method === "POST") {
-        if (parts[4] === "submit") return send(res, 200, await track(wecom.submit(parts[3], await body(req))));
-        if (parts[4] === "refresh") return send(res, 200, await track(wecom.refresh(parts[3])));
-      }
       if (path === "/api/wechat/status" && req.method === "GET")
         return send(res, 200, { enabled: false, available: false, retired: true, reason: "请使用随访 → 聊天随访中的会话核验与读取" });
       if (["/api/wechat/read", "/api/wechat/send"].includes(path) && req.method === "POST")
@@ -2721,7 +2761,12 @@ export function createServer(options = {}) {
   server.drg = drg;
   server.cases = cases;
   server.wechat = wechat;
-  server.wecom = wecom;
+  Object.defineProperty(server, "wecom", {
+    enumerable: true,
+    configurable: true,
+    get: () => wecom,
+  });
+  server.channelWecom = wecomService;
   server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
@@ -2766,7 +2811,6 @@ export function createServer(options = {}) {
     await pluginHost.stopAll();
     await pluginHost.drainAll();
     await chatFollowups.stop();
-    wecomAibot.stop();
     wechatExp.stop();
     care.stop();
     extensions.stop();

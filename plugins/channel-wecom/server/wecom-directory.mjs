@@ -1,6 +1,6 @@
 import { WecomApiError } from 'wecom';
-import { AppError, check, identifier, string } from './errors.mjs';
-import { sqliteTransaction } from './sqlite-transaction.mjs';
+import { AppError, check, identifier, string } from '../../../server/errors.mjs';
+import { sqliteTransaction } from '../../../server/sqlite-transaction.mjs';
 
 // Customer and group directory of the WeCom members that use 客户联系.
 // Everything is pulled on a schedule so the doctor never types UserIDs;
