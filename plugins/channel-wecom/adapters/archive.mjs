@@ -4,7 +4,7 @@ import { AppError } from "../../../server/errors.mjs";
 export function createArchiveAdapter({ db, vault, archive }) {
   const capabilities = {
     receive: "none",
-    send: "manual",
+    send: "none",
     history: true,
     groups: false,
     contacts: false,

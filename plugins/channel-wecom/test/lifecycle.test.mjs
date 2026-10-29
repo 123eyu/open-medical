@@ -52,7 +52,9 @@ test("运行时停用 channel-wecom：路由 404、定时器与 WSS 停止、回
   assert.equal(service.timer, null);
   assert.equal(running.server.chatFollowups.aibot.timer, null);
   assert.equal(
-    running.server.pluginHost.pluginServices.channel.list().length,
+    running.server.pluginHost.pluginServices.channel
+      .list()
+      .filter((adapter) => adapter.id.startsWith("wecom-")).length,
     0,
     "停用后不得残留已注册 adapter",
   );

@@ -4,8 +4,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { DesktopControl } from '../core/desktop-control.mjs';
-import { recognizeImage, localOcrAvailable } from '../core/image-ocr.mjs';
+import { DesktopControl } from '../../../server/core/desktop-control.mjs';
+import { recognizeImage, localOcrAvailable } from '../../../server/core/image-ocr.mjs';
 import {
   WindowsWechatControl,
   recognizeWindowsImage,
@@ -21,7 +21,7 @@ import {
   AVATAR_BAND,
   AVATAR_MATCH_DISTANCE,
 } from './wechat-windows.mjs';
-import { check } from '../errors.mjs';
+import { check } from '../../../server/errors.mjs';
 const exec = promisify(execFile), bundle = 'com.tencent.xinWeChat';
 const normalized = value => value.normalize('NFC').trim();
 const cancelled = signal => check(!signal?.aborted,'CHAT_CANCELLED','读取已取消',409);

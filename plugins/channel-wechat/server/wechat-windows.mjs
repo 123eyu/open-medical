@@ -1,16 +1,16 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import { AppError } from "../errors.mjs";
+import { AppError } from "../../../server/errors.mjs";
 
 // Windows 本地 OCR 已提升为 core/windows-ocr.mjs(资料建档等场景共用);此处保持兼容导出。
 export {
   recognizeWindowsImage,
   windowsOcrAvailable as windowsWechatAvailable,
-} from "../core/windows-ocr.mjs";
+} from "../../../server/core/windows-ocr.mjs";
 
 const controlScript = resolve(
   import.meta.dirname,
-  "../../desktop/bin/native-control.ps1",
+  "../../../desktop/bin/native-control.ps1",
 );
 
 const MAX_STDOUT = 24_000_000;

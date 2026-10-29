@@ -62,7 +62,7 @@ test("四个 WeCom adapter 通过 validateAdapter，能力矩阵与设计一致"
     },
     "wecom-archive": {
       receive: "none",
-      send: "manual",
+      send: "none",
       history: true,
       groups: false,
       contacts: false,
@@ -71,7 +71,10 @@ test("四个 WeCom adapter 通过 validateAdapter，能力矩阵与设计一致"
     },
   });
   assert.deepEqual(
-    app.server.pluginHost.pluginServices.channel.list().map((a) => a.id),
+    app.server.pluginHost.pluginServices.channel
+      .list()
+      .map((a) => a.id)
+      .filter((id) => id.startsWith("wecom-")),
     ["wecom-aibot", "wecom-archive", "wecom-customer", "wecom-kf"],
   );
 

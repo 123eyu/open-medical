@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { createHash } from 'node:crypto';
-import { check, string, AppError } from '../errors.mjs';
+import { check, string, AppError } from '../../../server/errors.mjs';
 const MAX_FILE = 4 * 1024 * 1024, MAX_TEXT = 128 * 1024;
 // Never extract archive entries to disk, execute attachments, or infer patient identity.
 function decode(bytes) {

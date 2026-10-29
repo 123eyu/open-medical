@@ -59,6 +59,17 @@ test("validateAdapter：正例补默认能力，反例拒绝非法契约", () =>
     () => validateAdapter(baseAdapter({ send: undefined })),
     /必须实现 send/,
   );
+  // A read-only adapter declares send:"none" and must not expose send().
+  const readOnly = baseAdapter({ capabilities: { receive: "none", send: "none" } });
+  delete readOnly.send;
+  assert.equal(validateAdapter(readOnly), readOnly);
+  assert.throws(
+    () =>
+      validateAdapter(
+        baseAdapter({ capabilities: { receive: "none", send: "none" } }),
+      ),
+    /不能实现 send/,
+  );
   assert.throws(
     () =>
       validateAdapter(
@@ -140,6 +151,21 @@ test("channel service.send：confirm 必须医生确认，manual 不自动发送
   assert.match(awaiting.error, /医生确认/);
   assert.equal(calls.length, 0, "未确认时不得调用适配器发送");
 
+  let readOnlyCalls = 0;
+  const readOnly = baseAdapter({
+    id: "wecom-archive",
+    label: "企微会话存档",
+    capabilities: { receive: "none", send: "none" },
+  });
+  delete readOnly.send;
+  service.register(readOnly);
+  // Simulate a stray implementation on the instance: the service must still
+  // reject the send before calling it.
+  readOnly.send = async () => {
+    readOnlyCalls += 1;
+    return { state: "sent" };
+  };
+
   const manual = await service.send("wechat-desktop", { id: "p1" }, "你好", {
     confirmed: true,
   });
@@ -157,6 +183,13 @@ test("channel service.send：confirm 必须医生确认，manual 不自动发送
   assert.equal(sent.externalId, "confirm-1");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].opts.requestId, "r1");
+
+  const rejected = await service.send("wecom-archive", { id: "p3" }, "只读", {
+    confirmed: true,
+  });
+  assert.equal(rejected.state, "failed");
+  assert.match(rejected.error, /只读渠道/);
+  assert.equal(readOnlyCalls, 0, "none 渠道不得调用适配器");
 
   const direct = await service.send("wecom-kf", { id: "p2" }, "直接发送");
   assert.equal(direct.state, "sent");

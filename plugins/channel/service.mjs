@@ -19,8 +19,9 @@ const errorText = (error) =>
 /**
  * Registry + unified send facade for channel adapters. The service never
  * creates a send on its own: `confirm` adapters require an explicit
- * `{ confirmed: true }` from a doctor-reviewed action, and `manual` adapters
- * only return an awaiting-member result.
+ * `{ confirmed: true }` from a doctor-reviewed action, `manual` adapters only
+ * return an awaiting-member result, and `none` adapters are read-only and
+ * never receive a send call.
  */
 export function createChannelService({ gateway } = {}) {
   check(gateway, "CHANNEL_SERVICE", "channel 服务需要消息网关实例");
@@ -84,6 +85,12 @@ export function createChannelService({ gateway } = {}) {
           retryable: false,
         });
       const mode = entry.capabilities.send;
+      if (mode === "none")
+        return Object.freeze({
+          state: "failed",
+          error: `渠道适配器 ${adapterId} 是只读渠道，不提供发送路径`,
+          retryable: false,
+        });
       if (mode === "manual")
         return Object.freeze({
           state: "awaiting_member",

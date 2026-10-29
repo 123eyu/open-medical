@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { check, AppError } from "../errors.mjs";
-import { collectorUrl } from "./archive-endpoint.mjs";
+import { check, AppError } from "../../../server/errors.mjs";
+import { collectorUrl } from "../../../server/chat-connectors/archive-endpoint.mjs";
 
 const LIMIT = 100;
 const protocol = (ok, message = "wx-cli 返回的数据格式不兼容") =>

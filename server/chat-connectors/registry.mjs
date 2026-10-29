@@ -1,11 +1,30 @@
-import { check, string } from "../errors.mjs";
-import { WxCliClient } from "./wx-cli.mjs";
+import { AppError, check, string } from "../errors.mjs";
+
+// wx-cli lives in channel-wechat after T7.2c. The registry receives a factory
+// through ChatFollowups instead of importing the plugin file directly.
+const missingWxCli = () => ({
+  status: async () => {
+    throw new AppError("WXCLI_UNAVAILABLE", "wx-cli 连接未启用", 503);
+  },
+  read: async () => {
+    throw new AppError("WXCLI_UNAVAILABLE", "wx-cli 连接未启用", 503);
+  },
+  conversations: async () => {
+    throw new AppError("WXCLI_UNAVAILABLE", "wx-cli 连接未启用", 503);
+  },
+});
 
 const ID = /^[a-z][a-z0-9-]{0,39}$/;
 export class ChatConnectorRegistry {
-  constructor({ wechat, archive, archiveClass = null, wxcli, plugins = [] } = {}) {
+  constructor({ wechat, archive, archiveClass = null, wxcli, createWxCli = null, plugins = [] } = {}) {
     this.entries = new Map();
     this.archiveClass = archiveClass;
+    this.createWxCli =
+      typeof createWxCli === "function"
+        ? createWxCli
+        : wxcli
+          ? () => wxcli
+          : missingWxCli;
     const archiveClient = () => archive || (archiveClass ? new archiveClass() : {});
     this.register({
       id: "wechat",
@@ -26,7 +45,7 @@ export class ChatConnectorRegistry {
       name: "微信 · wx-cli",
       protocol: "wx-cli",
       builtin: true,
-      client: wxcli || new WxCliClient(),
+      client: wxcli || this.createWxCli(),
       defaultEndpoint: "http://127.0.0.1:9100",
     });
     for (const plugin of plugins) this.register(plugin);
@@ -98,7 +117,7 @@ export class ChatConnectorRegistry {
       ...manifest,
       client:
         manifest.protocol === "wx-cli"
-          ? new WxCliClient()
+          ? this.createWxCli()
           : this.archiveClass
             ? new this.archiveClass()
             : {},

@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { readdirSync, readFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { check, AppError } from "./errors.mjs";
+import { check, AppError } from "../../../server/errors.mjs";
 
 const run = promisify(execFile);
 const RELEASE_API = "https://api.github.com/repos/sunhanaix/pc_wechat_exp/releases/latest";
@@ -38,6 +38,8 @@ export class WechatExpService {
     this.account = "";
     this.bridge = null;
     this.bridgeSignature = "";
+    this.active = false;
+    this.timer = null;
   }
   get exePath() { return join(this.home, "wechat_exp.exe"); }
   get backupDir() { return join(this.home, "backup"); }
@@ -91,6 +93,7 @@ export class WechatExpService {
   }
   // ---- ③ wx-cli 协议桥接(连接启用时自动随启停;仅监听 127.0.0.1) ----
   async reconcile(followups) {
+    if (!this.active) return;
     let enabled = false, secret = "", revision = 0, accountId = "";
     try {
       const row = followups.db.prepare("SELECT data FROM chat_connections WHERE channel=?").get("wechat-exp");
@@ -103,9 +106,9 @@ export class WechatExpService {
     const want = enabled && this.toolReady;
     const signature = want ? `${revision}:${secret}` : "";
     if (signature === this.bridgeSignature && (!want || Boolean(this.bridge) === want)) return;
-    this.stopBridge?.();
+    await this.stopBridge();
     this.bridgeSignature = signature;
-    if (!want) return;
+    if (!want || !this.active) return;
     this.account = accountId;
     const server = createServer((req, res) => {
       const url = new URL(req.url, "http://127.0.0.1");
@@ -121,12 +124,61 @@ export class WechatExpService {
         },
       );
     });
-    server.listen(this.port, "127.0.0.1");
-    server.on("error", e => this.log(`桥接端口错误:${e?.message || e}`));
-    this.bridge = server;
-    this.log(`wx-cli 协议桥接已启动: http://127.0.0.1:${this.port}/api/v1 (账号 ${this.account})`);
+    await new Promise(resolve => {
+      let settled = false;
+      const finish = (error) => {
+        if (settled) return;
+        settled = true;
+        server.off("listening", onListening);
+        server.off("error", onError);
+        if (error) {
+          this.lastError = clip(error?.message || error, 200);
+          this.log(`桥接端口错误:${error?.message || error}`);
+          this.bridge = null;
+          try { server.close(); } catch {}
+          return resolve();
+        }
+        server.on("error", e => {
+          this.lastError = clip(e?.message || e, 200);
+          this.log(`桥接端口错误:${e?.message || e}`);
+        });
+        this.bridge = server;
+        this.log(`wx-cli 协议桥接已启动: http://127.0.0.1:${this.port}/api/v1 (账号 ${this.account})`);
+        resolve();
+      };
+      const onListening = () => finish();
+      const onError = error => finish(error);
+      server.once("listening", onListening);
+      server.once("error", onError);
+      server.listen(this.port, "127.0.0.1");
+    });
   }
   get bridgeLive() { return Boolean(this.bridge); }
+  // The embedded wx-cli server used to leak because stopBridge was never set.
+  // Closing it is the only behaviour change in this migration.
+  async stopBridge() {
+    const server = this.bridge;
+    this.bridge = null;
+    if (!server) return;
+    await new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(finish, 2000);
+      timer.unref?.();
+      try {
+        server.close(finish);
+        server.closeAllConnections?.();
+      } catch {
+        finish();
+      }
+    });
+    this.log("wx-cli 协议桥接已关闭");
+  }
   async api(path, query) {
     check(Boolean(this.account), "WXCLI_IDENTITY", "桥接尚未配置账号", 409);
     if (path === "health") return { ready: true, current_account: { wxid: this.account }, worker_id: "wechat-exp-embedded" };
@@ -237,15 +289,17 @@ export class WechatExpService {
   }
   start(followups) {
     this.followups = followups;
+    this.active = true;
     if (this.timer) return;
     this.timer = setInterval(() => this.reconcile(followups).catch(() => {}), 10000);
     this.timer.unref?.();
     this.reconcile(followups).catch(() => {});
   }
-  stop() {
+  async stop() {
+    this.active = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    this.stopBridge?.();
+    await this.stopBridge();
   }
 }
 

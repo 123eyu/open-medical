@@ -1,4 +1,4 @@
-import { AppError } from './errors.mjs';
+import { AppError } from '../../../server/errors.mjs';
 
 // Compatibility shell for old callers. The former whole-window collector and
 // blind search/Return sender are deliberately absent, including direct calls.

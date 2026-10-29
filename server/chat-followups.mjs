@@ -1,4 +1,3 @@
-import { parseWechatExportBatch } from './chat-connectors/wechat-export.mjs';
 import { visibleDelta } from './chat-connectors/visible-delta.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { CredentialVault } from './core/oauth.mjs';
@@ -6,18 +5,37 @@ import { check, string, identifier, AppError } from './errors.mjs';
 import { sqliteTransaction } from './sqlite-transaction.mjs';
 import { collectorUrl } from './chat-connectors/archive-endpoint.mjs';
 import { ChatConnectorRegistry } from './chat-connectors/registry.mjs';
-import { WechatReader, validateRegion } from './chat-connectors/wechat-reader.mjs';
-import { flatName } from './chat-connectors/wechat-windows.mjs';
 
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const json = row => row ? JSON.parse(row.data) : null;
 const now = () => new Date().toISOString();
+const unavailable = () => { throw new AppError('WECHAT_UNAVAILABLE', '个人微信插件未启用', 503); };
+const missingReader = {
+  platform: process.platform,
+  status: async () => ({ ready: false, message: '个人微信插件未启用' }),
+  capture: unavailable, read: unavailable, send: unavailable, locate: unavailable,
+  title: unavailable, listNames: unavailable, scanConversationList: unavailable,
+  findAvatar: unavailable, findAvatarScanning: unavailable,
+};
+const fallbackValidateRegion = r => {
+  check(r && ['x','y','width','height'].every(k => Number.isFinite(r[k])) && r.x >= 0 && r.y >= 0 && r.width >= .02 && r.height >= .015 && r.x+r.width <= 1.000001 && r.y+r.height <= 1.000001, 'CHAT_REGION', '请在窗口预览上选择有效的标题和消息区域');
+  return { x:r.x,y:r.y,width:r.width,height:r.height };
+};
+const fallbackFlatName = text => String(text).toLowerCase().replace(/\s+/g, '');
+const fallbackParseExport = async () => { throw new AppError('CHAT_IMPORT_UNAVAILABLE', '微信导入插件未启用', 503); };
 export class ChatFollowups {
-  constructor({ store, patients, followups, directory, provider, wechat, archive, archiveClass, wxcli, aibot, plugins = [] }) {
+  constructor({ store, patients, followups, directory, provider, wechat, archive, archiveClass, wxcli, createWxCli, aibot, plugins = [], parseExport, delta, validateRegion, flatName }) {
     Object.assign(this, { store, db: store.db, patients, followups, provider });
     this.vault = new CredentialVault(this.db, directory);
-    this.wechat = wechat || new WechatReader(); this.archive = archive || null;
-    this.registry = new ChatConnectorRegistry({ wechat: this.wechat, archive: this.archive, archiveClass, wxcli, plugins });
+    // The reader/exporter/parser live in channel-wechat after T7.2c. The fixed
+    // shell receives them through the plugin service; the fallbacks keep the
+    // remaining fixed routes from crashing if that plugin is unavailable.
+    this.wechat = wechat || missingReader; this.archive = archive || null;
+    this.parseExport = parseExport || fallbackParseExport;
+    this.visibleDelta = delta || visibleDelta;
+    this.validateRegion = validateRegion || fallbackValidateRegion;
+    this.flatName = flatName || fallbackFlatName;
+    this.registry = new ChatConnectorRegistry({ wechat: this.wechat, archive: this.archive, archiveClass, wxcli, createWxCli, plugins });
     if (aibot) this.registry.register({ id: "wecom-aibot", name: "企业微信 · 智能机器人", protocol: "aibot-ws", builtin: true, client: aibot, defaultEndpoint: aibot.endpoint });
     this.aibot = aibot || null;
     this.pendingAI = new Map(); this.stopped = false; this.ticking = false; this.active = new Map(); this.probes = new Map(); this.imports = new Map(); this.previews = new Map(); this.timer = null;
@@ -170,7 +188,7 @@ export class ChatFollowups {
     const candidates = (snapshot.lines || []).filter(l => title && l.text.trim() === title && l.confidence >= .85 && l.box?.y < .2 && l.box?.x > .2);
     if (candidates.length === 1) {
       const b = candidates[0].box, x = Math.max(0,b.x-.008), y = Math.max(0,b.y-.006);
-      try { suggestedTitleRegion = validateRegion({x,y,width:Math.min(1-x,b.width+.016),height:Math.min(1-y,b.height+.012)}); } catch { /* Manual calibration remains available. */ }
+      try { suggestedTitleRegion = this.validateRegion({x,y,width:Math.min(1-x,b.width+.016),height:Math.min(1-y,b.height+.012)}); } catch { /* Manual calibration remains available. */ }
     }
     if (this.wechat.platform === 'win32' && typeof this.wechat.findAvatar === 'function') {
       // 视口左头像列被卡片/纯出向消息占满时,滚动重试再抓,避免这类画面被迫转手动框选。
@@ -197,7 +215,7 @@ export class ChatFollowups {
   }
   async previewImport(input) {
     check(input.consent===true,'CHAT_CONSENT','请确认在本机读取所选导出文件',412);
-    const parsed = await parseWechatExportBatch(input);
+    const parsed = await this.parseExport(input);
     for(const [id,p] of this.imports) if(p.expires<Date.now()) this.imports.delete(id);
     while(this.imports.size>=3) this.imports.delete(this.imports.keys().next().value);
     const id=randomUUID();
@@ -310,10 +328,10 @@ export class ChatFollowups {
           avatarConfirmed: input.confirmed === true,
         };
       } else {
-        const messageRegion = validateRegion(input.messageRegion);
+        const messageRegion = this.validateRegion(input.messageRegion);
         let titleRegion = null;
         if (input.titleRegion) {
-          titleRegion = validateRegion(input.titleRegion);
+          titleRegion = this.validateRegion(input.titleRegion);
           check(messageRegion.y >= titleRegion.y + titleRegion.height, 'CHAT_REGION', '消息区域必须在会话标题下方');
           const observed = await this.wechat.title(p, titleRegion);
           check(observed === title, 'CHAT_IDENTITY', '选择区域识别的会话名称与填写不一致，请调整标题区域', 409);
@@ -453,7 +471,7 @@ export class ChatFollowups {
         check(result && typeof result.text === 'string' && result.text.trim() && result.text.length <= 20000, 'CHAT_CAPTURE', '未读到可用的聊天内容', 422);
         this.assertCurrent(c,signal); this.binding(b.id);
         const previous = json(this.db.prepare('SELECT data FROM chat_messages WHERE channel=? AND account=? AND conversation=? ORDER BY rowid DESC LIMIT 1').get(c.channel,this.account(c),b.conversationId));
-        const delta = visibleDelta(previous?.frameText || previous?.text,result.text);
+        const delta = this.visibleDelta(previous?.frameText || previous?.text,result.text);
         const source = { id: hash([b.conversationId,result.fingerprint]), conversationId: b.conversationId, senderId: '', direction: 'unknown', type: 'visible-window', text: delta.text, frameText: result.text, gap: delta.gap, sentAt: null, observedAt: now(), evidence: result.evidence, partial: true, title: b.title };
         if (delta.text) ({ added, drafts } = this.ingest(c,[source]));
         // 入库钩子:自动随访用它把「已发送待回复」的随访标记为已回复并做红旗筛查。
@@ -622,10 +640,10 @@ export class ChatFollowups {
     const { rows } = await this.wechat.scanConversationList(signal);
     const bindings = this.db.prepare("SELECT data FROM chat_bindings WHERE channel='wechat' AND account=?").all(this.account(c)).map(json)
       .filter(b => !b.disabled && b.mode !== 'import' && b.calibration);
-    const byName = new Map(bindings.map(b => [flatName(b.title), b]));
+    const byName = new Map(bindings.map(b => [this.flatName(b.title), b]));
     const changed = [];
     for (const row of rows) {
-      const b = byName.get(flatName(row.name));
+      const b = byName.get(this.flatName(row.name));
       if (!b || this.watchState.get(b.id) === row.fingerprint) continue;
       const fail = this.watchFails.get(b.id);
       if (fail && fail.fingerprint === row.fingerprint && fail.count >= 3) continue;

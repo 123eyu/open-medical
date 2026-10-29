@@ -6,7 +6,6 @@ import { PersonalRegression } from './medical/personal-regression.mjs';
 import { PersonalContext, learningPrefs, saveLearningPrefs } from "./medical/personal-context.mjs";
 import { ChatFollowups } from "./chat-followups.mjs";
 import { WecomAibotChannel, chatAibotApi } from "./chat-aibot.mjs";
-import { WechatExpService, wechatExpApi } from "./wechat-exp.mjs";
 import { chatFollowupsApi } from "./chat-followups-api.mjs";
 import { WechatAutoFollow } from "./chat-autofollow.mjs";
 import { chatAutoFollowApi } from "./chat-autofollow-api.mjs";
@@ -51,7 +50,6 @@ import { careTools } from "./care/tools.mjs";
 import { trialTools } from "./medical/trial-tools.mjs";
 import { scheduleTools } from "./medical/schedule-tools.mjs";
 import { careApi } from "./care/api.mjs";
-import { WeChatMacBridge } from "./wechat-bridge.mjs";
 import { DoctorProfile } from "./medical/doctor-profile.mjs";
 import { LiteratureService, literatureTools } from "./medical/literature.mjs";
 import { createKnowledgeQueryExpander } from "./medical/knowledge-query.mjs";
@@ -780,6 +778,25 @@ export function createServer(options = {}) {
     proxyResolver: options.skillProxyResolver,
   });
   sessionBridge.evolution = extensions;
+  // channel-wechat owns the WeChat desktop reader, wx-cli client, exporter and
+  // retired bridge. The fixed shell constructs the legacy ChatFollowups
+  // pipeline from this service rather than importing plugin files.
+  let chatFollowups = null;
+  const wechatBridgeOptions = {
+    patients,
+    enabled: ["1", "on", "true"].includes(
+      String(
+        options.wechatBridge ?? process.env.MEDICAL_WECHAT_BRIDGE ?? "",
+      ).toLowerCase(),
+    ),
+    processNames: String(process.env.MEDICAL_WECHAT_PROCESS || "微信,WeChat")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    // 测试缝:允许 fixture 注入 darwin 以覆盖桥接逻辑;默认真实平台。
+    platform: options.wechatBridgePlatform ?? process.platform,
+  };
+  const channelWechatOptions = options.channelWechat || {};
   // 固定区服务已全部就绪：迁移后依次执行插件 setup。插件只能通过 ctx.services
   // 调用这些对象，不直接改写固定区实现。
   Object.assign(pluginServices, {
@@ -824,6 +841,25 @@ export function createServer(options = {}) {
       // processing (and therefore automatic reply handling) was enabled.
       shouldRefreshAwaiting: () => care.settings().processing.enabled,
     },
+    channelWechatHost: {
+      dataDir: vaultDir,
+      vault: models.vault,
+      getChat: () => chatFollowups,
+      reader: channelWechatOptions.reader,
+      exp: options.wechatExp || channelWechatOptions.exp,
+      bridge: channelWechatOptions.bridge,
+      wxcli: channelWechatOptions.wxcli,
+      createReader: channelWechatOptions.createReader,
+      createExp: channelWechatOptions.createExp,
+      fetch: channelWechatOptions.fetch,
+      now: channelWechatOptions.now,
+      log: (message) => console.error(`[wechat-exp] ${message}`),
+      options: {
+        ...channelWechatOptions,
+        bridge: wechatBridgeOptions,
+        expPort: options.wechatExp?.port,
+      },
+    },
   });
   pluginHost.migrate();
   pluginHost.setup();
@@ -833,20 +869,8 @@ export function createServer(options = {}) {
     .find((plugin) => plugin.id === "channel-wecom");
   if (wecomService && wecomStatus?.enabled && wecomStatus?.available)
     attachWecom(wecomService);
-  const wechat = new WeChatMacBridge({
-    patients,
-    enabled: ["1", "on", "true"].includes(
-      String(
-        options.wechatBridge ?? process.env.MEDICAL_WECHAT_BRIDGE ?? "",
-      ).toLowerCase(),
-    ),
-    processNames: String(process.env.MEDICAL_WECHAT_PROCESS || "微信,WeChat")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
-    // 测试缝:允许 fixture 注入 darwin 以覆盖桥接逻辑;默认真实平台。
-    platform: options.wechatBridgePlatform ?? process.platform,
-  });
+  const wechatService = pluginHost.pluginServices["channel-wechat"] || null;
+  const wechat = wechatService?.bridge || null;
   // 企微智能机器人通道:先建实例再交给 ChatFollowups 注册,start 后按配置自动拉起长连接。
   // skills 注入群聊自动回复的起草提示词(医生按群勾选技能)。
   const wecomAibot = options.chatAibot || new WecomAibotChannel({
@@ -861,7 +885,7 @@ export function createServer(options = {}) {
     patientBrief,
     skills,
   });
-  const chatFollowups = new ChatFollowups({
+  chatFollowups = new ChatFollowups({
     store,
     patients,
     followups,
@@ -870,15 +894,20 @@ export function createServer(options = {}) {
     aibot: wecomAibot,
     archive: wecomService?.archive || null,
     archiveClass: wecomService?.WecomArchiveClient || null,
+    wechat: wechatService?.reader,
+    wxcli: wechatService?.wxcli,
+    createWxCli: wechatService ? () => new wechatService.WxCliClient() : null,
+    parseExport: wechatService?.parseWechatExportBatch,
+    validateRegion: wechatService?.validateRegion,
+    flatName: wechatService?.flatName,
     ...options.chatFollowups,
   });
   wecomAibot.attach(chatFollowups);
   // The socket implementation moved into channel-wecom; lifecycle.start/stop
   // still owns when the aibot connection is installed and torn down.
   wecomService?.attachAibot(wecomAibot);
-  // 微信历史导入:向导式组件下载/备份 + 内置 wx-cli 协议桥接(仅 127.0.0.1)。
-  const wechatExp = options.wechatExp || new WechatExpService({ dataDir: vaultDir, log: (message) => console.error(`[wechat-exp] ${message}`) });
-  wechatExp.start(chatFollowups);
+  // The embedded exporter/wx-cli bridge starts and stops with the
+  // channel-wechat plugin lifecycle, not here.
   // 随访问卷:到期随提醒生成,医生经已验证渠道下发,患者按题号回复由确定性解析回收。
   const surveys = new FollowUpSurveys(store, followups, {
     provider: () => providerConfigured(workspaces.provider) ? workspaces.provider : null,
@@ -1681,13 +1710,8 @@ export function createServer(options = {}) {
       }
       if (path.startsWith("/api/care/") && await track(careApi(care, req, url, { body: () => body(req), send: (status, value) => send(res, status, value), pending }))) return;
       if (path.startsWith("/api/chat-aibot/") && await track(chatAibotApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path.startsWith("/api/wechat-exp/") && await track(wechatExpApi(wechatExp, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       if (path.startsWith("/api/chat-followups/") && await track(chatFollowupsApi(chatFollowups, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       if (path.startsWith("/api/chat-autofollow/") && await track(chatAutoFollowApi(chatAutoFollow, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
-      if (path === "/api/wechat/status" && req.method === "GET")
-        return send(res, 200, { enabled: false, available: false, retired: true, reason: "请使用随访 → 聊天随访中的会话核验与读取" });
-      if (["/api/wechat/read", "/api/wechat/send"].includes(path) && req.method === "POST")
-        throw new AppError("WECHAT_LEGACY_RETIRED", "旧微信桥接已停用。请在随访 → 聊天随访中核验并关联会话；发送请在微信中完成。", 410);
       const feishuBindings = [
         ["/api/knowledge-bot/feishu-binding", knowledgeBot.bindingOrNull()],
         ["/api/doctor-notifications/feishu-binding", doctorNotifications.bindingOrNull()],
@@ -2767,6 +2791,7 @@ export function createServer(options = {}) {
     get: () => wecom,
   });
   server.channelWecom = wecomService;
+  server.channelWechat = wechatService;
   server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
@@ -2811,7 +2836,6 @@ export function createServer(options = {}) {
     await pluginHost.stopAll();
     await pluginHost.drainAll();
     await chatFollowups.stop();
-    wechatExp.stop();
     care.stop();
     extensions.stop();
     if (databasePath === ":memory:" && !options.userSkillsDir) rmSync(userSkillsDir, { recursive: true, force: true });

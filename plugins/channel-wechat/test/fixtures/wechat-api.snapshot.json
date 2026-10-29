@@ -1,0 +1,39 @@
+{
+  "/api/wechat/status": {
+    "status": 200,
+    "body": {
+      "enabled": false,
+      "available": false,
+      "retired": true,
+      "reason": "请使用随访 → 聊天随访中的会话核验与读取"
+    }
+  },
+  "/api/wechat-exp/status": {
+    "status": 200,
+    "body": {
+      "warning": "⚠️ 该组件需要从微信进程内存提取数据库密钥，此行为可能被微信感知上报，存在账号被平台处罚的先例（一次性备份风险较低但不为零）。请仅用你自己拥有的账号与数据，知情后启用。",
+      "toolReady": false,
+      "toolPath": "<dataDir>/wechat-exp/wechat_exp.exe",
+      "backupReady": false,
+      "account": "",
+      "bridgeRunning": false,
+      "job": null,
+      "lastError": "",
+      "lastBackupAt": null
+    }
+  },
+  "POST /api/wechat/read": {
+    "status": 410,
+    "body": {
+      "error": "旧微信桥接已停用。请在随访 → 聊天随访中核验并关联会话；发送请在微信中完成。",
+      "code": "WECHAT_LEGACY_RETIRED"
+    }
+  },
+  "POST /api/wechat/send": {
+    "status": 410,
+    "body": {
+      "error": "旧微信桥接已停用。请在随访 → 聊天随访中核验并关联会话；发送请在微信中完成。",
+      "code": "WECHAT_LEGACY_RETIRED"
+    }
+  }
+}

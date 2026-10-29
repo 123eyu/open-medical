@@ -10,7 +10,8 @@ export const CHANNEL_API_VERSION = 1;
  *
  * @typedef {Object} ChannelCapabilities
  * @property {"push"|"poll"|"none"} receive       incoming messages arrive by callback, polling, or not at all
- * @property {"direct"|"confirm"|"manual"} send   direct send / doctor-confirmed send / draft-only manual task
+ * @property {"direct"|"confirm"|"manual"|"none"} send
+ *   direct send / doctor-confirmed send / draft-only manual task / read-only channel with no send path
  * @property {boolean} history                    can read historical messages
  * @property {boolean} groups                     supports group conversations
  * @property {boolean} contacts                   can enumerate contacts
@@ -19,7 +20,12 @@ export const CHANNEL_API_VERSION = 1;
  */
 
 export const CHANNEL_RECEIVE_MODES = Object.freeze(["push", "poll", "none"]);
-export const CHANNEL_SEND_MODES = Object.freeze(["direct", "confirm", "manual"]);
+export const CHANNEL_SEND_MODES = Object.freeze([
+  "direct",
+  "confirm",
+  "manual",
+  "none",
+]);
 export const CHANNEL_SEND_STATES = Object.freeze([
   "sent",
   "queued",
@@ -76,6 +82,7 @@ export function normalizeCapabilities(input = {}) {
  *
  * Required: id, label, capabilities, status(), start(), stop().
  * Required by capability: send() for direct/confirm, onMessage() for push.
+ * A `none` channel is read-only: it must not expose a send path at all.
  * Optional: configure/connect/disconnect/listConversations/listContacts/
  *           bind/unbind/health.
  *
@@ -102,7 +109,13 @@ export function validateAdapter(adapter) {
       `渠道适配器 ${adapter.id} 缺少 ${method}()`,
     );
   }
-  if (capabilities.send !== "manual")
+  if (capabilities.send === "none")
+    check(
+      adapter.send === undefined,
+      "CHANNEL_ADAPTER_INVALID",
+      `渠道适配器 ${adapter.id} 的 send 能力为 none，不能实现 send()`,
+    );
+  if (capabilities.send === "direct" || capabilities.send === "confirm")
     check(
       typeof adapter.send === "function",
       "CHANNEL_ADAPTER_INVALID",
