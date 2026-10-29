@@ -1,6 +1,5 @@
 import { RememberedNotice } from './learning-loop';
-import { SimilarCases } from "./similar-cases";
-import { ResultCard } from "./plugin-slots";
+import { ResultCard, useSlot } from "./plugin-slots";
 import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -185,6 +184,7 @@ function ArtifactReview({ artifact, onReview }) {
 }
 export function AcceptanceView({ artifact, previous, onSource, onClose, onReview }) {
   const [view, setView] = useState(previous ? "diff" : "preview");
+  const resultCards = useSlot("chat.resultCards");
   if (!artifact) return null;
   const cur = artifactToLines(artifact);
   const prev = previous ? artifactToLines(previous) : null;
@@ -196,11 +196,17 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
     ...(artifact.missing || []).map((m) => ({ ok: false, text: m })),
     ...(artifact.limitations || []).map((m) => ({ ok: true, warn: true, text: m })),
   ];
-  if (artifact.type === "similar_cases") return (
-    <div className="acceptance case-reader" role="dialog" aria-label="查看相似病例">
-      <div className="accept-bar"><button className="text-button" onClick={onClose}>‹ 返回对话</button><h3>查看相似病例</h3></div>
+  // A plugin result card may own the whole reading surface. This stays generic:
+  // any artifact type with a registered card uses the reader shell, and the
+  // shell falls back to the ordinary artifact view when no card is registered.
+  const resultCard = resultCards.find((item) => item.type === artifact.type);
+  if (resultCard) return (
+    <div className="acceptance case-reader" role="dialog" aria-label={resultCard.label || "查看结果"}>
+      <div className="accept-bar"><button className="text-button" onClick={onClose}>‹ 返回对话</button><h3>{resultCard.label || artifact.title || "查看结果"}</h3></div>
       <div className="case-reader-body">
-        <ResultCard artifact={artifact} fallback={<SimilarCases key={artifact.id} artifact={artifact}/>} />
+        <ResultCard artifact={artifact} fallback={artifactToLines(artifact, { preview: true }).map((line, index) => (
+          <p key={index} className={line.startsWith("【") || line.startsWith("—") ? "acc-head" : ""}>{line}</p>
+        ))} />
         <ArtifactReview key={artifact.id + "-review"} artifact={artifact} onReview={onReview} />
 
       </div>
@@ -224,7 +230,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
         <div className="accept-main">
           {view === "preview" && (
             <div className="acc-doc">
-              <ResultCard artifact={artifact} fallback={artifact.type === "similar_cases" ? <SimilarCases key={artifact.id} artifact={artifact} /> : artifactToLines(artifact, { preview: true }).map((l, i) => (
+              <ResultCard artifact={artifact} fallback={artifactToLines(artifact, { preview: true }).map((l, i) => (
                 <p key={i} className={l.startsWith("【") || l.startsWith("—") ? "acc-head" : ""}>{l}</p>
               ))} />
             </div>
@@ -265,7 +271,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
                   <span>{m.quote}</span>
                   {/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/.test(m.url || "") ?
                     <a className="source-link" href={m.url} target="_blank" rel="noreferrer">{m.sourceName} · PubMed</a> :
-                    artifact.type === "similar_cases" ? <span>{m.sourceName} · 本地记录</span> :
+                    m.evidence?.type === "local-record" ? <span>{m.sourceName} · 本地记录</span> :
                     <button className="source-link" onClick={() => onSource(m)}>{m.sourceName}{m.line ? ` · L${m.line}` : ""}</button>}
                   {m.scope && <small>{m.scope}</small>}
                   {m.evidence?.text && <details><summary>查看检索时保存的{m.evidence.type === "abstract" ? "摘要" : "记录"}</summary><p>{m.evidence.text}</p></details>}
@@ -563,7 +569,7 @@ export function GoalCard({ message = "", running, runStatus, artifacts = [], onS
       });
       if (hit) {
         const sourceCount = (hit.events || []).length + (hit.matches || []).length;
-        if (hit.type === "similar_cases") {
+        if (hit.cases || hit.searches) {
           row.done = true;
           const cases = hit.cases || [];
           const metadata = cases.filter(c => c.evidence?.type === "metadata" || /仅题录/.test(c.scope)).length;

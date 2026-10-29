@@ -8,7 +8,6 @@ import { DueNotifyWatcher } from "./due-notify";
 import { conversationRunIds } from "../shared/patient-conversations.mjs";
 import { PatientQuestionHistory } from "./patient-question-history";
 import { TaskResult, hasTaskResult } from "./task-result";
-import { SimilarCases } from "./similar-cases";
 import { ProjectDirectory, ToolDirectory, TaskDirectory } from "./work-directory";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import { IntakeBackground } from "./intake-background";
@@ -82,7 +81,7 @@ import { TrialScreeningView } from "./trial-screening";
 import { DrgView } from "./drg";
 import { ClinicalRefView } from "./clinical-ref";
 import { IconButton, Badge, Modal, STATUS } from "./components";
-import { registerUiPlugins } from "./plugin-slots";
+import { ResultCard, registerUiPlugins, usePluginEnabled, useSlot } from "./plugin-slots";
 import { loadUiPluginModules } from "./plugin-registry";
 import { modelBoundary } from "../shared/model-boundary.mjs";
 import { ModelSettings } from "./model-settings";
@@ -176,6 +175,8 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const resultCards = useSlot("chat.resultCards");
+  const customCard = Boolean(artifact && resultCards.some((item) => item.type === artifact.type));
   useEffect(() => {
     setEditing(false);
     setError("");
@@ -284,12 +285,12 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           <p className="muted">尚未检索或评估外部文献。</p>
         </>
       )}
-      {artifact.type !== "similar_cases" && artifact.matches?.map((match, i) => (
+      {!customCard && artifact.matches?.map((match, i) => (
         <blockquote key={i}>
           <p>{match.quote}</p>
           {/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/.test(match.url || "") ?
             <a className="source-link" href={match.url} target="_blank" rel="noreferrer">{match.sourceName} · PubMed</a> :
-            artifact.type === "similar_cases" ? <span>{match.sourceName} · 本地记录</span> :
+            match.evidence?.type === "local-record" ? <span>{match.sourceName} · 本地记录</span> :
             <button className="source-link" onClick={() => onSource({...match, snapshot: artifact.evidenceSources?.find(source => source.id === match.sourceId)})}>{match.sourceName}{match.line ? ` · L${match.line}` : ""}</button>}
           {match.scope && <small>{match.scope}</small>}
           {match.evidence?.text && <details><summary>查看检索时保存的{match.evidence.type === "abstract" ? "摘要" : "记录"}</summary><p>{match.evidence.text}</p></details>}
@@ -313,7 +314,7 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           <span>未进行临床解释</span>
         </div>
       ))}
-      {artifact.type === "similar_cases" && <SimilarCases key={artifact.id} artifact={artifact} variant="teaser" onOpen={onOpen} />}
+      {customCard && <ResultCard key={artifact.id} artifact={artifact} variant="teaser" onOpen={onOpen} />}
       {(artifact.concerns || (!artifact.events &&
         !artifact.pico &&
         !artifact.matches &&
@@ -344,12 +345,12 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
           ))}
         </ul>
       )}
-      {artifact.type !== "similar_cases" && artifact.limitations?.map((x) => (
+      {!customCard && artifact.limitations?.map((x) => (
         <p className="boundary" key={x}>
           {x}
         </p>
       ))}
-      {artifact.type !== "similar_cases" && artifact.review && (
+      {!customCard && artifact.review && (
         <div className="review-note">
           <b>复核记录 · {artifact.review.reviewer}</b>
           <p>{artifact.review.note}</p>
@@ -487,6 +488,9 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
 }
 function App() {
   const initialLocation = useRef(readLocation()).current;
+  const resultCards = useSlot("chat.resultCards");
+  const similarCasesEnabled = usePluginEnabled("similar-cases");
+  const cardForArtifact = (artifact) => resultCards.find((item) => item.type === artifact?.type) || null;
   const [config, setConfig] = useState(null),
     [sessions, setSessions] = useState([]),
     [session, setSession] = useState(null),
@@ -675,7 +679,7 @@ function App() {
     setNotice("");
     setTimeout(() => inputRef.current?.focus(), 0);
   };
-  const completedCaseRun = (r) => r?.status === "completed" && (!r.outcome || r.outcome === "delivered") && r.artifacts?.some(a => a.type === "similar_cases");
+  const completedCaseRun = (r) => r?.status === "completed" && (!r.outcome || r.outcome === "delivered") && r.artifacts?.some(a => cardForArtifact(a) && a.cases);
   const messageMeta = (m) => {
     if (m.role === "user") return "本轮输入";
     const outcome = m.outcome || runOf(m.runId)?.outcome;
@@ -1935,7 +1939,7 @@ function App() {
                             {m.role === "user" ? (
                               m.content
                             ) : (
-                              runOf(m.runId)?.artifacts?.some(a => a.type === "similar_cases") ? <><SimilarCases key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => a.type === "similar_cases").id)} artifact={runOf(m.runId).artifacts.find(a => a.type === "similar_cases")} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
+                              runOf(m.runId)?.artifacts?.find(a => cardForArtifact(a)) ? <><ResultCard key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => cardForArtifact(a)).id)} artifact={runOf(m.runId).artifacts.find(a => cardForArtifact(a))} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
                             )}
                           </div>
                           {m.role !== "user" && ["delivery_failed","unverified"].includes(m.outcome || runOf(m.runId)?.outcome) &&
@@ -1978,7 +1982,7 @@ function App() {
                             }
                           />
                           {(activeRun?.partial || persistedRunning?.partial) && (
-                            ["patient-assessment", "similar-case-search"].includes(persistedRunning?.policy?.workflow) ? (
+                            (persistedRunning?.policy?.workflow === "patient-assessment" || (similarCasesEnabled && persistedRunning?.policy?.workflow === "similar-case-search")) ? (
                               <details className="message-content streaming execution-notes">
                                 <summary>查看执行过程（非最终结论）</summary>
                                 <RichMessage text={activeRun?.partial || persistedRunning?.partial} />
@@ -1991,7 +1995,7 @@ function App() {
                     {!busy && (!session?.patientId || questionRunId) &&
                       (session?.artifacts.length || 0) > 0 &&
                       session.artifacts
-                        .filter(a => !(a.type === "treatment_review" && session.messages.some(m=>m.role==="assistant" && m.runId===(session.patientId ? questionRun : session.runs.at(-1))?.id)) && (session.patientId ? questionRun : session.runs.at(-1))?.artifacts?.some(current => current.id === a.id) && !(a.type === "similar_cases" && session.messages.some(m => m.role === "assistant" && m.runId === (session.patientId ? questionRun : session.runs.at(-1))?.id)))
+                        .filter(a => !(a.type === "treatment_review" && session.messages.some(m=>m.role==="assistant" && m.runId===(session.patientId ? questionRun : session.runs.at(-1))?.id)) && (session.patientId ? questionRun : session.runs.at(-1))?.artifacts?.some(current => current.id === a.id) && !(cardForArtifact(a) && session.messages.some(m => m.role === "assistant" && m.runId === (session.patientId ? questionRun : session.runs.at(-1))?.id)))
                         .slice(-3)
                         .reverse()
                         .map((a) => (
@@ -2012,7 +2016,7 @@ function App() {
                                   setAcceptId(a.id);
                                 }}
                               >
-                                {a.type === "similar_cases" ? "查看病例详情" : "查看结果"}
+                                {cardForArtifact(a) ? "查看病例详情" : "查看结果"}
                               </button>
                             </div>
                           </div>

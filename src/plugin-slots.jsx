@@ -91,15 +91,29 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
       if (!value || typeof value !== "object" || Array.isArray(value))
         throw new Error(`插件 ${id} 的插槽 ${name} 必须是 { 类型: 加载函数 }`);
       const keyed = {};
-      for (const [type, loader] of Object.entries(value)) {
+      for (const [type, contribution] of Object.entries(value)) {
         if (typeof type !== "string" || !type.trim())
           throw new Error(`插件 ${id} 的插槽 ${name} 缺少类型`);
+        const loader =
+          typeof contribution === "function"
+            ? contribution
+            : contribution?.component;
         if (typeof loader !== "function")
           throw new Error(`插件 ${id} 的插槽 ${name}.${type} 必须是加载函数`);
+        if (
+          typeof contribution !== "function" &&
+          contribution.label !== undefined &&
+          typeof contribution.label !== "string"
+        )
+          throw new Error(`插件 ${id} 的插槽 ${name}.${type} 的 label 必须是字符串`);
         keyed[type] = Object.freeze({
           pluginId: id,
           type,
-          order: 100,
+          order: Number.isFinite(contribution?.order)
+            ? contribution.order
+            : 100,
+          label:
+            typeof contribution === "function" ? undefined : contribution.label,
           component: lazy(loader),
         });
       }
@@ -180,6 +194,14 @@ export function registerUiPlugins(modules = {}, enabled = []) {
 export function useSlot(name) {
   useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return slotsByName.get(name) || EMPTY;
+}
+
+// Fixed-shell entry points use this to show or hide affordances that start a
+// plugin workflow. Disabled plugins are absent from enabledIds immediately
+// after registration, without a page reload.
+export function usePluginEnabled(id) {
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return enabledIds.has(id);
 }
 
 // Exported so the server-render regression test can exercise the fallback

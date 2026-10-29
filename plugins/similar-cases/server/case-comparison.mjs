@@ -1,5 +1,5 @@
-import {CASE_DIMENSIONS} from '../../shared/case-comparison.mjs';
-import {medicalExcerpt} from '../../shared/medical-excerpt.mjs';
+import {CASE_DIMENSIONS} from '../../../shared/case-comparison.mjs';
+import {medicalExcerpt} from '../../../shared/medical-excerpt.mjs';
 const normalized=value=>medicalExcerpt(value).replace(/\s+/gu,' ').trim();
 export function evidenceText(value) {
   const parts=[JSON.stringify(value)];

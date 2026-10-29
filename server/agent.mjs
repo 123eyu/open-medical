@@ -619,6 +619,7 @@ export function createServer(options = {}) {
     patientRecord: id => patients.row(id),
     skills,
     doctor,
+    pluginHost,
     plugins: [
       ...knowledgeToolPlugins,
       ...localPlugins(researchToolPlugins(research)),

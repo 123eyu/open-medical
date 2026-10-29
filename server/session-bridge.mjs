@@ -2,7 +2,6 @@ import { ReviewLog } from "./medical/review-log.mjs";
 import {taskPresentation} from '../shared/task-presentation.mjs';
 import {requestsMedicalDeliverable} from '../shared/medical-delivery.mjs';
 import { collectWorkspaceDelivery } from "./core/workspace-delivery.mjs";
-import {similarCaseQuestion, similarCaseSearchScope} from './medical/similar-case-workflow.mjs';
 import { assessmentQuestion } from "./medical/assessment-tools.mjs";
 import { assessmentPatientSource } from "./medical/assessment-source.mjs";
 // Session Bridge：把「统一内核工作区（kind:"session"）」投影成首页医疗
@@ -62,7 +61,7 @@ const resolveMode = (mode) => {
 export class SessionBridge {
   // store：旧医疗会话存储；runtime：旧医疗引擎；service：统一内核；
   // sessionsRoot：会话工作区自动目录的父目录（数据库目录下）。
-  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
+  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
     Object.assign(this, {
       store,
       runtime,
@@ -71,6 +70,7 @@ export class SessionBridge {
       patientRecord,
       skills,
       doctor,
+      pluginHost,
       plugins: new Map(plugins.map((p) => [p.definition.function.name, p])),
       contextBudget,
       maxRounds,
@@ -607,7 +607,7 @@ export class SessionBridge {
       // receipts. Preserve audit records and never clear genuine delivery gaps.
       let delivery = run.delivery, outcome = run.outcome;
       if (run.status === "completed" && outcome === "delivery_failed" &&
-          ["patient-assessment", "similar-case-search"].includes(run.policy?.workflow) &&
+          (run.policy?.workflow === "patient-assessment" || this.pluginHost?.workflow(run.policy?.workflow)) &&
           run.completion?.kind === "answer" && run.artifacts?.length &&
           delivery?.gaps?.length === 1 && delivery.gaps[0].reason === "no_verifiable_output") {
         try {
@@ -870,9 +870,11 @@ export class SessionBridge {
     );
     // 患者页一键入口可显式指定评估工作流，不再依赖草稿文本命中正则。
     const assessment = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && (body.workflow === "patient-assessment" || assessmentQuestion(message)));
-    const similarCases = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && similarCaseQuestion(message));
+    const detectedWorkflow = w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) ? this.pluginHost?.matchWorkflow?.(message, policy) : null;
+    check(!detectedWorkflow || detectedWorkflow.enabled, "PLUGIN_UNAVAILABLE", `任务所属插件未启用：${detectedWorkflow?.pluginId || ""}`, 409);
+    const similarCases = Boolean(detectedWorkflow);
     if (assessment) policy.workflow = "patient-assessment";
-    if (similarCases) { policy.workflow = "similar-case-search"; policy.intent = "similar_cases"; policy.searchScope = similarCaseSearchScope(message); }
+    if (detectedWorkflow) detectedWorkflow.workflow.applyPolicy(policy, message);
     policy.presentation = policy.workflow === "literature-research" ? "literature" : taskPresentation(message);
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
     const fileIds = this.selectMaterials(w, body.fileIds, body.contextMode);
@@ -891,7 +893,7 @@ export class SessionBridge {
       policy,
       collectArtifacts: true,
       skipArtifact: (output) =>
-        (similarCases ? output.type !== "similar_cases" : assessment ? output.type !== "treatment_review" : policy.intent === "consultation" && output.type === "source_search"),
+        (similarCases ? output.type !== detectedWorkflow.workflow.artifactType : assessment ? output.type !== "treatment_review" : policy.intent === "consultation" && output.type === "source_search"),
       fileIds,
       sourceHashes: sources.map((s) => s.hash),
       sources,

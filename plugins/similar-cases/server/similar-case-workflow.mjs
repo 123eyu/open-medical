@@ -1,7 +1,7 @@
 import { comparisonSchema, verifyComparison, comparisonIssues, groundedCaseFindings, quoteInEvidence, evidenceText } from './case-comparison.mjs';
 import {randomUUID} from 'node:crypto';
-import {check} from '../errors.mjs';
-import {CASE_DIMENSIONS} from '../../shared/case-comparison.mjs';
+import {check} from '../../../server/errors.mjs';
+import {CASE_DIMENSIONS} from '../../../shared/case-comparison.mjs';
 
 function searchOverview(items, {localResult, localSearched, receipts, localOnly}) {
   const local = items.filter(item => item.evidence.type === 'local-record').length;

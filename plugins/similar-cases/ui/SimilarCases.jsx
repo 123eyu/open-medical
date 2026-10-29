@@ -1,10 +1,10 @@
-import {medicalExcerpt} from '../shared/medical-excerpt.mjs';
-import {caseForDisplay} from '../shared/case-profile.mjs';
+import {medicalExcerpt} from '../../../shared/medical-excerpt.mjs';
+import {caseForDisplay} from '../../../shared/case-profile.mjs';
 import {useState,useRef,useLayoutEffect} from 'react';
 import {ArrowLeft, ArrowUpRight, ChevronRight, Search} from 'lucide-react';
-import {CASE_DIMENSIONS, RELATION_LABELS, comparisonScore} from '../shared/case-comparison.mjs';
+import {CASE_DIMENSIONS, RELATION_LABELS, comparisonScore} from '../../../shared/case-comparison.mjs';
 import './similar-cases.css';
-import {CuratedCaseSources} from './curated-case-sources';
+import {CuratedCaseSources} from '../../../src/plugin-kit/index.js';
 
 const sourceOf=item=>item.sourceKind || (item.evidence?.type==='local-record'?'local':'online');
 function caseTitle(item,index) {

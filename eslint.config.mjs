@@ -35,7 +35,7 @@ export default [
     },
   },
   {
-    files: ["src/**/*.jsx"],
+    files: ["src/**/*.jsx", "plugins/**/*.jsx"],
     plugins: { react, "react-hooks": hooks },
     settings: { react: { version: "detect" } },
     rules: {

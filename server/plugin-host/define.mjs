@@ -27,6 +27,7 @@ export function definePlugin(spec = {}) {
     skills,
     proposals = {},
     agendaSources = [],
+    workflows = {},
     api,
     events = {},
   } = spec;
@@ -175,6 +176,36 @@ export function definePlugin(spec = {}) {
     });
   });
 
+  check(isObject(workflows), "PLUGIN_SPEC", `插件 ${id} 的 workflows 必须是对象`);
+  const normalizedWorkflows = {};
+  for (const [workflowId, hooks] of Object.entries(workflows)) {
+    check(
+      PLUGIN_ID.test(workflowId),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的工作流 id ${workflowId} 无效`,
+    );
+    check(
+      isObject(hooks),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的工作流 ${workflowId} 必须是对象`,
+    );
+    check(
+      hooks.artifactType === undefined ||
+        (typeof hooks.artifactType === "string" && hooks.artifactType.trim()),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的工作流 ${workflowId} 的 artifactType 必须是非空字符串`,
+    );
+    for (const [name, hook] of Object.entries(hooks)) {
+      if (name === "artifactType") continue;
+      check(
+        typeof hook === "function",
+        "PLUGIN_SPEC",
+        `插件 ${id} 的工作流 ${workflowId} 的 ${name} 必须是函数`,
+      );
+    }
+    normalizedWorkflows[workflowId] = Object.freeze({ ...hooks });
+  }
+
   check(isObject(events), "PLUGIN_SPEC", `插件 ${id} 的 events 必须是对象`);
   for (const [name, listener] of Object.entries(events))
     check(
@@ -201,6 +232,7 @@ export function definePlugin(spec = {}) {
     skills,
     proposals: Object.freeze(normalizedProposals),
     agendaSources: Object.freeze(normalizedSources),
+    workflows: Object.freeze(normalizedWorkflows),
     api,
     events: Object.freeze({ ...events }),
   });

@@ -551,6 +551,57 @@ export class PluginHost {
     return null;
   }
 
+  // Workflow hooks are only exposed while the owning plugin is enabled. The
+  // returned object carries the plugin context so callers can invoke
+  // configure(ctx, { registry, workspace, run }) exactly as plugins declare it.
+  workflow(id) {
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec) continue;
+      const hooks = record.spec.workflows?.[id];
+      if (!hooks) continue;
+      return Object.freeze({
+        id,
+        pluginId: record.id,
+        artifactType: hooks.artifactType,
+        ctx: this.contextFor(record),
+        detect: hooks.detect,
+        applyPolicy: hooks.applyPolicy,
+        guidance: hooks.guidance,
+        configure: hooks.configure,
+        prepared: hooks.prepared,
+        answer: hooks.answer,
+      });
+    }
+    return null;
+  }
+
+  // Detection is intentionally available for disabled plugins so a request can
+  // fail with PLUGIN_UNAVAILABLE instead of silently running the wrong
+  // workflow. Callers must use workflow(id) before invoking any hook.
+  matchWorkflow(message, policy) {
+    for (const record of this.ordered) {
+      if (!record.spec?.workflows) continue;
+      for (const [id, hooks] of Object.entries(record.spec.workflows)) {
+        if (!hooks.detect) continue;
+        let matched = false;
+        try {
+          matched = hooks.detect(message, policy) === true;
+        } catch (error) {
+          this._fail(record, `工作流检测失败：${errorMessage(error)}`);
+        }
+        if (matched)
+          return {
+            id,
+            pluginId: record.id,
+            enabled: record.enabled && record.available,
+            available: record.available,
+            workflow: record.enabled && record.available ? this.workflow(id) : null,
+          };
+      }
+    }
+    return null;
+  }
+
   agendaItems({ now = new Date().toISOString(), patientId } = {}) {
     const items = [];
     for (const record of this.ordered) {

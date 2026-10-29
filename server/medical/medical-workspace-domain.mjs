@@ -2,7 +2,6 @@ import { LITERATURE_RESEARCH_GUIDANCE, verifyLiteratureResearch, researchAnswer 
 import { PATIENT_RECORD_INTENT } from "./record-intent.mjs";
 import {configureTrialTools,TRIAL_GUIDANCE,trialAnswer} from './trial-eligibility-tools.mjs';
 import {configureTaskPresentation} from './task-presentation.mjs';
-import {configureSimilarCaseTools, SIMILAR_CASE_GUIDANCE, similarCaseAnswer} from './similar-case-workflow.mjs';
 import { configureAssessmentTools, ASSESSMENT_GUIDANCE, assessmentAnswer } from "./assessment-tools.mjs";
 import { configureIntakeTools } from "./intake-tools.mjs";
 import { configureGlobalAssistantTools, GLOBAL_ASSISTANT_DISCIPLINE, rosterDigest } from "./global-assistant.mjs";
@@ -26,7 +25,6 @@ export const MEDICAL_WORKSPACE_DISCIPLINE = `
 - 整理完成时，在本次回复中概括已保存内容、来源和确实存在的缺失或冲突，邀请用户直接回复更正；不要为已保存内容另建人工核对待办，不要声称用户已逐项审核或改变未知事实。尚未保存的建档或档案更新提案，在当前任务中展示一次供用户确认。
 - 用户上传或提及患者资料时：主动读取并整理结构化信息，保留文件名与行号。诊断一条一个临床问题，区分确诊/疑似/影像发现/待核对；同名多来源合并。新患者用 patient_create_propose，已有患者用 patient_record_propose；身份更正写 name 等字段，不只写备注。核对已有档案避免重复建档。
 ${PATIENT_RECORD_INTENT}
-- 辅助诊断或相似病例问题：先 read_patient_brief 与原始材料构建脱敏临床指纹，再 read_skill 读取 similar-case-search。用 similar_case_search 检索本地病例库及其他患者档案（自动排除当前患者），用 online_case_search 搜索网上病例报告。联网仅传医学关键词，不含姓名、电话、病历号、详细日期。分别展示本地/网上来源、匹配与差异、未核验信息；候选不能直接当作诊断依据。医生评价某个病例有价值、典型或想留档时（如「这个病例很典型」「收进案例库」），主动用 case_save_propose 提议入库：summary 概括病例，lessons 写两句最值得记住的经验和下次怎么用，可带标签；医生确认后即入精选案例，之后的相似检索会优先翻出它。
 - 私域患者管理（企业微信消息、自动回复、提醒、定时随访）：用 care_overview / care_inbox / care_alerts / care_patient_thread / care_campaigns / care_settings_get 查看；医生说已知晓或已处理时用 care_alert_update / care_message_mark；起草回复用 care_reply_draft（只存草稿）。凡是会发给患者或改变自动化规则的操作——发消息 care_send_propose、建自动随访 care_campaign_propose（发给患者并收集回复；只提醒医生本人联系则用 followup_create_propose）、改设置 care_settings_propose——都只生成待确认提案，告诉医生到「待确认」面板核对确认，不要声称已发送。给患者的文字不得包含诊断结论、处方或剂量调整；红旗症状由系统规则固定提醒，不能关闭。
 - 工作台定制与进化：医生提出个性化或医院要求（文书格式/模板、写作习惯、质控必写项、定时提醒、检验阈值提醒、复诊前消息、定期汇总）时，不要只口头答应，也不要只存记忆：先 extension_list 看已有扩展，再用 extension_preview 试算，最后 extension_propose 固化为技能或自动化规则，由医生确认。纯偏好（如用词习惯）仍可用 doctor_memory_save。医生说不需要某规则时用 extension_toggle 停用。
 - 复诊与新结果：医生说出复诊日期时用 appointment_create 登记（不会通知患者），改期或登记到诊用 appointment_update，appointment_list 查看；patient_new_labs 查看尚未标记已阅的新检验结果，医生明确表示看过后才可 markReviewed。
@@ -105,13 +103,21 @@ export function createMedicalWorkspaceDomain({
         if (proposal) return { message: { role: "assistant", content: "资料已整理为待核对草稿。请核对并编辑，确认后建档。" } };
       }
       if(run?.policy?.workflow==='trial-eligibility')return run.artifacts?.some(a=>a.type==='trial_eligibility')?{message:{role:'assistant',content:trialAnswer(workspace,runId,{text:''}).text}}:null;
-      const type=run?.policy?.workflow==='similar-case-search'?'similar_cases':run?.policy?.workflow==='patient-assessment'?'treatment_review':null;
-      const artifact=type && run.artifacts?.find(a=>a.type===type && (type!=='treatment_review'||a.matches?.length));
+      const workflow=pluginHost?.workflow(run?.policy?.workflow);
+      const prepared=workflow?.prepared?.(workspace,runId);
+      if(prepared)return prepared;
+      const type=run?.policy?.workflow==='patient-assessment'?'treatment_review':null;
+      const artifact=type && run.artifacts?.find(a=>a.type===type && a.matches?.length);
       if(!artifact || run.inputs?.some(i=>i.createdAt>=new Date(artifact.createdAt).getTime()))return null;
-      const result=type==='similar_cases'?similarCaseAnswer(workspace,runId,{text:''}):assessmentAnswer(workspace,runId,{text:''});
+      const result=assessmentAnswer(workspace,runId,{text:''});
       return {message:{role:'assistant',content:result.text}};
     },
-    finalizeResult: (workspace,runId,result) => researchAnswer(workspace,runId,trialAnswer(workspace,runId,similarCaseAnswer(workspace,runId,assessmentAnswer(workspace,runId,finalizeKnowledgeAnswer(result))))),
+    finalizeResult: (workspace,runId,result) => {
+      const afterAssessment=assessmentAnswer(workspace,runId,finalizeKnowledgeAnswer(result));
+      const workflow=pluginHost?.workflow(workspace.runs?.find(run=>run.id===runId)?.policy?.workflow);
+      const afterWorkflow=workflow?.answer?workflow.answer(workspace,runId,afterAssessment):afterAssessment;
+      return researchAnswer(workspace,runId,trialAnswer(workspace,runId,afterWorkflow));
+    },
     contextManagement: true,
     allowAutoFileWrites: true,
     // 能力快照的领域事实：医疗叠层开关走共享判定点，通用内核不感知。
@@ -139,6 +145,7 @@ export function createMedicalWorkspaceDomain({
       const unreliable = sources.filter(
         (s) => s.extraction?.ocr?.quality && s.extraction.ocr.quality.level !== "good",
       );
+      const workflow = pluginHost?.workflow(run.policy?.workflow);
       return [
         workspace.channelSource ? '本次来自已授权医生的外部私聊。回答将发回原聊天。患者档案与随访修改只创建提案，不调用 proposal_confirm；请医生到工作台待确认面板核对。文件修改遵循工作区审批策略。当前渠道仅支持文字，文件结果请说明在工作台会话中查看。' : '',
         patients && !workspace.patientId && run.policy?.contextMode !== "auto" ? rosterDigest(patients()) : "",
@@ -146,8 +153,7 @@ export function createMedicalWorkspaceDomain({
         workspace.patientId ? `当前已关联患者编号：${workspace.patientId}。可调用 read_patient_brief 读取最新档案；不必让医生重新输入已有病史。` : "",
         run.policy?.workflow === "patient-assessment" ? ASSESSMENT_GUIDANCE : "",
         run.policy?.workflow === "literature-research" ? LITERATURE_RESEARCH_GUIDANCE : "",
-        run.policy?.workflow === "similar-case-search" ? SIMILAR_CASE_GUIDANCE : "",
-        run.policy?.workflow === "similar-case-search" && run.policy.searchScope === "local" ? "本轮医生限定仅本地检索：只使用本机患者档案和本地病例库，不进行网上检索。online_case_search 和 literature_fetch 不可用。完成一次 similar_case_search 后直接核对候选并提交 finish_similar_case_search；无候选也提交真实的本地检索结果。" : "",
+        workflow?.guidance?.(run) || "",
         run.policy?.presentation === "diagnostic" ? "辅助诊断结果请调用 present_diagnostic_review 整理支持依据、不同点和待补资料，不能把可能诊断当确诊。若只是评估治疗方案，继续用治疗方案评估工具。" : "",
         run.policy?.presentation === "answer" ? "本轮默认是普通问答：直接回答用户问题。只有用户明确要求整理材料、生成文档或修改档案时，才生成对应成果；不要为了展示界面额外创建草稿、目标清单或复核任务。" : "",
         run.policy?.workflow === "trial-eligibility" ? TRIAL_GUIDANCE : "",
@@ -237,8 +243,9 @@ export function createMedicalWorkspaceDomain({
               execute(plugin.definition.function.name, args, context),
           });
         const intakeRun = workspace.runs?.find(run => run.id === runId);
+        const workflow = pluginHost?.workflow(intakeRun?.policy?.workflow);
         if (intakeRun?.policy?.workflow === "patient-assessment") configureAssessmentTools(registry, workspace, intakeRun, { readPatient: patients ? () => patients().row(workspace.patientId) : null });
-        if (intakeRun?.policy?.workflow === "similar-case-search") configureSimilarCaseTools(registry, workspace, intakeRun);
+        if (workflow?.configure) workflow.configure(workflow.ctx, { registry, workspace, run: intakeRun });
         if (intakeRun?.policy?.workflow === "patient-intake") {
           const sameFiles = run => JSON.stringify([...(run.fileIds || [])].sort()) === JSON.stringify([...(intakeRun.fileIds || [])].sort());
           const previous = [...workspace.runs].reverse().find(run => run.id !== runId && ["failed", "cancelled", "interrupted"].includes(run.status) && sameFiles(run) && run.policy?.workflow === "patient-intake" && run.intakeNotes?.length);
