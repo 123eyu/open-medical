@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
+import { api } from "../../../src/agent-runtime";
 const labels = {
   running: "正在自动核对",
   completed: "AI 初筛已完成",

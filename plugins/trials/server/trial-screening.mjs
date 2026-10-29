@@ -1,13 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { check, string } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
+import { check, string } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
 export class TrialScreening {
   constructor(store, patients) {
     this.store = store;
     this.patients = patients;
-    store.db.exec(
-      "CREATE TABLE IF NOT EXISTS trial_protocols(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS trial_screenings(trial_id TEXT NOT NULL,patient_id TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(trial_id,patient_id))",
-    );
   }
   list() {
     return this.store.db

@@ -79,21 +79,22 @@ test("停用 legacy-agenda 后只剩复诊与 followup 插件来源；重新启�
   assert.equal(reduced.status, 200);
   assert.deepEqual(
     reduced.body.kinds.map(({ kind }) => kind),
-    ["all", "visit", "followup", "messages"],
-    "停用后固定区复诊与 followup 插件来源保留，其余旧来源消失",
+    ["all", "visit", "followup", "messages", "trial"],
+    "停用后固定区复诊与已迁移的 followup/trials 插件来源保留，其余旧来源消失",
   );
   assert.deepEqual(reduced.body.counts, {
     all: 5,
     visit: 1,
     followup: 1,
     messages: 3,
+    trial: 0,
   });
   assert.equal(reduced.body.total, SNAPSHOT.total);
   assert.ok(
     reduced.body.items.every((item) =>
-      ["visit", "followup", "messages"].includes(item.kind),
+      ["visit", "followup", "messages", "trial"].includes(item.kind),
     ),
-    "停用后今日待办只剩复诊与 followup 插件条目",
+    "停用后今日待办只剩复诊与已迁移插件条目",
   );
 
   const rejected = await app.request("/api/doctor/overview?kind=risk");

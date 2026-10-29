@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { check } from "../errors.mjs";
+import { check } from "../../../server/errors.mjs";
 export const TRIAL_GUIDANCE = `本轮是临床试验自动纳排初筛。先 read_skill 读取 trial-eligibility，再 read_trial_criteria。分批读取当前患者资料并 save_trial_eligibility_batch，直到全部条件有判断。yes/no 都必须有已读原文出处；资料不足写 unknown 和具体待补项。不得将未知视为满足。无需联网或生成其他文件，完成草稿即结束。`;
 export function trialAnswer(workspace, runId, result) {
   const run = workspace.runs.find((r) => r.id === runId);

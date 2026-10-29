@@ -74,7 +74,6 @@ import { DoctorProfilePanel } from "./doctor-profile";
 import { KnowledgeLibraries } from "./knowledge-libraries";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
 import { CasesView } from "./cases";
-import { TrialScreeningView } from "./trial-screening";
 import { IconButton, Badge, Modal, STATUS } from "./components";
 import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
 import { loadUiPluginModules } from "./plugin-registry";
@@ -1658,8 +1657,6 @@ function App() {
             <KnowledgeLibraries onOpenTask={openTask} />
           ) : view === "cases" ? (
             <CasesView />
-          ) : view === "research" && medical ? (
-            <TrialScreeningView onOpenTask={openTask} onOpenPatient={id=>openPatient({id})} />
           ) : TOOL_VIEWS.includes(view) ? (
             <main id="main" className="module-page" aria-label="功能未启用">
               <section className="module-card" style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}>

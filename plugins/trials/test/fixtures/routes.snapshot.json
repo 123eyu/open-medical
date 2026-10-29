@@ -1,0 +1,259 @@
+{
+  "list": {
+    "status": 200,
+    "body": {
+      "trials": [
+        {
+          "id": "<uuid>",
+          "title": "迁移快照试验",
+          "registration": "",
+          "version": "v1",
+          "sourceUrl": "",
+          "site": "",
+          "recruitment": "正在招募",
+          "protocolText": "快照用方案原文",
+          "criteria": [
+            {
+              "id": "<uuid>",
+              "kind": "include",
+              "text": "年龄 18–75 岁"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "include",
+              "text": "确诊 2 型糖尿病"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "exclude",
+              "text": "妊娠"
+            }
+          ],
+          "createdAt": "<time>"
+        },
+        {
+          "id": "<uuid>",
+          "title": "示例·糖尿病随访观察方案（虚构）",
+          "registration": "",
+          "version": "演示 v1",
+          "sourceUrl": "",
+          "site": "",
+          "recruitment": "虚构练习，不招募",
+          "protocolText": "本方案仅用于练习逐条筛选。未知信息必须标记待补充，不推断符合；不存在真实招募或试验注册。",
+          "criteria": [
+            {
+              "id": "<uuid>",
+              "kind": "include",
+              "text": "年龄 18–75 岁"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "include",
+              "text": "病历已记录2型糖尿病"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "include",
+              "text": "愿意提供近期血糖记录"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "exclude",
+              "text": "拒绝参与随访"
+            },
+            {
+              "id": "<uuid>",
+              "kind": "exclude",
+              "text": "资料不足以核对患者身份"
+            }
+          ],
+          "createdAt": "<time>"
+        }
+      ]
+    }
+  },
+  "trial": {
+    "status": 200,
+    "body": {
+      "id": "<uuid>",
+      "title": "迁移快照试验",
+      "registration": "",
+      "version": "v1",
+      "sourceUrl": "",
+      "site": "",
+      "recruitment": "正在招募",
+      "protocolText": "快照用方案原文",
+      "criteria": [
+        {
+          "id": "<uuid>",
+          "kind": "include",
+          "text": "年龄 18–75 岁"
+        },
+        {
+          "id": "<uuid>",
+          "kind": "include",
+          "text": "确诊 2 型糖尿病"
+        },
+        {
+          "id": "<uuid>",
+          "kind": "exclude",
+          "text": "妊娠"
+        }
+      ],
+      "createdAt": "<time>"
+    }
+  },
+  "candidates": {
+    "status": 200,
+    "body": {
+      "suggested": [
+        "<uuid>"
+      ],
+      "trial": {
+        "id": "<uuid>",
+        "title": "迁移快照试验",
+        "registration": "",
+        "recruitment": "正在招募",
+        "criteria": 3,
+        "limits": {
+          "minAge": 18,
+          "maxAge": 75,
+          "sex": null,
+          "sources": [
+            "年龄 18–75 岁"
+          ]
+        }
+      },
+      "candidates": [
+        {
+          "patientId": "<uuid>",
+          "name": "示例·李婉珍",
+          "patientNumber": "",
+          "gender": "female",
+          "birthYear": 1966,
+          "diagnoses": [
+            "2型糖尿病"
+          ],
+          "archived": false,
+          "prefilter": {
+            "status": "likely",
+            "score": 4,
+            "reasons": [
+              "年龄约 60 岁，在范围内",
+              "「2型糖尿病」与入选条件相关",
+              "「示例·糖尿病」与入选条件相关"
+            ],
+            "warnings": []
+          },
+          "ai": null,
+          "review": null,
+          "enrollment": {
+            "stage": "none",
+            "label": "未处理",
+            "revision": 0,
+            "note": "",
+            "consentDate": null,
+            "updatedAt": null
+          },
+          "next": "建议 AI 初筛"
+        },
+        {
+          "patientId": "<uuid>",
+          "name": "示例·张沪生",
+          "patientNumber": "",
+          "gender": "male",
+          "birthYear": 1952,
+          "diagnoses": [
+            "原发性高血压",
+            "胆囊切除术后状态"
+          ],
+          "archived": false,
+          "prefilter": {
+            "status": "unclear",
+            "score": 0,
+            "reasons": [
+              "年龄约 74 岁，在范围内"
+            ],
+            "warnings": []
+          },
+          "ai": null,
+          "review": null,
+          "enrollment": {
+            "stage": "none",
+            "label": "未处理",
+            "revision": 0,
+            "note": "",
+            "consentDate": null,
+            "updatedAt": null
+          },
+          "next": "资料不足，可 AI 初筛"
+        },
+        {
+          "patientId": "<uuid>",
+          "name": "示例·王建国",
+          "patientNumber": "",
+          "gender": "male",
+          "birthYear": 1978,
+          "diagnoses": [
+            "急性阑尾炎",
+            "腹腔镜阑尾切除术后"
+          ],
+          "archived": false,
+          "prefilter": {
+            "status": "unclear",
+            "score": 0,
+            "reasons": [
+              "年龄约 48 岁，在范围内"
+            ],
+            "warnings": []
+          },
+          "ai": null,
+          "review": null,
+          "enrollment": {
+            "stage": "none",
+            "label": "未处理",
+            "revision": 0,
+            "note": "",
+            "consentDate": null,
+            "updatedAt": null
+          },
+          "next": "资料不足，可 AI 初筛"
+        }
+      ],
+      "counts": {
+        "total": 3,
+        "stages": {
+          "none": 3,
+          "shortlisted": 0,
+          "contacted": 0,
+          "consented": 0,
+          "enrolled": 0,
+          "declined": 0,
+          "ineligible": 0,
+          "withdrawn": 0
+        },
+        "prefilter": {
+          "likely": 1,
+          "possible": 0,
+          "unclear": 2,
+          "mismatch": 0
+        },
+        "aiDone": 0,
+        "awaitingReview": 0
+      },
+      "batch": null
+    }
+  },
+  "enrollment": {
+    "status": 200,
+    "body": {
+      "trialId": "<uuid>",
+      "patientId": "<uuid>",
+      "stage": "none",
+      "revision": 0,
+      "note": "",
+      "consentDate": null,
+      "history": []
+    }
+  }
+}

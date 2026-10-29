@@ -1,6 +1,6 @@
-import { AppError, check, string } from "../errors.mjs";
+import { AppError, check, string } from "../../../server/errors.mjs";
 
-import {splitEligibility} from "../../shared/trial-protocol.mjs";
+import {splitEligibility} from "../../../shared/trial-protocol.mjs";
 export {splitEligibility};
 
 export class TrialRegistry {

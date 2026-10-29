@@ -1,15 +1,12 @@
 import { randomUUID, createHash } from "node:crypto";
-import { check } from "../errors.mjs";
-import { localCalendarDate } from "../../shared/calendar-date.mjs";
+import { check } from "../../../server/errors.mjs";
+import { localCalendarDate } from "../../../shared/calendar-date.mjs";
 
 // Jobs and their evidence are durable; a model draft never overwrites physician review.
 export class TrialEligibilityJobs {
   constructor({ store, patients, trials, bridge, workspaces }) {
     Object.assign(this, { store, patients, trials, bridge, workspaces });
     this.active = new Map();
-    store.db.exec(
-      "CREATE TABLE IF NOT EXISTS trial_ai_jobs(id TEXT PRIMARY KEY,data TEXT NOT NULL)",
-    );
     for (const job of this.list())
       if (job.status === "running")
         this.write({

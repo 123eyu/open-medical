@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, CheckCheck, Search, RotateCw, UserPlus } from "lucide-react";
 import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
-import { requestTrial } from "./trial-screening";
 import { requestSettingsTab } from "./extension-center";
 import { usePluginActive } from "./plugin-slots";
 
@@ -102,7 +101,7 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       else if (item.action.type === "patients") await onPatient({});
       else {
         if (item.action.view === "care" && item.action.tab) requestPluginIntent("followup", "care-tab", item.action.tab);
-        if (item.action.view === "research" && item.action.trialId) requestTrial(item.action.trialId);
+        if (item.action.view === "research" && item.action.trialId) requestPluginIntent("trials", "open-trial", { trialId: item.action.trialId });
         if (item.action.view === "settings" && item.action.settingsTab) requestSettingsTab(item.action.settingsTab);
         await onView(item.action.view);
       }

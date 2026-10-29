@@ -1,5 +1,4 @@
 import { PATIENT_RECORD_INTENT } from "./record-intent.mjs";
-import {configureTrialTools,TRIAL_GUIDANCE,trialAnswer} from './trial-eligibility-tools.mjs';
 import {configureTaskPresentation} from './task-presentation.mjs';
 import { configureAssessmentTools, ASSESSMENT_GUIDANCE, assessmentAnswer } from "./assessment-tools.mjs";
 import { configureIntakeTools } from "./intake-tools.mjs";
@@ -53,7 +52,6 @@ export function medicalWorkspaceEnabled(workspace) {
 }
 
 export function createMedicalWorkspaceDomain({
-  trialJobs = null,
   personalContext = null,
   plugins = [],
   sessionPlugins = [],
@@ -99,7 +97,6 @@ export function createMedicalWorkspaceDomain({
         const proposal = pending?.()?.list({ type: "patient-create", sourceSessionId: workspace.id, status: "pending" }).find(action => action.payload.sourceRunId === runId);
         if (proposal) return { message: { role: "assistant", content: "资料已整理为待核对草稿。请核对并编辑，确认后建档。" } };
       }
-      if(run?.policy?.workflow==='trial-eligibility')return run.artifacts?.some(a=>a.type==='trial_eligibility')?{message:{role:'assistant',content:trialAnswer(workspace,runId,{text:''}).text}}:null;
       const workflow=pluginHost?.workflow(run?.policy?.workflow);
       const prepared=workflow?.prepared?.(workspace,runId);
       if(prepared)return prepared;
@@ -113,7 +110,7 @@ export function createMedicalWorkspaceDomain({
       const afterAssessment=assessmentAnswer(workspace,runId,finalizeKnowledgeAnswer(result));
       const workflow=pluginHost?.workflow(workspace.runs?.find(run=>run.id===runId)?.policy?.workflow);
       const afterWorkflow=workflow?.answer?workflow.answer(workspace,runId,afterAssessment):afterAssessment;
-      return trialAnswer(workspace,runId,afterWorkflow);
+      return afterWorkflow;
     },
     contextManagement: true,
     allowAutoFileWrites: true,
@@ -152,7 +149,6 @@ export function createMedicalWorkspaceDomain({
         workflow?.guidance?.(run) || "",
         run.policy?.presentation === "diagnostic" ? "辅助诊断结果请调用 present_diagnostic_review 整理支持依据、不同点和待补资料，不能把可能诊断当确诊。若只是评估治疗方案，继续用治疗方案评估工具。" : "",
         run.policy?.presentation === "answer" ? "本轮默认是普通问答：直接回答用户问题。只有用户明确要求整理材料、生成文档或修改档案时，才生成对应成果；不要为了展示界面额外创建草稿、目标清单或复核任务。" : "",
-        run.policy?.workflow === "trial-eligibility" ? TRIAL_GUIDANCE : "",
         run.policy?.workflow === "patient-intake" ? "" : doctor?.digest(),
         `可用技能：${JSON.stringify(skills?.list() || [])}`,
         run.pinnedSkills?.length
@@ -248,7 +244,6 @@ export function createMedicalWorkspaceDomain({
           if (initialNotes.length) saveIntakeNotes(workspace.id, runId, initialNotes);
           configureIntakeTools(registry, workspace, notes => saveIntakeNotes(workspace.id, runId, notes), initialNotes, personalContext?.(intakeRun, workspace.id));
         }
-        if (intakeRun?.policy?.workflow === "trial-eligibility") { configureTrialTools(registry,workspace,intakeRun,trialJobs); return; }
         configureTaskPresentation(registry, intakeRun?.policy?.workflow === "patient-assessment" ? undefined : intakeRun?.policy?.presentation, value => saveDisplayResult(workspace.id, runId, value));
         return;
       }

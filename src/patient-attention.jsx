@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
-import { requestTrial } from "./trial-screening";
 import { requestSettingsTab } from "./extension-center";
 import { usePluginActive } from "./plugin-slots";
 import "./patient-attention.css";
@@ -68,7 +67,7 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
             patientName: patient.name,
           });
         if (action.view === "research" && action.trialId)
-          requestTrial(action.trialId);
+          requestPluginIntent("trials", "open-trial", { trialId: action.trialId });
         if (action.view === "settings" && action.settingsTab)
           requestSettingsTab(action.settingsTab);
         await onView(action.view);

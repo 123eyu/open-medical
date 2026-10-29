@@ -7,10 +7,6 @@ import { KnowledgeOrganizer } from "./medical/knowledge-organizer.mjs";
 import { graphSlice } from "../shared/knowledge-graph-search.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
 import { createReadStream } from "node:fs";
-import {TrialEligibilityJobs} from './medical/trial-eligibility-jobs.mjs';
-import { TrialRegistry } from "./medical/trial-registry.mjs";
-import { TrialScreening } from "./medical/trial-screening.mjs";
-import { TrialCandidates } from "./medical/trial-candidates.mjs";
 import { IntakeJobs } from "./medical/intake-jobs.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
 import http from "node:http";
@@ -37,7 +33,6 @@ import {
   composeDigest,
   selectDigestMessages,
 } from "./patients.mjs";
-import { trialTools } from "./medical/trial-tools.mjs";
 import { scheduleTools } from "./medical/schedule-tools.mjs";
 import { DoctorProfile } from "./medical/doctor-profile.mjs";
 import { createKnowledgeQueryExpander } from "./medical/knowledge-query.mjs";
@@ -282,7 +277,10 @@ export function createServer(options = {}) {
   const pending = new PendingActions(store, {
     patients: () => patients,
     cases: () => cases,
-    trials: () => trialCandidates,
+    trials: () =>
+      pluginActive("trials")
+        ? pluginService("trials")?.candidates || null
+        : null,
     extensions: () => extensions,
     doctor: () => doctor,
     pluginHost: () => pluginHost,
@@ -526,7 +524,6 @@ export function createServer(options = {}) {
         run.learningHoldout = holdout;
         return { build: notes => service.build(notes, { holdout }), modelView: value => service.modelView(value), prepare: (payload, value) => service.prepare(payload, value, pending) };
       },
-      trialJobs: {load:id=>trialJobs.get(id),save:(id,checks)=>trialJobs.save(id,checks)},
       saveIntakeNotes: (id, runId, notes) => workspaces.store.update(id, w => { w.runs.find(run => run.id === runId).intakeNotes = notes; }),
       saveDisplayResult: (id, runId, value) => workspaces.store.update(id, w => { const run=w.runs.find(r=>r.id===runId);run.displayResults=[...(run.displayResults||[]).filter(r=>r.key!==value.key),value].slice(-12); }),
       readPatientBrief: (patientId) => patientBrief.read(patientId),
@@ -537,7 +534,6 @@ export function createServer(options = {}) {
       plugins: [
         ...knowledgeToolPlugins,
         ...localPlugins(pendingActionTools(pending, doctor)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -547,7 +543,6 @@ export function createServer(options = {}) {
       sessionPlugins: [
         ...knowledgeToolPlugins,
           ...localPlugins(pendingActionTools(pending, doctor)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -579,7 +574,6 @@ export function createServer(options = {}) {
     plugins: [
       ...knowledgeToolPlugins,
       ...localPlugins(pendingActionTools(pending, doctor)),
-      ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
       ...localPlugins(extensionTools(() => extensions, pending)),
@@ -696,15 +690,20 @@ export function createServer(options = {}) {
             .counts.suggested
         : 0;
     },
-    trialWork: () => trialScreening.list().map((t) => {
-      const { counts } = trialCandidates.candidates(t.id);
-      return { id: t.id, title: t.title.slice(0, 40), awaitingReview: counts.awaitingReview };
-    }),
+    trialWork: () => {
+      if (!pluginActive("trials")) return [];
+      const service = pluginService("trials");
+      if (!service?.screening || !service?.candidates) return [];
+      return service.screening.list().map((trial) => {
+        const { counts } = service.candidates.candidates(trial.id);
+        return {
+          id: trial.id,
+          title: trial.title.slice(0, 40),
+          awaitingReview: counts.awaitingReview,
+        };
+      });
+    },
   });
-  const trialScreening = new TrialScreening(store, patients);
-  const trialJobs = new TrialEligibilityJobs({store,patients,trials:trialScreening,bridge:sessionBridge,workspaces});
-  const trialCandidates = new TrialCandidates({ store, patients, trials: trialScreening, jobs: trialJobs });
-  const trialRegistry = new TrialRegistry(options.trialRegistryOptions);
   const patientBrief = new PatientBrief(store, patients);
   const careTasks = new CareTasks(store, patients, followups, {
     resolvePatientFile: (patientId, fileId) => {
@@ -789,11 +788,16 @@ export function createServer(options = {}) {
     pending,
     followups,
     cases,
-    trials: trialCandidates,
     extensions,
     doctor,
     schedule,
     workspaces,
+    trialHost: {
+      patients,
+      bridge: sessionBridge,
+      workspaces,
+      registryOptions: options.trialRegistryOptions,
+    },
     skills,
     guidelines,
     knowledge: guidelines,
@@ -898,10 +902,11 @@ export function createServer(options = {}) {
   const followup = pluginActive("followup") ? followupService() : null;
   if (followup)
     risks.surveyAlertsProvider = (patient) => followup.surveys.alerts(patient);
+  const trialService = pluginActive("trials") ? pluginService("trials") : null;
   const demoPack = new DemoPack(patients, followup?.followups || null, store, {
     sessions: sessionBridge,
     cases,
-    trials: trialScreening,
+    trials: trialService?.screening || null,
     guidelines,
     schedule,
     careTasks,
@@ -912,7 +917,6 @@ export function createServer(options = {}) {
   runtime.registerPlugins([
     ...pendingActionTools(pending, doctor),
     ...pluginHost.legacyToolPlugins(),
-    ...trialTools(() => trialCandidates, pending),
     ...scheduleTools(() => schedule),
     ...labDisplayTools(() => patients),
     ...extensionTools(() => extensions, pending),
@@ -2174,39 +2178,6 @@ export function createServer(options = {}) {
             return send(res, 200, await digestMessages(pid, await body(req)));
         }
       }
-      if (parts[0] === "api" && parts[1] === "trials") {
-        if(parts.length===6 && parts[3]==='screenings' && parts[5]==='ai') {
-          const trialId=identifier(parts[2]),patientId=identifier(parts[4]);
-          trialScreening.get(trialId);patients.get(patientId);
-          if(req.method==='GET')return send(res,200,{jobs:trialJobs.list(trialId,patientId).map(j=>trialJobs.public(j))});
-          if(req.method==='POST')return send(res,202,trialJobs.start(trialId,patientId,await body(req)));
-        }
-        if(parts.length===7 && parts[3]==='screenings' && parts[5]==='ai' && req.method==='DELETE') {
-          const job=trialJobs.get(identifier(parts[6]));
-          check(job.trialId===parts[2]&&job.patientId===parts[4],'NOT_FOUND','初筛任务不存在',404);
-          return send(res,200,trialJobs.cancel(job.id));
-        }
-        if (parts.length === 4 && parts[2] === "registry" && req.method === "GET") return send(res,200,await trialRegistry.lookup(parts[3]));
-        if (parts.length === 4 && parts[3] === "candidates" && req.method === "GET") return send(res,200,trialCandidates.candidates(parts[2], { stage: url.searchParams.get("stage") || undefined, status: url.searchParams.get("status") || undefined }));
-        if (parts.length === 4 && parts[3] === "batches" && req.method === "POST") return send(res,202,trialCandidates.startBatch(parts[2], await body(req)));
-        if (parts.length === 6 && parts[3] === "batches" && parts[5] === "cancel" && req.method === "POST") {
-          const batch = trialCandidates.getBatch(parts[4]);
-          check(batch.trialId === parts[2], "NOT_FOUND", "批量初筛不存在", 404);
-          return send(res,200,trialCandidates.cancelBatch(batch.id));
-        }
-        if (parts.length === 5 && parts[3] === "enrollments") {
-          if (req.method === "GET") return send(res,200,trialCandidates.enrollment(identifier(parts[2]), identifier(parts[4])));
-          if (req.method === "PUT") return send(res,200,trialCandidates.setEnrollment(parts[2], parts[4], await body(req)));
-        }
-        if (parts.length === 2 && req.method === "GET") return send(res,200,{trials:trialScreening.list()});
-        if (parts.length === 2 && req.method === "POST") return send(res,201,trialScreening.create(await body(req)));
-        if (parts.length === 3 && req.method === "GET") return send(res,200,trialScreening.get(identifier(parts[2])));
-        if (parts.length === 5 && parts[3] === "screenings") {
-          const trialId=identifier(parts[2]),patientId=identifier(parts[4]);
-          if(req.method === "GET") return send(res,200,trialScreening.screening(trialId,patientId));
-          if(req.method === "PUT") return send(res,200,trialScreening.save(trialId,patientId,await body(req)));
-        }
-      }
       const knowledgeRoutes =
         parts[0] === "api" &&
         (parts[1] === "knowledge" || parts[1] === "guidelines");
@@ -2569,7 +2540,6 @@ export function createServer(options = {}) {
   server.knowledgeOrganizer = knowledgeOrganizer;
   server.risks = risks;
   server.cases = cases;
-  server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
   server.pendingActions = pending;
@@ -2594,6 +2564,10 @@ export function createServer(options = {}) {
     () => followupService()?.chatAutoFollow || null,
   );
   exposePluginService("care", () => followupService()?.care || null);
+  exposePluginService(
+    "trialCandidates",
+    () => pluginService("trials")?.candidates || null,
+  );
   exposePluginService(
     "messageGateway",
     () => pluginService("channel")?.gateway || null,
@@ -2643,8 +2617,6 @@ export function createServer(options = {}) {
     for (const id of workspaces.active.keys())
       if (sessionBridge.isSessionWorkspace(id)) workspaces.cancel(id);
     await intakeJobs.stop();
-    await trialCandidates.stop();
-    await trialJobs.stop();
     await knowledgeOrganizer.stop();
     await Promise.allSettled([...guidelines.indexTasks.values()]);
     for (const ws of sockets.clients) ws.terminate();

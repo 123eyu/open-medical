@@ -1,11 +1,12 @@
-import {TrialAIReview} from "./trial-ai-review";
-import { EnrollmentSelect, TrialCandidatesPanel } from "./trial-candidates";
-import {splitEligibility} from "../shared/trial-protocol.mjs";
+import {TrialAIReview} from "./TrialAIReview";
+import { EnrollmentSelect, TrialCandidatesPanel } from "./TrialCandidates";
+import {splitEligibility} from "../../../shared/trial-protocol.mjs";
 import { useEffect, useRef, useState } from "react";
-import { api } from "./agent-runtime";
-import { importKnowledge } from "./import-knowledge";
-import { patientOptionLabel } from "./patient-labels";
-import "./medical-modules.css";
+import { api } from "../../../src/agent-runtime";
+import { importKnowledge } from "../../../src/import-knowledge";
+import { patientOptionLabel } from "../../../src/patient-labels";
+import { takePluginIntent } from "../../../src/plugin-navigation";
+import "../../../src/medical-modules.css";
 const blank = {
   title: "",
   registration: "",
@@ -17,10 +18,6 @@ const blank = {
   inclusion: "",
   exclusion: "",
 };
-const OPEN_KEY = "omw-trial-open";
-// Lets the agenda open one trial's candidate list on arrival.
-export function requestTrial(id) { try { sessionStorage.setItem(OPEN_KEY, id); } catch { /* storage unavailable */ } }
-function takeTrialRequest() { try { const id = sessionStorage.getItem(OPEN_KEY); sessionStorage.removeItem(OPEN_KEY); return id; } catch { return null; } }
 
 function EnrollmentControl({ trialId, patientId }) {
   const [enrollment, setEnrollment] = useState(null), [error, setError] = useState("");
@@ -83,7 +80,7 @@ export function TrialScreeningView({ onOpenPatient }) {
     ]);
     setTrials(a.trials);
     setPatients(b.patients.filter((p) => !p.archived));
-    const wanted = takeTrialRequest();
+    const wanted = takePluginIntent("trials", "open-trial")?.trialId;
     if (wanted) { const t = a.trials.find((x) => x.id === wanted); if (t) setTrial(t); }
   };
   useEffect(() => {

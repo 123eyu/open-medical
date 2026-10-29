@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "./agent-runtime";
-import { Modal } from "./components";
-import { localCalendarDate as today } from "../shared/calendar-date.mjs";
+import { api } from "../../../src/agent-runtime";
+import { Modal } from "../../../src/plugin-kit/index.js";
+import { localCalendarDate as today } from "../../../shared/calendar-date.mjs";
 
 export const STAGES = { none: "未处理", shortlisted: "拟邀请", contacted: "已联系", consented: "已签知情同意", enrolled: "已入组", declined: "患者拒绝", ineligible: "不符合", withdrawn: "已退出" };
 const FLOW = ["shortlisted", "contacted", "consented", "enrolled"];

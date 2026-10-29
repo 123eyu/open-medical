@@ -6,7 +6,6 @@ import { isCalendarDate } from "../../shared/calendar-date.mjs";
 // fixed-region services via ctx). DoctorOverview still owns merging, sorting,
 // pagination and counts, so a future plugin migration only moves its source.
 const DAY = 86400000;
-const TRIAL_STEP = { shortlisted: "联系患者，说明研究", contacted: "登记知情同意", consented: "确认入组" };
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 const moment = (now) => typeof now === "number" ? now : Date.parse(now) || Date.now();
 const hasTable = (db, name) => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
@@ -63,27 +62,6 @@ const tracking = {
   },
 };
 
-const trial = {
-  kind: "trial",
-  label: "试验入组",
-  order: 60,
-  read(ctx) {
-    const db = ctx.db;
-    const items = [];
-    if (hasTable(db, "trial_enrollments")) {
-      const titles = new Map(db.prepare("SELECT id,data FROM trial_protocols").all().map((r) => [r.id, JSON.parse(r.data).title]));
-      for (const row of db.prepare("SELECT trial_id,patient_id,data FROM trial_enrollments").all()) {
-        const e = JSON.parse(row.data);
-        if (!TRIAL_STEP[e.stage] || !titles.has(row.trial_id)) continue;
-        items.push({ id: `trial:${row.trial_id}:${row.patient_id}`, kind: "trial", patientId: row.patient_id, title: TRIAL_STEP[e.stage],
-          detail: `临床试验「${titles.get(row.trial_id).slice(0, 40)}」`, at: e.updatedAt, weight: 6,
-          action: { type: "view", view: "research", trialId: row.trial_id, label: "打开试验" } });
-      }
-    }
-    return items;
-  },
-};
-
 const custom = {
   kind: "custom",
   label: "我的规则",
@@ -112,5 +90,5 @@ export default definePlugin({
   version: "1.0.0",
   title: "今日待办旧来源（过渡）",
   enabledByDefault: true,
-  agendaSources: [risk, tracking, trial, custom],
+  agendaSources: [risk, tracking, custom],
 });

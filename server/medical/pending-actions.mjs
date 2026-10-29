@@ -22,12 +22,9 @@ const TYPES = [
   "patient-grouping",
   "case-save",
   "patient-group-suggest",
-  "trial-batch",
-  "trial-enrollment",
   "ext-change",
   "ext-install",
 ];
-const isTrial = (type) => type.startsWith("trial-");
 const isExt = (type) => type.startsWith("ext-");
 const confirmationFingerprint = (value) => {
   const canonical = (item) => Array.isArray(item) ? item.map(canonical) : item && typeof item === "object"
@@ -67,9 +64,6 @@ export class PendingActions {
   }
   get doctor() {
     return this.services.doctor?.();
-  }
-  get trials() {
-    return this.services.trials?.() || null;
   }
   get extensions() {
     return this.services.extensions?.() || null;
@@ -177,11 +171,6 @@ export class PendingActions {
     if (isExt(type)) {
       check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
       normalized = this.extensions.normalizeProposal(type, payload);
-    }
-    if (isTrial(type)) {
-      check(this.trials, "TRIAL_UNAVAILABLE", "临床试验模块未启用", 503);
-      normalized = this.trials.normalizeProposal(type, { ...payload, ...(patientId ? { patientId } : {}) });
-      if (normalized.patientId) resolvedPatientId = normalized.patientId;
     }
     if (type === "patient-update") {
       const fields = {
@@ -434,9 +423,9 @@ export class PendingActions {
         "该提案已处理",
         409,
       );
-      // Trial proposals never overwrite the chart, and legacy plugin types keep
-      // their pre-migration revision semantics (care types were never pinned to
-      // a patient revision). New plugin types still use the normal guard.
+      // Legacy plugin types keep their pre-migration revision semantics
+      // (care/trial types were never pinned to a patient revision). New plugin
+      // types still use the normal guard.
       const pluginKnown =
         !TYPES.includes(action.type) &&
         this.pluginHost?.knowsProposalType(action.type);
@@ -449,8 +438,7 @@ export class PendingActions {
           409,
         );
       const skipRevisionCheck =
-        isTrial(action.type) ||
-        (pluginHandler?.legacy && !pluginHandler.revisionScoped);
+        pluginHandler?.legacy && !pluginHandler.revisionScoped;
       if (action.patientId && skipRevisionCheck) {
         check(!this.patients.row(action.patientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案并重新核对提案。", 409);
       } else if (action.patientId) {
@@ -473,9 +461,6 @@ export class PendingActions {
         check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
         applied = this.extensions.applyProposal(action);
         if (applied?.kind === "skill") writtenSkill = applied.id ?? applied.ids;
-      } else if (isTrial(action.type)) {
-        check(this.trials, "TRIAL_UNAVAILABLE", "临床试验模块未启用", 503);
-        applied = this.trials.applyProposal(action);
       } else if (action.type === "patient-create") {
         if (action.payload.sourceSessionId) check(!this.list({ type: "patient-create", sourceSessionId: action.payload.sourceSessionId, status: "applied", limit: 1 }).length,
           "ALREADY_CREATED", "该资料任务已完成建档，请到已有患者档案查看。", 409);

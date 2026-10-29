@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { check, identifier, string } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
-import { isCalendarDate, localCalendarDate } from "../../shared/calendar-date.mjs";
+import { check, identifier, string } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
+import { isCalendarDate, localCalendarDate } from "../../../shared/calendar-date.mjs";
 
 // Trial-wide work on top of per-patient screening: a deterministic
 // pre-filter, queued AI screening for many patients, the candidate list and
@@ -76,10 +76,6 @@ export class TrialCandidates {
     Object.assign(this, { store, patients, trials, jobs, now });
     this.db = store.db;
     this.runners = new Map();
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS trial_enrollments(trial_id TEXT NOT NULL, patient_id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(trial_id, patient_id));
-      CREATE TABLE IF NOT EXISTS trial_batches(id TEXT PRIMARY KEY, trial_id TEXT NOT NULL, data TEXT NOT NULL);
-    `);
     for (const b of this.batches().filter((x) => x.status === "running"))
       this.writeBatch({ ...b, status: "interrupted", detail: "应用重启，批量初筛已暂停；再次开始会跳过已完成的患者。" });
   }

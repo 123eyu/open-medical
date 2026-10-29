@@ -156,7 +156,6 @@ const catalog = [
     FileText,
     "任务内使用",
   ],
-  ["research", "临床试验", "管理试验方案，按入排标准开展患者初筛。", "科研工具", BookOpen, "试验初筛"],
   [
     "cases",
     "病例库",
@@ -175,7 +174,6 @@ const CATALOG_ORDER = {
   literature: 40,
   care: 50,
   followups: 55,
-  research: 60,
   "clinical-ref": 70,
   cases: 80,
   "data-analysis": 90,
@@ -204,15 +202,13 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       .filter(
         (x) =>
           (medical ||
-            !["research", "cases", "drg"].includes(
-              x[0],
-            )) &&
+            x[0] !== "cases") &&
           matches(
             x[0],
             x[1],
             x[2],
             x[3],
-            {"research":"试验 入组 入排", "documents":"Word Excel 报告"}[x[0]] || "",
+            {"documents":"Word Excel 报告"}[x[0]] || "",
           ),
       )
       .map((row) => ({ kind: "fixed", id: row[0], order: CATALOG_ORDER[row[0]] ?? 100, row })),
