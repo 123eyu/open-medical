@@ -174,9 +174,9 @@
 | 设计令牌、默认文字、字号模式 | [style.css](../src/style.css)、[business-layout.css](../src/business-layout.css) |
 | 页面框架、导航与任务上下文 | [v6-layout.css](../src/v6-layout.css)、[clinical-workflow.css](../src/clinical-workflow.css)、[navigation.js](../src/navigation.js)、[task-context.css](../src/task-context.css) |
 | 患者身份与概览 | [patient-identity.jsx](../src/patient-identity.jsx)、[patient-overview.jsx](../src/patient-overview.jsx)、[patient-dashboard.mjs](../shared/patient-dashboard.mjs) |
-| 检验、提醒与规则 | [recent-labs.mjs](../shared/recent-labs.mjs)、[lab-axis.mjs](../shared/lab-axis.mjs)、[patient-attention.jsx](../src/patient-attention.jsx)、[risk-rules.mjs](../server/medical/risk-rules.mjs) |
+| 检验、提醒与规则 | [recent-labs.mjs](../shared/recent-labs.mjs)、[lab-axis.mjs](../shared/lab-axis.mjs)、[patient-attention.jsx](../src/patient-attention.jsx)、[risk-rules.mjs](../plugins/risk-rules/server/risk-rules.mjs) |
 | AI 复核与写入 | [patient-proposal.jsx](../src/patient-proposal.jsx)、[pending-actions.mjs](../server/medical/pending-actions.mjs)、[架构说明](ARCHITECTURE.md) |
-| 阅读、随访与任务状态 | [knowledge-reader.jsx](../src/knowledge-reader.jsx)、[followup-records.jsx](../src/followup-records.jsx)、[followups.mjs](../server/followups.mjs)、[run-status.mjs](../server/core/run-status.mjs) |
+| 阅读、随访与任务状态 | [knowledge-reader.jsx](../src/knowledge-reader.jsx)、[FollowupRecords.jsx](../plugins/followup/ui/FollowupRecords.jsx)、[followups.mjs](../plugins/followup/core/followups.mjs)、[run-status.mjs](../server/core/run-status.mjs) |
 
 主题令牌的数值以代码为准；调整全局规则时同步更新本指南。仅改变患者概览的布局，不代表知识阅读器、弹窗、表格及所有字号模式已经通过同一检查。
 

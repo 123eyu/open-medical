@@ -350,12 +350,53 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 - 企微连接器与 care 的挂接回调、微信 bridge 配置：属于组合根装配，保留在 `agent.mjs` 作为薄适配，不持有第二个服务实例。
 - 设置页“插件”分组与固定区壳：属于 T4 固定插槽，不在 T7 迁移范围。
 
+#### T8 完成情况（T8a–T8c）
+
+- **T8a `literature`**：文献检索/文章抓取/导入会话材料、`literature-research` 工作流、`legacyApiPaths`（`/api/literature/*`）、文献工具、结果/工具卡片与旧 `?view=literature` 页面迁入；`test/fixtures/routes.snapshot.json` 固定旧接口响应。
+- **T8b `research-stats`**：描述统计、组间比较、样本量、脱敏导出、`/api/research/*`、`legacyViews` 与工具卡片迁入；研究数据读取留在固定区共享模块，插件只负责统计与导出。
+- **T8c `clinical-ref`**：量表、检验参考、ICD-9/ICD-10、不良反应速查、`legacyViews` 页面、工具卡片和旧速查路由迁入；量表/编码数据随插件移动。
+- **T8.0 截图基线**：新增 17 张工具页截图基线；工具目录、文献、科研统计、临床速查、试验、病例、DRG 等页面纳入严格截图比对。
+- **验收**：三个插件的旧接口快照、停用 404/工具消失测试通过；T2 既有截图零差异。
+
+#### T9 完成情况（T9a–T9d）
+
+- **T9a `drg`**：DRG 分组数据/规则、测算 API、`legacyViews` 页面迁入；示例费率和免责声明保持原样。
+- **T9b `trials`**：试验方案库、规则预筛、批量 AI 初筛 job、医生核对、入组提案、`trial_*` 表、`trial` 待办与工具卡片迁入；`trial-eligibility` 工作流由插件配置。
+- **T9b 共享布局修复**：把误移进插件的共享 CSS 规则移回固定区静态入口，恢复知识库等页面布局；这条成为后续 CSS 迁移规则的直接来源。
+- **T9c `care-tasks`**：检查复查/转诊跟进服务、`care_tasks` 表、`tracking` 待办来源、患者页“检查与转诊”tab 与旧 `/api/patients/:id/care-tasks` 路由迁入。
+- **T9d `risk-rules`**：风险阈值/趋势/监测规则、`risk_alerts` 表、`risk` 待办、患者简报风险计数与旧 `/api/risk*` 路由迁入；固定区只保留规则触发和空状态降级。
+- **验收**：各插件测试、接口快照、停用行为通过；患者页可选接口 404 时整体仍可渲染。
+
+#### T10 完成情况（T10a–T10c）
+
+- **T10a `feishu-knowledge-bot`**：飞书知识库机器人服务、`knowledge_bot_*` 表、旧设置/回调路由和设置面板迁入；知识库依赖由宿主解析。
+- **T10b `doctor-notifications`**：医生每日摘要、微信医生号/飞书 Webhook、`doctor_notification_*` 表和设置面板迁入；摘要仍不含患者姓名与病历内容。
+- **T10c `learning`**：医生习惯/记忆候选、自动化规则、专科模板包、`review_*`/`habit_*`/`learning_*`/`workbench_*`/`automation_*`/`evolution_*` 表、设置面板与 `custom` 待办来源迁入；过渡插件 `legacy-agenda` 的最后一个来源并入后删除。
+- **T10 修复**：`/api/extensions/prefs` 路由恢复，设置页六个深链接按插件面板重新对齐；前端不再静默吞掉 500。
+- **验收**：三个插件的设置深链接、旧路由、停用行为通过；`legacy-agenda` 退出运行。
+
 #### T11a 完成情况（表归属收口）
 
 - 固定区不再直接读写 `follow_ups`、`followup_plans`、`care_tasks`、`risk_alerts`、`followup_surveys`、`trial_*` 等插件表。
 - 宿主新增同步事务钩子 `hooks`（`patient.deleted` 由插件清理自己的行，抛错时整笔删除回滚）、患者列表贡献 `patientSummary`、患者简报贡献 `patientBrief`、示例数据贡献 `demo.install/clear/exists`。
 - `follow_ups`、`followup_plans` 的建表移入 followup 插件迁移（`002_legacy_tables.sql`，同名同结构、`IF NOT EXISTS`），`legacyTables` 不再声明这两张表。
-- 新增表归属扫描测试：读取所有插件 migrations 与 `legacyTables` 的表名，扫描 `server/` 下非 `plugin-host` 的 `.mjs`；仅允许逐条登记的文件 + 表 + 行签名白名单（当前只有模型提示里作为工具名出现的 `wecom_groups`）。
+- 新增表归属扫描测试：读取所有插件 migrations 与 `legacyTables` 的表名，扫描 `server/` 下非 `plugin-host` 的 `.mjs`；白名单只允许逐条登记的文件 + 表 + 行签名。
+- T11c 把最后一条企微工具提示移入 `plugins/channel-wecom/prompt.md`，白名单清零。
+
+#### T11b 完成情况（升级兼容 + 懒加载）
+
+- 新增 `tests/upgrade/`：用 `main` 生成的旧库 fixture（`legacy.sqlite`）启动当前分支，比较数据、接口快照和表结构；旧行仍可读，新表只追加，不删字段。
+- `src/main.jsx` 的页面改为按路由表 `React.lazy` 加载；固定区首屏不再静态引入所有旧页面。
+- 保留 25 张截图基线，新增/变更界面均走严格模式。
+- **验收**：升级测试、UI 插槽测试、既有基线通过。
+
+#### T11c 完成情况（收尾）
+
+- 新增 `docs/PLUGIN_GUIDE.md`：固定区/插件判断、`definePlugin` 全字段、`ctx`、宿主扩展点、前端插槽、规则清单（含历史坑）、测试要求、疼痛评分完整示例。
+- 新增 `docs/plugin-template/` 最小模板与 `scripts/new-plugin.mjs` / `npm run plugin:new`；脚手架校验 id、重名，按文件深度重写仓库相对路径。
+- 新增 `tests/plugin-host/scaffold.test.mjs`：在临时目录生成插件，用 `pluginDirs` 加载，断言迁移、工具、API 与插件自带测试。
+- 架构文档增加“领域插件”一章，更新插件表/固定区表/迁移路径/模块地图；README 与 README_EN 只在文档导航增加插件指南链接。
+- 零碎清理：企微提示移入插件、表归属白名单清零、删除空的 `plugins/legacy-agenda/`；补充本完成情况与重构总结。
 
 ---
 
@@ -367,3 +408,75 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 3. 在独立的 Linux 环境中 clone 该分支，执行 `npm ci && npm run lint && npm run build && npm test`。
 4. 检查硬性约束：`server/core` 没有改动；没有删除表或字段；没有新增未列出的依赖；测试没有被削弱。
 5. 结论只有三种：**通过** / **返工（列出具体问题）** / **方案调整（更新本文后重新下发）**。
+
+---
+
+## 8. 重构总结
+
+### 8.1 目标完成情况
+
+**目标 1：内核不变。**
+`git diff main --stat -- server/core` 为空；AgentRuntime、ToolRegistry、PermissionEngine、WorkspaceService、Provider、提案机制仍在内核原位。插件宿主只通过 domain adapter、ToolRegistry 和提案委派接入，没有修改 `server/core/**`。
+
+**目标 2：固定核心 + 插件扩展。**
+固定区保留对话、患者档案、复诊预约、今日待办壳、知识库、知识图谱和设置壳；场景能力全部落在 `plugins/<id>/`，同时携带数据迁移、service、Agent 工具、提示/技能、提案、待办来源、HTTP 路由和前端插槽。插件停用后固定区照常工作，数据保留。
+
+**目标 3：越用越轻。**
+新增场景 = 新增一个插件目录。脚手架自检（T11c）在 `plugins/` 下生成 `pain-score` 示例后，`git status` 只出现 `plugins/pain-score/`，没有修改 `src/main.jsx`、`src/patients.jsx`、`src/doctor-agenda.jsx`、`server/agent.mjs`、`server/store.mjs`；生成后已删除示例，不提交。
+
+**成功标准逐条对照。**
+
+| 标准 | 结果 |
+| :--- | :--- |
+| 新增场景不改 `src/main.jsx` | 达成；UI 通过 `defineUiPlugin` 注册到既有插槽。 |
+| 新增场景不改 `src/patients.jsx` | 达成；`patient.tabs` / `patient.actions` / `patient.overviewCards` 由宿主合并。 |
+| 新增场景不改 `src/doctor-agenda.jsx` | 达成；分类来自 `/api/doctor/overview` 的 `kinds`，事项来自 `agendaSources`。 |
+| 新增场景不改 `server/agent.mjs` | 达成；宿主在组合根统一装配，插件路由/工具/提案由 host 分派。 |
+| 新增场景不改 `server/store.mjs` | 达成；插件表由自己的迁移创建，固定区不建插件表。 |
+| 内核不变 | 达成；`server/core/**` diff 为空。 |
+| 界面不变 | 达成；T11c 不改变运行时行为和界面，25 张 PNG 未修改。 |
+
+历史迁移提交确实修改过 `src/main.jsx`、`server/agent.mjs`、`server/store.mjs`：那是把既有硬编码场景搬到插件的一次性接线，不是“新增场景”的持续成本。完成后的新增场景自检见 8.3。
+
+### 8.2 最终插件清单
+
+当前 `plugins/` 有 **15 个可加载插件**。另有 1 个已撤销的过渡插件 `legacy-agenda`（T10c 删除 `plugin.mjs`，T11c 删除空目录），连同它历史上一共 16 个插件目录。
+
+| # | 插件 | 职责 |
+| :--- | :--- | :--- |
+| 1 | `care-tasks` | 检查复查/转诊跟进、`care_tasks`、`tracking` 待办、患者页“检查与转诊”tab。 |
+| 2 | `channel` | 消息渠道契约、`message_*` 表、渠道注册与旧 `/api/message-channels`。 |
+| 3 | `channel-wechat` | 个人微信 wx-cli、导入导出、`wechat_*`、旧 `/api/wechat*`。 |
+| 4 | `channel-wecom` | 企业微信连接器、通讯录/客户/群、客服/机器人/存档、`wecom_*`。 |
+| 5 | `clinical-ref` | 量表、检验参考、ICD-9/10、不良反应速查与工具卡片。 |
+| 6 | `doctor-notifications` | 医生每日摘要（微信医生号/飞书 Webhook）与设置面板。 |
+| 7 | `drg` | DRG 分组测算、示例费率与旧页面。 |
+| 8 | `feishu-knowledge-bot` | 飞书知识库机器人、`knowledge_bot_*` 与设置面板。 |
+| 9 | `followup` | 随访/问卷/聊天随访/自动随访/care 引擎、7 个历史提案 type、患者沟通 tab；需已连接渠道。 |
+| 10 | `learning` | 医生习惯/记忆候选、自动化规则、专科模板、设置面板与 `custom` 待办。 |
+| 11 | `literature` | 文献检索/导入、证据校验工作流、旧 `/api/literature/*`。 |
+| 12 | `research-stats` | 科研统计、样本量、脱敏导出与旧研究页面。 |
+| 13 | `risk-rules` | 风险阈值/趋势/监测、`risk_alerts`、`risk` 待办、患者简报风险计数。 |
+| 14 | `similar-cases` | 本地相似病例、在线病例报告、`similar-case-search` 工作流与结果卡片。 |
+| 15 | `trials` | 试验方案、规则预筛、AI 初筛 job、入组提案、`trial_*` 与 `trial` 待办。 |
+| — | `legacy-agenda`（已撤销） | 过渡期待办来源；已并入 followup/risk-rules/trials/care-tasks/learning。 |
+
+### 8.3 测试资产
+
+- **服务端/集成测试**：52 个 `*.test.mjs`（`tests/` 31 个 + 插件 21 个），`npm test` 共 110 个测试；插件测试覆盖加载、迁移、工具、提案、停用、接口快照和激活。
+- **UI/SSR 测试**：`tests/ui/` 覆盖插槽合并、lazy 组件、错误边界、可选接口 404、设置深链接和插件面板顺序。
+- **截图基线**：`tests/e2e/__screenshots__/` 共 25 张 PNG；4 个 Playwright spec 文件，严格模式比对。
+- **升级兼容**：`tests/upgrade/upgrade.test.mjs` 使用 `main` 生成的 `legacy.sqlite` fixture，对比数据、接口快照与表结构。
+- **脚手架自检**：`tests/plugin-host/scaffold.test.mjs` 在临时目录生成插件，宿主加载/迁移/注册工具，并运行插件自带测试。
+- **约束检查**：`git diff main --stat -- server/core` 为空；表归属扫描测试白名单为空。
+
+### 8.4 已知遗留问题与建议的后续工作
+
+1. **E2E 未在 T11c 环境重跑**：本机没有浏览器，未运行 `npm run test:e2e`；25 张 PNG 未修改，运行时行为未变。合并前应在有浏览器的环境重跑严格截图。
+2. **表归属靠源码扫描**：`table-ownership.test.mjs` 能阻止固定区直接引用插件表，但不是数据库权限隔离；未来可加 SQL 访问审计或只读视图。
+3. **`server/chat-connectors/` 仍保留通用底层原语**（注册表、可见文本差分、归档端点）。渠道业务已进插件，若后续继续收口，可评估把这些原语并入 `plugins/channel/`。
+4. **部分插件仍用 `legacyViews`**（文献、科研、临床速查、DRG、试验、随访）保持旧 `?view=` URL。这是有意的兼容层；未来可逐个改为命名插槽，但要保留旧 URL 重定向。
+5. **插件服务只有整数 `apiVersion`**，没有语义化版本协商；跨插件接口变更时要靠 `requires.plugins` 范围 + `apiVersion` 双约束。
+6. **插件模板是最小示例**：没有内置 CSS、分页、权限细分和截图测试；复杂插件应以现有 `followup`/`trials` 为参考。
+7. **文档语言**：`docs/PLUGIN_GUIDE.md` 为中文；README_EN 的导航指向同一中文指南，符合仓库“详细指南暂以中文为主”的现状。
+8. **插件数量口径**：计划早期写“16 个插件”，包含过渡插件 `legacy-agenda`；T11c 清理后实际可加载 15 个，本文和架构文档已按“15 活跃 + 1 已撤销”说明。

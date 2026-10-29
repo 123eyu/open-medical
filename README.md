@@ -500,7 +500,7 @@ Docker 为可选依赖，用于容器化终端与部分办公工具。具体支�
 | 微信、企业微信与消息归档 | [聊天连接插件](docs/chat-connectors.md) |
 | 患者、消息和随访的数据关系 | [患者管理](docs/PATIENTS.md) |
 | 医生界面、交互规则与任务验收 | [开发指南](docs/DEVELOPMENT_GUIDE.md) |
-| 系统架构与扩展开发 | [架构说明](docs/ARCHITECTURE.md) · [通用内核](docs/GENERIC_RUNTIME.md) · [编排与调度](docs/ORCHESTRATION.md) |
+| 系统架构与扩展开发 | [架构说明](docs/ARCHITECTURE.md) · [插件开发指南](docs/PLUGIN_GUIDE.md) · [通用内核](docs/GENERIC_RUNTIME.md) · [编排与调度](docs/ORCHESTRATION.md) |
 | 运行时支持范围 | [运行时兼容说明](RUNTIME_COMPATIBILITY.md) |
 | 私有远程任务队列与 Worker | [远程部署](deploy/remote/README.md) |
 
