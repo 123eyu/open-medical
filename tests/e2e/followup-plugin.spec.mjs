@@ -43,6 +43,8 @@ test("停用 followup 后患者沟通与随访 tab 消失，重新启用后恢�
     await expect(
       page.getByRole("heading", { name: "患者概览", exact: true }),
     ).toBeVisible();
+    const areas = page.getByRole("navigation", { name: "患者工作内容" });
+    await areas.getByRole("button", { name: "沟通与随访" }).click();
     const tabs = page.getByRole("navigation", { name: "患者栏目" });
     await expect(tabs.getByRole("button", { name: /消息记录/ })).toHaveCount(0);
     await expect(

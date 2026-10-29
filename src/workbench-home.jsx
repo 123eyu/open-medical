@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { careSetupProgress, requestPluginIntent } from "./plugin-navigation";
+import { usePluginEnabled } from "./plugin-slots";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
@@ -291,6 +292,7 @@ export function WorkbenchHome({
   fileInputRef,
   onFilesPicked,
 }) {
+  const followupEnabled = usePluginEnabled("followup");
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [category, setCategory] = useState("clinical");
@@ -309,6 +311,7 @@ export function WorkbenchHome({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [pickedSkills, setPickedSkills] = useState(draftState.pickedSkills ?? []);
   useEffect(() => { onDraftChange?.({prompt, patientId, projectId, flowId, pickedSkills}); }, [prompt, patientId, projectId, flowId, pickedSkills]);
+  useEffect(() => { if (!followupEnabled && flowId === "followup") setFlowId(""); }, [followupEnabled, flowId]);
   const inputRef = useRef(null);
   // The doctor's own templates (extension center) and learned ordering.
   const [workbenchPrefs, setWorkbenchPrefs] = useState(null);
@@ -317,10 +320,11 @@ export function WorkbenchHome({
     api("/api/extensions/prefs").then(setWorkbenchPrefs).catch(() => {});
   }, [config]);
   const customFlows = (workbenchPrefs?.quickTasks || []).map((q) => ({ ...q, icon: ClipboardList, category: "mine", output: "按所选模板整理" }));
-  const allFlows = [...customFlows, ...MEDICAL_WORKFLOWS];
+  const allFlows = [...customFlows, ...MEDICAL_WORKFLOWS]
+    .filter((flow) => flow.id !== "followup" || followupEnabled);
   const starterFlows = (workbenchPrefs?.starters || []).map((id) => allFlows.find((f) => f.id === id)).filter(Boolean);
   const selectedFlow = allFlows.find((flow) => flow.id === flowId);
-  const isFollowup = flowId === "followup";
+  const isFollowup = flowId === "followup" && followupEnabled;
   const isHome = view === "home";
   const skillOptions = config?.skills || [];
   const mentionMatches = skillMention

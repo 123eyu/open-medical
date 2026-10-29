@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer as createViteServer } from "vite";
+import { resolveCommunicationTab } from "../../src/patient-tabs.js";
 
 async function load() {
   const vite = await createViteServer({
@@ -43,6 +44,24 @@ function tabsHarness(slots) {
   };
 }
 
+
+function fallbackHarness(slots) {
+  return function Fallback() {
+    const contributions = slots.useSlot("patient.tabs");
+    const tabs = slots.mergePatientTabs(contributions, {
+      area: "communication",
+      builtin: [
+        ["appointments", "复诊预约", 20],
+        ["tracking", "检查与转诊", 40],
+      ],
+    });
+    return createElement("span", {
+      "data-first-message": resolveCommunicationTab(tabs, "messages"),
+      "data-first-followup": resolveCommunicationTab(tabs, "followups"),
+    });
+  };
+}
+
 test("followup 启用时贡献消息/随访 tab，legacyTab 保持旧 URL id", async (t) => {
   const { vite, slots, plugin } = await load();
   t.after(() => vite.close());
@@ -57,6 +76,10 @@ test("followup 启用时贡献消息/随访 tab，legacyTab 保持旧 URL id", a
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(keys, ["messages", "appointments", "followups", "tracking"]);
+
+  const fallback = renderToStaticMarkup(createElement(fallbackHarness(slots)));
+  assert.match(fallback, /data-first-message="messages"/);
+  assert.match(fallback, /data-first-followup="followups"/);
 
   const messages = plugin.slots["patient.tabs"].find((tab) => tab.id === "messages");
   const followups = plugin.slots["patient.tabs"].find((tab) => tab.id === "followups");
@@ -86,6 +109,10 @@ test("followup 停用时消息/随访 tab 与设置面板都不出现", async (t
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(keys, ["appointments", "tracking"]);
+
+  const fallback = renderToStaticMarkup(createElement(fallbackHarness(slots)));
+  assert.match(fallback, /data-first-message="appointments"/);
+  assert.match(fallback, /data-first-followup="appointments"/);
 
   function Panels() {
     const panels = slots.useSlot("settings.panels");

@@ -4,6 +4,7 @@ import { parsePastedMessages } from "../shared/message-import.mjs";
 import { messageChannelLabel } from "../shared/message-provenance.mjs";
 import { PatientDashboard } from "./patient-dashboard";
 import { loadPatientCore, loadPatientOptional } from "./patient-detail-data";
+import { resolveCommunicationTab } from "./patient-tabs";
 import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -92,9 +93,22 @@ export function PatientsView({
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
   const followupEnabled = usePluginEnabled("followup");
+  // Bootstrap status is available before the lazy UI module finishes loading,
+  // so a direct ?tab=followups link is not mistaken for a disabled plugin.
+  const followupReady =
+    followupEnabled ||
+    Boolean(config?.plugins?.some((plugin) => plugin.id === "followup" && plugin.status === "ready"));
   const pluginTabs = useSlot("patient.tabs");
   const pluginActions = useSlot("patient.actions");
   const activePluginTab = findPatientTab(pluginTabs, tab);
+  const communicationTabs = mergePatientTabs(pluginTabs, {
+    area: "communication",
+    builtin: [
+      ["appointments", "复诊预约", 20],
+      ["tracking", "检查与转诊", 40],
+    ],
+  });
+  const firstCommunicationTab = communicationTabs[0]?.key || "appointments";
   const [clinicalEditRequest, setClinicalEditRequest] = useState(null);
   useEffect(() => { setClinicalEditRequest(null); }, [detail?.id]);
   // 时间轴「查看原文」跨标签跳转的目标材料：状态放在父级，因为按 tab 切换
@@ -103,14 +117,15 @@ export function PatientsView({
   const [labFocus, setLabFocus] = useState(null);
   useEffect(() => { if (tab !== "labs") setLabFocus(null); }, [tab]);
   const openRecordTab = (nextTab, opts = {}) => {
-    setTab(nextTab);
-    setClinicalEditRequest(opts.edit ? { patientId: detail.id, tab: nextTab } : null);
+    const targetTab = resolveCommunicationTab(communicationTabs, nextTab);
+    setTab(targetTab);
+    setClinicalEditRequest(opts.edit ? { patientId: detail.id, tab: targetTab } : null);
     if ("focusFile" in opts) setSourceFocus(opts.focusFile);
-    if (nextTab === "labs") setLabFocus(opts.focusLab ? { patientId: detail.id, key: opts.focusLab } : null);
-    if (nextTab === "followups" && opts.patientId === detail?.id && opts.reviewDate) {
+    if (targetTab === "labs") setLabFocus(opts.focusLab ? { patientId: detail.id, key: opts.focusLab } : null);
+    if (targetTab === "followups" && opts.patientId === detail?.id && opts.reviewDate) {
       setFollowupSource({ patientId: detail.id, reviewDate: opts.reviewDate, title: opts.title });
     }
-    if (nextTab === "followups" && opts.focusFollowupId) setFollowupFocus({ id: opts.focusFollowupId, token: Date.now() });
+    if (targetTab === "followups" && opts.focusFollowupId) setFollowupFocus({ id: opts.focusFollowupId, token: Date.now() });
   };
   const [patientLoading, setPatientLoading] = useState(false);
   const [optionalVersion, setOptionalVersion] = useState(0);
@@ -222,9 +237,13 @@ export function PatientsView({
     try {
       // The fixed record must open even when optional plugin routes are gone.
       const core = await loadPatientCore(api, id);
+      const targetTab =
+        (nextTab === "messages" || nextTab === "followups") && !followupReady
+          ? firstCommunicationTab
+          : nextTab;
       const work = await api(`/api/sessions/${core.patient.sessionId}`);
       if (version !== patientGeneration.current) return;
-      setTab(nextTab);
+      setTab(targetTab);
       onSwitchCurrent?.(id);
       setDetail(core.patient);
       setRisks(core.risks);
@@ -467,13 +486,6 @@ export function PatientsView({
     area: "record",
     builtin: RECORD_TABS,
   });
-  const communicationTabs = mergePatientTabs(pluginTabs, {
-    area: "communication",
-    builtin: [
-      ["appointments", "复诊预约", 20],
-      ["tracking", "检查与转诊", 40],
-    ],
-  });
   const patientSectionTabs =
     activeArea === "communication" ? communicationTabs : recordTabs;
   return (
@@ -689,7 +701,7 @@ export function PatientsView({
           <nav className="tab-row patient-area-tabs" aria-label="患者工作内容">
             <button className={isRecordTab(tab) || activePluginTab?.area === "record" ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
             <button className={tab === "assistance" ? "active" : ""} onClick={() => setTab("assistance")}>诊疗辅助</button>
-            <button className={["messages", "followups", "tracking", "appointments"].includes(tab) || activePluginTab?.area === "communication" ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
+            <button className={["messages", "followups", "tracking", "appointments"].includes(tab) || activePluginTab?.area === "communication" ? "active" : ""} onClick={() => setTab(firstCommunicationTab)}>沟通与随访</button>
           </nav>
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
             {patientSectionTabs.map((entry) => {

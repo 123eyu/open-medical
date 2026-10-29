@@ -489,6 +489,7 @@ function App() {
   const resultCards = useSlot("chat.resultCards");
   const legacyViews = useSlot("legacyViews");
   const similarCasesEnabled = usePluginEnabled("similar-cases");
+  const followupEnabled = usePluginEnabled("followup");
   const cardForArtifact = (artifact) => resultCards.find((item) => item.type === artifact?.type) || null;
   const [config, setConfig] = useState(null),
     [sessions, setSessions] = useState([]),
@@ -2356,7 +2357,8 @@ function App() {
                   ))}
                 </div>
                 <div className="panel-scroll">
-                  {tab === "results" &&
+                  {followupEnabled &&
+                    tab === "results" &&
                     session?.patientId &&
                     session.artifacts.length > 0 && (
                       <div className="next-workflow">
