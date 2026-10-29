@@ -52,7 +52,7 @@ function snapshotShape(overview) {
   };
 }
 
-test("停用 legacy-agenda 后只剩复诊与 followup 插件来源；重新启用后恢复快照", async (t) => {
+test("停用 legacy-agenda 后只失去自定义规则来源；重新启用后恢复快照", async (t) => {
   const app = await startTestServer({
     provider: createScriptedProvider([]),
     serverOptions: { pluginDirs: [PRODUCTION_PLUGINS, CHANNEL_FAKE] },
@@ -79,11 +79,12 @@ test("停用 legacy-agenda 后只剩复诊与 followup 插件来源；重新启�
   assert.equal(reduced.status, 200);
   assert.deepEqual(
     reduced.body.kinds.map(({ kind }) => kind),
-    ["all", "visit", "followup", "tracking", "messages", "trial"],
-    "停用后固定区复诊与已迁移的 followup/care-tasks/trials 插件来源保留，其余旧来源消失",
+    ["all", "risk", "visit", "followup", "tracking", "messages", "trial"],
+    "停用后固定区复诊与已迁移的 risk-rules/followup/care-tasks/trials 插件来源保留，legacy 只剩 custom",
   );
   assert.deepEqual(reduced.body.counts, {
     all: 5,
+    risk: 0,
     visit: 1,
     followup: 1,
     tracking: 0,
@@ -93,17 +94,14 @@ test("停用 legacy-agenda 后只剩复诊与 followup 插件来源；重新启�
   assert.equal(reduced.body.total, SNAPSHOT.total);
   assert.ok(
     reduced.body.items.every((item) =>
-      ["visit", "followup", "tracking", "messages", "trial"].includes(item.kind),
+      ["risk", "visit", "followup", "tracking", "messages", "trial"].includes(item.kind),
     ),
     "停用后今日待办只剩复诊与已迁移插件条目",
   );
 
-  const rejected = await app.request("/api/doctor/overview?kind=risk");
-  assert.equal(rejected.status, 400, "停用后 kind=risk 应返回 400");
-  assert.equal(rejected.body.code, "INVALID_INPUT");
-  for (const kind of ["followup", "messages"]) {
+  for (const kind of ["risk", "followup", "messages"]) {
     const accepted = await app.request(`/api/doctor/overview?kind=${kind}`);
-    assert.equal(accepted.status, 200, `followup 插件的 kind=${kind} 应保留`);
+    assert.equal(accepted.status, 200, `已迁移插件的 kind=${kind} 应保留`);
   }
 
   const enabled = await app.request("/api/plugins/legacy-agenda", {

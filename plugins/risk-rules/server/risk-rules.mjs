@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { AppError, check, identifier, string } from "../errors.mjs";
-import { evaluateMedicationSafety } from "./med-safety.mjs";
+import { AppError, check, identifier, string } from "../../../server/errors.mjs";
+import { evaluateMedicationSafety } from "../../../server/medical/med-safety.mjs";
 
 // Deterministic, data-driven risk rules evaluated against the structured
 // clinical fields of a patient record. Alerts are advisory only: they never
@@ -145,11 +145,6 @@ export class RiskEngine {
   constructor(store, followups = null) {
     this.store = store;
     this.followups = followups;
-    // Per-patient lab monitors set by the doctor on top of the built-in
-    // LAB_RULES; same advisory semantics, thresholds chosen per patient.
-    store.db.exec(
-      "CREATE TABLE IF NOT EXISTS lab_monitors (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, data TEXT NOT NULL)",
-    );
   }
   patientRow(patientId) {
     const row = this.store.db

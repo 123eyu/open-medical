@@ -98,8 +98,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS guideline_chunk_vectors (doc_id TEXT NOT NULL, ord INTEGER NOT NULL, model TEXT NOT NULL DEFAULT '', dim INTEGER NOT NULL, vector TEXT NOT NULL, PRIMARY KEY(doc_id, ord, model));
       CREATE INDEX IF NOT EXISTS guideline_chunks_doc ON guideline_chunks(doc_id,ord);
       CREATE TABLE IF NOT EXISTS followup_plans (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS risk_alerts (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, rule_key TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-      CREATE UNIQUE INDEX IF NOT EXISTS risk_alerts_key ON risk_alerts(patient_id,rule_key);
       CREATE TABLE IF NOT EXISTS case_library (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS context_archives (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, run_id TEXT, hash TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS context_archives_session ON context_archives(session_id);

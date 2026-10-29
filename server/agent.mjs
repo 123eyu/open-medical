@@ -51,7 +51,6 @@ import { Extensions } from "./medical/extensions.mjs";
 import { extensionTools } from "./medical/extension-tools.mjs";
 import { DoctorOverview } from "./medical/doctor-overview.mjs";
 import { buildShareRecord } from "./medical/deidentify.mjs";
-import { RiskEngine } from "./medical/risk-rules.mjs";
 import { onlineCaseTools } from "./medical/online-cases.mjs";
 import { CaseLibrary, caseTools } from "./medical/cases.mjs";
 import { cohortProfileTool } from "./medical/cohort-profile.mjs";
@@ -673,7 +672,10 @@ export function createServer(options = {}) {
     },
   );
   const careService = () => requireFollowupService().care;
-  const risks = new RiskEngine(store, followups);
+  // Risk rules are plugin-owned. Fixed patient flows still trigger an
+  // evaluation when the plugin is active; disabled means a no-op.
+  const riskEngine = () =>
+    pluginActive("risk-rules") ? pluginService("risk-rules") : null;
   const schedule = new PatientSchedule(store, patients);
   const doctorOverview = new DoctorOverview(store, sessionBridge, {
     schedule,
@@ -703,7 +705,9 @@ export function createServer(options = {}) {
       });
     },
   });
-  const patientBrief = new PatientBrief(store, patients);
+  const patientBrief = new PatientBrief(store, patients, {
+    riskEnabled: () => pluginActive("risk-rules"),
+  });
   const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, {
     getProvider: () => providerConfigured(provider) ? provider : null,
     // The registration implementation belongs to the channel plugin; resolve
@@ -856,7 +860,7 @@ export function createServer(options = {}) {
       isActive: (id = "followup") => pluginHost.isActive(id),
       syncActivation: () => pluginHost.syncActivation(),
     },
-    risks,
+    risks: { evaluatePatient: (patientId) => riskEngine()?.evaluatePatient(patientId) },
     // Dependencies for the generic channel plugin. They are fixed-region
     // objects; the plugin owns the gateway and exposes it back as a service.
     channelHost: {
@@ -907,7 +911,9 @@ export function createServer(options = {}) {
   pluginHost.setup();
   const followup = pluginActive("followup") ? followupService() : null;
   if (followup)
-    risks.surveyAlertsProvider = (patient) => followup.surveys.alerts(patient);
+    if (riskEngine())
+      riskEngine().surveyAlertsProvider = (patient) =>
+        followup.surveys.alerts(patient);
   const trialService = pluginActive("trials") ? pluginService("trials") : null;
   const careTasksService = pluginActive("care-tasks")
     ? pluginService("care-tasks")
@@ -1211,7 +1217,7 @@ export function createServer(options = {}) {
             enabled: true,
             semantic: embedder.available(),
           },
-          riskAlerts: risks.counts(),
+          riskAlerts: riskEngine()?.counts() || { active: 0, critical: 0 },
           medSafety: { enabled: true },
           scales: {
             enabled: pluginActive("clinical-ref"),
@@ -1750,31 +1756,6 @@ export function createServer(options = {}) {
           excludeRiskAlerts: Boolean(url.searchParams.get("patientId")) && url.searchParams.get("excludeRiskAlerts") === "1",
           offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 12),
         }));
-      if (path === "/api/risk-alerts" && req.method === "GET")
-        return send(res, 200, {
-          alerts: risks.list({
-            patientId: url.searchParams.get("patientId") || undefined,
-            status: url.searchParams.get("status") || undefined,
-          }),
-          counts: risks.counts(),
-        });
-      if (path === "/api/risk-alerts/evaluate" && req.method === "POST")
-        return send(res, 200, risks.evaluateAll());
-      if (
-        parts[0] === "api" &&
-        parts[1] === "risk-alerts" &&
-        parts.length === 4 &&
-        ["ack", "resolve", "reopen"].includes(parts[3]) &&
-        req.method === "POST"
-      ) {
-        const status =
-          parts[3] === "ack"
-            ? "acknowledged"
-            : parts[3] === "resolve"
-              ? "resolved"
-              : "active";
-        return send(res, 200, risks.setStatus(parts[2], status));
-      }
       if (path === "/api/cases" && req.method === "GET")
         return send(
           res,
@@ -2053,7 +2034,7 @@ export function createServer(options = {}) {
         });
       if (path === "/api/patients" && req.method === "POST") {
         const patient = patients.create(await body(req));
-        risks.evaluatePatient(patient.id);
+        riskEngine()?.evaluatePatient(patient.id);
         return send(res, 201, patient);
       }
       if (path === "/api/patients/group-suggestions" && req.method === "POST")
@@ -2123,24 +2104,6 @@ export function createServer(options = {}) {
           if (req.method === "GET") return send(res, 200, patients.labDisplay(pid));
           if (req.method === "PATCH") return send(res, 200, patients.updateLabDisplay(pid, await body(req)));
         }
-        if (parts[3] === "lab-monitors") {
-          if (parts.length === 4 && req.method === "GET") return send(res, 200, { monitors: risks.listMonitors(pid) });
-          if (parts.length === 4 && req.method === "POST") {
-            const monitor = risks.createMonitor(pid, await body(req));
-            risks.evaluatePatient(pid);
-            return send(res, 201, monitor);
-          }
-          if (parts.length === 5 && req.method === "PATCH") {
-            const monitor = risks.updateMonitor(pid, identifier(parts[4]), await body(req));
-            risks.evaluatePatient(pid);
-            return send(res, 200, monitor);
-          }
-          if (parts.length === 5 && req.method === "DELETE") {
-            risks.removeMonitor(pid, identifier(parts[4]), (await body(req)).revision);
-            risks.evaluatePatient(pid);
-            return send(res, 200, { ok: true });
-          }
-        }
         if (parts.length === 4 && parts[3] === "brief" && req.method === "GET")
           return send(res, 200, patientBrief.read(pid));
         if (parts[3] === "export" && req.method === "GET")
@@ -2151,7 +2114,7 @@ export function createServer(options = {}) {
           if (req.method === "GET") return send(res, 200, patients.get(pid));
           if (req.method === "PATCH") {
             const updated = patients.update(pid, await body(req));
-            risks.evaluatePatient(pid);
+            riskEngine()?.evaluatePatient(pid);
             return send(res, 200, updated);
           }
           if (req.method === "DELETE") {
@@ -2540,7 +2503,6 @@ export function createServer(options = {}) {
   });
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
-  server.risks = risks;
   server.cases = cases;
   server.schedule = schedule;
   server.extensions = extensions;

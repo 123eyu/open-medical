@@ -52,6 +52,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   assert.equal(byId.drg.status, "ready");
   assert.equal(byId["similar-cases"].status, "ready");
   assert.equal(byId["care-tasks"].status, "ready");
+  assert.equal(byId["risk-rules"].status, "ready");
   assert.equal(byId.trials.status, "ready");
 
   const list = await app.request("/api/plugins");
@@ -71,6 +72,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "literature",
       "needs-missing",
       "research-stats",
+      "risk-rules",
       "similar-cases",
       "trials",
     ],

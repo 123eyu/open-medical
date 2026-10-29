@@ -20,10 +20,16 @@ export async function loadPatientOptional(
   };
 }
 
-export async function loadPatientCore(api, id) {
+export async function loadPatientCore(
+  api,
+  id,
+  { riskEnabled = true } = {},
+) {
   const [patient, risk] = await Promise.all([
     api(`/api/patients/${encodeURIComponent(id)}`),
-    optional(api(`/api/risk-alerts?patientId=${id}`), { alerts: [] }),
+    riskEnabled
+      ? optional(api(`/api/risk-alerts?patientId=${id}`), { alerts: [] })
+      : Promise.resolve({ alerts: [] }),
   ]);
   return {
     patient,
@@ -34,10 +40,10 @@ export async function loadPatientCore(api, id) {
 export async function loadPatientBundle(
   api,
   id,
-  { followupEnabled = false } = {},
+  { followupEnabled = false, riskEnabled = true } = {},
 ) {
   const [core, optionalData] = await Promise.all([
-    loadPatientCore(api, id),
+    loadPatientCore(api, id, { riskEnabled }),
     loadPatientOptional(api, id, { followupEnabled }),
   ]);
   return { ...core, ...optionalData };

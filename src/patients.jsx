@@ -92,6 +92,20 @@ export function PatientsView({
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
   const followupActive = usePluginActive("followup");
+  const riskActive = usePluginActive("risk-rules");
+  // Direct patient URLs can render before the lazy UI registration finishes;
+  // bootstrap already carries the plugin verdict, so use it for the first
+  // request without falling back to a disabled plugin.
+  const riskReady =
+    riskActive ||
+    Boolean(
+      config?.plugins?.some(
+        (plugin) =>
+          plugin.id === "risk-rules" &&
+          plugin.status === "ready" &&
+          plugin.active !== false,
+      ),
+    );
   // Bootstrap status is available before the lazy UI module finishes loading,
   // so a direct ?tab=followups link is not mistaken for a disabled plugin.
   const followupReady =
@@ -232,7 +246,7 @@ export function PatientsView({
     setPaste("");
     try {
       // The fixed record must open even when optional plugin routes are gone.
-      const core = await loadPatientCore(api, id);
+      const core = await loadPatientCore(api, id, { riskEnabled: riskReady });
       const targetTab =
         (nextTab === "messages" || nextTab === "followups") && !followupReady
           ? firstCommunicationTab
@@ -739,7 +753,7 @@ export function PatientsView({
           />}
           {!activePluginTab && tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {!activePluginTab && tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
-          {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={<RiskList
+          {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={riskActive ? <RiskList
                 alerts={[...risks].sort(
                   (a, b) =>
                     (a.status === "active" ? 0 : 1) -
@@ -765,7 +779,7 @@ export function PatientsView({
                   );
                   await refreshPatient();
                 }}
-              />}/></div>}
+              /> : null}/></div>}
           {!activePluginTab && tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} onOpenTask={onOpenWorkspace}/>}
         </>
       )}

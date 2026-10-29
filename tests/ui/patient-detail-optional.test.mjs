@@ -40,6 +40,23 @@ test("followup 停用：不请求 messages/followups，患者详情仍可加载"
   );
 });
 
+test("risk-rules 停用：不请求 risk-alerts，患者详情仍可加载", async () => {
+  const calls = [];
+  const api = async (path) => {
+    calls.push(path);
+    if (path === "/api/patients/patient-1") return patient;
+    throw Object.assign(new Error("接口不存在"), { code: "NOT_FOUND", status: 404 });
+  };
+
+  const bundle = await loadPatientBundle(api, "patient-1", {
+    followupEnabled: false,
+    riskEnabled: false,
+  });
+  assert.equal(bundle.patient.id, "patient-1");
+  assert.deepEqual(bundle.risks, []);
+  assert.deepEqual(calls, ["/api/patients/patient-1"]);
+});
+
 test("followup 启用但可选接口 404：详情加载不被拒绝，可选数据按空处理", async () => {
   const api = async (path) => {
     if (path === "/api/patients/patient-1") return patient;

@@ -7,7 +7,7 @@ const source = (value, fallback) => value || fallback;
 // A deterministic, local read model. It does not infer diagnoses, normalize
 // incompatible units, or turn missing history into a negative clinical fact.
 export class PatientBrief {
-  constructor(store, patients) { this.store = store; this.patients = patients; }
+  constructor(store, patients, { riskEnabled = () => true } = {}) { this.store = store; this.patients = patients; this.riskEnabled = riskEnabled; }
   read(patientId) {
     const p = this.patients.row(patientId);
     const db = this.store.db;
@@ -41,7 +41,9 @@ export class PatientBrief {
       .map((row) => { const task = JSON.parse(row.data); return { id: task.id, title: task.title, status: task.status, dueAt: task.dueAt, note: task.note, resultSource: task.resultSource, reviewNote: task.reviewNote, source: `待跟进事项 ${task.id}` }; });
     const counts = this.patients.counts(patientId);
     const pendingReviews = db.prepare("SELECT COUNT(*) n FROM pending_actions WHERE patient_id=? AND status='pending'").get(patientId).n;
-    const activeRisks = db.prepare("SELECT COUNT(*) n FROM risk_alerts WHERE patient_id=? AND status='active'").get(patientId).n;
+    const activeRisks = this.riskEnabled()
+      ? db.prepare("SELECT COUNT(*) n FROM risk_alerts WHERE patient_id=? AND status='active'").get(patientId).n
+      : 0;
     const allergyStatus = (p.allergies || []).length ? "recorded" : p.allergyStatus || "unknown";
     const gaps = [];
     if (allergyStatus === "unknown") gaps.push({ field: "allergies", label: "过敏史未记录", tab: "clinical" });
