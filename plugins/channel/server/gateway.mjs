@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import QRCode from "qrcode";
 import { FeishuRegistration } from "./feishu-registration.mjs";
-import { check } from "../errors.mjs";
-import { sqliteTransaction } from "../sqlite-transaction.mjs";
-import { providerConfigured } from "../core/provider-status.mjs";
+import { check } from "../../../server/errors.mjs";
+import { sqliteTransaction } from "../../../server/sqlite-transaction.mjs";
+import { providerConfigured } from "../../../server/core/provider-status.mjs";
 import {
   MessageTransport,
   wechatHeaders,
@@ -28,13 +28,23 @@ const command = (text) =>
   })[text];
 
 export class MessageGateway {
-  constructor({ store, vault, bridge, getProvider, knowledgeBot, ...options }) {
+  constructor({
+    store,
+    vault,
+    bridge,
+    getProvider,
+    knowledgeBot,
+    getKnowledgeBot,
+    ...options
+  }) {
     Object.assign(this, {
       db: store.db,
       vault,
       bridge,
       getProvider,
       knowledgeBot,
+      getKnowledgeBot:
+        getKnowledgeBot || (() => this.knowledgeBot),
       options,
     });
     this.feishuBinding = new FeishuRegistration({
@@ -213,7 +223,7 @@ export class MessageGateway {
     );
   }
   assertNoKnowledgeConflict(appId) {
-    const c = this.knowledgeBot?.config();
+    const c = this.getKnowledgeBot()?.config();
     check(
       !c?.enabled || c.appId !== appId,
       "CONNECTION_CONFLICT",

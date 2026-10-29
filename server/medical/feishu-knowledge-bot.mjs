@@ -1,4 +1,3 @@
-import { FeishuRegistration } from "../messaging/feishu-registration.mjs";
 import { externalUseAllowed } from './knowledge-metadata.mjs';
 import * as Lark from '@larksuiteoapi/node-sdk';
 import { randomUUID } from 'node:crypto';
@@ -14,16 +13,28 @@ function socketFactory(options, handler) {
 }
 
 export class FeishuKnowledgeBot {
-  constructor(store, vault, library, { fetchImpl = fetch, createSocket = socketFactory, now = () => Date.now(), autoStart = true, getProvider = () => null } = {}) {
-    Object.assign(this, { db: store.db, vault, library, fetchImpl, createSocket, now, autoStart, getProvider });
+  constructor(store, vault, library, { fetchImpl = fetch, createSocket = socketFactory, now = () => Date.now(), autoStart = true, getProvider = () => null, createFeishuRegistration = null } = {}) {
+    Object.assign(this, { db: store.db, vault, library, fetchImpl, createSocket, now, autoStart, getProvider, createFeishuRegistration });
     this.state = 'disabled'; this.message = ''; this.generation = 0; this.jobs = new Set(); this.controllers = new Set(); this.contexts = new Map(); this.queues = new Map(); this.busy = false;
     this.db.exec(`CREATE TABLE IF NOT EXISTS knowledge_bot_settings(id INTEGER PRIMARY KEY,data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS knowledge_bot_groups(app_id TEXT,chat_id TEXT,data TEXT NOT NULL,PRIMARY KEY(app_id,chat_id));
       CREATE TABLE IF NOT EXISTS knowledge_bot_messages(app_id TEXT,message_id TEXT,at INTEGER,PRIMARY KEY(app_id,message_id));`);
     this.initializeBinding();
   }
+  get binding() {
+    if (!this._binding) {
+      check(typeof this.createFeishuRegistration === 'function', 'CHANNEL_SERVICE', '飞书扫码绑定需要可用的 channel 插件服务', 503);
+      const registration = this.createFeishuRegistration(this.bindingOptions);
+      check(registration && typeof registration.start === 'function', 'CHANNEL_SERVICE', '飞书扫码绑定需要可用的 channel 插件服务', 503);
+      this._binding = registration;
+    }
+    return this._binding;
+  }
+  bindingOrNull() {
+    try { return this.binding; } catch { return null; }
+  }
   initializeBinding() {
-    this.binding = new FeishuRegistration({ vault: this.vault, key: 'knowledge-feishu-registration', fetchImpl: this.fetchImpl, now: this.now,
+    this.bindingOptions = { vault: this.vault, key: 'knowledge-feishu-registration', fetchImpl: this.fetchImpl, now: this.now,
       canStart: () => check(!this.busy && !this.config().appId, 'ALREADY_CONNECTED', '请先断开已有连接，再重新扫码。', 409),
       accept: (flow, complete) => {
         check(!this.busy && !this.config().appId, 'ALREADY_CONNECTED', '连接已变化', 409);
@@ -38,7 +49,7 @@ export class FeishuKnowledgeBot {
         });
         return appId;
       }
-    });
+    };
   }
   async disconnect(revision) {
     check(!this.busy, 'BUSY', '正在更新连接，请稍后再试', 409);
@@ -49,7 +60,7 @@ export class FeishuKnowledgeBot {
       await this.stop();
       sqliteTransaction(this.db, () => {
         this.vault.delete(KEY);
-        this.binding.clearForChannel(old.appId);
+        this.bindingOrNull()?.clearForChannel(old.appId);
         this.db.prepare('INSERT OR REPLACE INTO knowledge_bot_settings VALUES(1,?)').run(JSON.stringify({ enabled: false, appId: '', collections: old.collections, groups: [], privateChats: [], answerMode: old.answerMode, revision: old.revision + 1 }));
       });
       return this.settings();
@@ -59,7 +70,7 @@ export class FeishuKnowledgeBot {
   settings() {
     const config = this.config();
     const provider = this.getProvider();
-    return { ...config, feishuBinding: this.binding.publicStatus(), model: provider ? { name: provider.model || '', provider: provider.provider || '', local: provider.local === true } : null, hasSecret: Boolean(this.vault.get(KEY).appSecret), state: this.state, message: this.message, busy: this.busy,
+    return { ...config, feishuBinding: this.bindingOrNull()?.publicStatus() ?? { status: 'unavailable' }, model: provider ? { name: provider.model || '', provider: provider.provider || '', local: provider.local === true } : null, hasSecret: Boolean(this.vault.get(KEY).appSecret), state: this.state, message: this.message, busy: this.busy,
       availableCollections: this.library.collections().map(c => ({ name: c.name, documentCount: c.documentCount, sharedCount: this.library.list({ collection: c.name, externalOnly: true }).length })),
       discoveredGroups: this.db.prepare('SELECT chat_id,data FROM knowledge_bot_groups WHERE app_id=?').all(config.appId).map(r => ({ id: r.chat_id, ...JSON.parse(r.data) })) };
   }

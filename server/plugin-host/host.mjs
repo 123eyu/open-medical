@@ -1129,7 +1129,7 @@ export class PluginHost {
     return results;
   }
 
-  setEnabled(id, enabled) {
+  async setEnabled(id, enabled) {
     check(typeof enabled === "boolean", "INVALID_INPUT", "enabled 必须是布尔值");
     const record = this.byId.get(id);
     check(record, "NOT_FOUND", "插件不存在", 404);
@@ -1142,6 +1142,43 @@ export class PluginHost {
       .run(id, enabled ? 1 : 0, time);
     record.enabled = enabled;
     if (!enabled) this.statusCache.delete(id);
+    // A runtime toggle must also start/stop background loops; routes alone are
+    // not enough for plugins whose lifecycle owns timers or sockets.
+    if (
+      !enabled &&
+      record.spec?.lifecycle &&
+      this.startedPlugins.has(id) &&
+      this.lifecycleStates.get(id) !== "stopped"
+    ) {
+      try {
+        if (record.spec.lifecycle.stop)
+          await record.spec.lifecycle.stop(this.contextFor(record));
+        this.lifecycleStates.set(id, "stopped");
+        this.lifecycleErrors.delete(id);
+      } catch (error) {
+        this.lifecycleErrors.set(id, `停止失败：${errorMessage(error)}`);
+        console.error(`插件 ${id} 停止失败:`, error);
+      }
+    } else if (
+      enabled &&
+      record.available &&
+      record.spec?.lifecycle &&
+      ["stopped", "failed"].includes(this.lifecycleStates.get(id))
+    ) {
+      this.lifecycleStates.set(id, "starting");
+      this.startedPlugins.add(id);
+      this.drainedPlugins.delete(id);
+      try {
+        if (record.spec.lifecycle.start)
+          await record.spec.lifecycle.start(this.contextFor(record));
+        this.lifecycleStates.set(id, "started");
+        this.lifecycleErrors.delete(id);
+      } catch (error) {
+        this.lifecycleStates.set(id, "failed");
+        this.lifecycleErrors.set(id, errorMessage(error));
+        console.error(`插件 ${id} 启动失败:`, error);
+      }
+    }
     this._buildLegacyRoutes();
     return this.list().find((item) => item.id === id);
   }

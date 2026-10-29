@@ -66,7 +66,6 @@ import { Backups } from "./medical/backups.mjs";
 import { DemoPack } from "./medical/demo-pack.mjs";
 import { CareTasks } from "./medical/care-tasks.mjs";
 import { FeishuKnowledgeBot } from "./medical/feishu-knowledge-bot.mjs";
-import { MessageGateway, messagingApi } from "./messaging/gateway.mjs";
 import { DoctorNotifications } from "./medical/doctor-notifications.mjs";
 import { PatientSchedule } from "./medical/patient-schedule.mjs";
 import { Extensions } from "./medical/extensions.mjs";
@@ -724,9 +723,19 @@ export function createServer(options = {}) {
       return { sessionId, fileId: file.id, name: file.name };
     },
   });
-  const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, { getProvider: () => providerConfigured(provider) ? provider : null, ...options.knowledgeBotOptions });
-  const doctorNotifications = new DoctorNotifications(store, models.vault, options.doctorNotificationOptions);
-  const messageGateway = new MessageGateway({ store, vault: models.vault, bridge: sessionBridge, getProvider: () => provider, knowledgeBot, ...options.messageGatewayOptions });
+  const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, {
+    getProvider: () => providerConfigured(provider) ? provider : null,
+    // The registration implementation belongs to the channel plugin; resolve
+    // it lazily so fixed modules never import plugins/channel files.
+    createFeishuRegistration: (input) =>
+      pluginHost.pluginServices.channel?.createFeishuRegistration(input),
+    ...options.knowledgeBotOptions,
+  });
+  const doctorNotifications = new DoctorNotifications(store, models.vault, {
+    createFeishuRegistration: (input) =>
+      pluginHost.pluginServices.channel?.createFeishuRegistration(input),
+    ...options.doctorNotificationOptions,
+  });
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
   const backups = new Backups(databasePath);
@@ -775,6 +784,15 @@ export function createServer(options = {}) {
     knowledge: guidelines,
     literature,
     knowledgeOrganizer,
+    // Dependencies for the generic channel plugin. They are fixed-region
+    // objects; the plugin owns the gateway and exposes it back as a service.
+    channelHost: {
+      vault: models.vault,
+      bridge: sessionBridge,
+      getProvider: () => provider,
+      getKnowledgeBot: () => knowledgeBot,
+      options: options.messageGatewayOptions || {},
+    },
   });
   pluginHost.migrate();
   pluginHost.setup();
@@ -1160,7 +1178,7 @@ export function createServer(options = {}) {
           "enabled 必须为布尔值",
         );
         return send(res, 200, {
-          plugin: pluginHost.setEnabled(
+          plugin: await pluginHost.setEnabled(
             decodeURIComponent(pluginRoute[1]),
             input.enabled,
           ),
@@ -1630,7 +1648,11 @@ export function createServer(options = {}) {
         return send(res, 200, { enabled: false, available: false, retired: true, reason: "请使用随访 → 聊天随访中的会话核验与读取" });
       if (["/api/wechat/read", "/api/wechat/send"].includes(path) && req.method === "POST")
         throw new AppError("WECHAT_LEGACY_RETIRED", "旧微信桥接已停用。请在随访 → 聊天随访中核验并关联会话；发送请在微信中完成。", 410);
-      for (const [base, binding] of [["/api/knowledge-bot/feishu-binding", knowledgeBot.binding], ["/api/doctor-notifications/feishu-binding", doctorNotifications.binding]]) {
+      const feishuBindings = [
+        ["/api/knowledge-bot/feishu-binding", knowledgeBot.bindingOrNull()],
+        ["/api/doctor-notifications/feishu-binding", doctorNotifications.bindingOrNull()],
+      ].filter(([, binding]) => binding);
+      for (const [base, binding] of feishuBindings) {
         if (path === base && req.method === "POST") return send(res, 200, await track(binding.begin()));
         if (path === base && req.method === "DELETE") return send(res, 200, binding.cancel((await body(req)).id));
         if (path === base + "/status" && req.method === "POST") return send(res, 200, await track(binding.poll((await body(req)).id)));
@@ -1640,10 +1662,9 @@ export function createServer(options = {}) {
       if (path === "/api/knowledge-bot" && req.method === "GET") return send(res, 200, knowledgeBot.settings());
       if (path === "/api/knowledge-bot" && req.method === "PUT") {
         const input = await body(req);
-        check(!input.enabled || !messageGateway.rows('message_channels').some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
+        check(!input.enabled || !(pluginHost.pluginServices.channel?.rows('message_channels') || []).some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
         return send(res, 200, await track(knowledgeBot.save(input)));
       }
-      if (path.startsWith('/api/message-channels') && await track(messagingApi(messageGateway, req, url, { body: () => body(req), send: (status, value) => send(res, status, value) }))) return;
       if (path === "/api/doctor-notifications" && req.method === "GET") return send(res, 200, doctorNotifications.settings());
       if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 3 && req.method === "PUT") return send(res, 200, doctorNotifications.save(parts[2], await body(req)));
       if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 4 && req.method === "POST") {
@@ -2692,7 +2713,7 @@ export function createServer(options = {}) {
   server.doctor = runtime.doctor;
   server.knowledgeBot = knowledgeBot;
   server.doctorNotifications = doctorNotifications;
-  server.messageGateway = messageGateway;
+  server.messageGateway = pluginHost.pluginServices.channel?.gateway;
   server.literature = literature;
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
@@ -2715,25 +2736,22 @@ export function createServer(options = {}) {
     workspaces.recovery.start();
     followups.start();
     doctorNotifications.start();
-    knowledgeBot.binding.start();
+    if (pluginHost.pluginServices.channel) knowledgeBot.binding.start();
     knowledgeBot.start();
-    messageGateway.start();
-    chatFollowups.start();
-    care.start();
-    extensions.start();
-    // 插件生命周期在固定区服务启动后统一开始；单个插件失败已在 host 内隔离。
+    // 与迁移前 messageGateway.start() 的位置一致：监听开始后、聊天随访前。
+    // 插件生命周期统一由 host 按依赖拓扑启动，单个插件失败已隔离。
     pluginHost.startAll().catch((error) => {
       console.error("插件启动失败:", error);
     });
+    chatFollowups.start();
+    care.start();
+    extensions.start();
   });
   server.shutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     guidelines.stopStatusQueries?.();
     shutdownPromise = (async () => {
-    // 先停插件后台任务并等待其收尾，再关闭固定区服务与数据库连接。
-    await pluginHost.stopAll();
-    await pluginHost.drainAll();
     await personalRegression.stop();
     workspaces.stopping = true;
     scheduler.stop();
@@ -2742,9 +2760,11 @@ export function createServer(options = {}) {
     workspaces.recovery.stop();
     followups.stop();
     await doctorNotifications.stop();
-    await knowledgeBot.binding.stop();
+    if (pluginHost.pluginServices.channel) await knowledgeBot.binding.stop();
     await knowledgeBot.stop();
-    await messageGateway.stop();
+    // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
+    await pluginHost.stopAll();
+    await pluginHost.drainAll();
     await chatFollowups.stop();
     wecomAibot.stop();
     wechatExp.stop();

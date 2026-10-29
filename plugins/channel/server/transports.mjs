@@ -1,6 +1,6 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
 import { randomBytes } from "node:crypto";
-import { AppError, check } from "../errors.mjs";
+import { AppError, check } from "../../../server/errors.mjs";
 
 const quiet = { debug() {}, info() {}, warn() {}, error() {}, trace() {} };
 export function feishuSocket(options, handler) {

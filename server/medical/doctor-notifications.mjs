@@ -1,4 +1,3 @@
-import { FeishuRegistration } from "../messaging/feishu-registration.mjs";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import QRCode from "qrcode";
 import { AppError, check } from "../errors.mjs";
@@ -27,8 +26,8 @@ function feishuWebhook(value) {
 // Outbound doctor digests only. No patient identities, clinical text or chat
 // messages enter the notification payload. Credentials share the app's vault.
 export class DoctorNotifications {
-  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true } = {}) {
-    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart });
+  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true, createFeishuRegistration = null } = {}) {
+    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart, createFeishuRegistration });
     this.db = store.db; this.active = new Map(); this.controllers = new Set(); this.qr = null; this.stopped = false;
     this.db.exec(`CREATE TABLE IF NOT EXISTS doctor_notification_settings(channel TEXT PRIMARY KEY,data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS doctor_notification_deliveries(channel TEXT NOT NULL,connection_id TEXT NOT NULL,day TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(channel,connection_id,day));`);
@@ -38,8 +37,20 @@ export class DoctorNotifications {
       if (data.status === "sending") this.writeDelivery({ ...data, status: "unknown", message: "上次发送被中断，请核对收件箱后再重试" });
     }
   }
+  get binding() {
+    if (!this._binding) {
+      check(typeof this.createFeishuRegistration === "function", "CHANNEL_SERVICE", "飞书扫码绑定需要可用的 channel 插件服务", 503);
+      const registration = this.createFeishuRegistration(this.bindingOptions);
+      check(registration && typeof registration.start === "function", "CHANNEL_SERVICE", "飞书扫码绑定需要可用的 channel 插件服务", 503);
+      this._binding = registration;
+    }
+    return this._binding;
+  }
+  bindingOrNull() {
+    try { return this.binding; } catch { return null; }
+  }
   initializeBinding() {
-    this.binding = new FeishuRegistration({ vault: this.vault, key: 'notification-feishu-registration', fetchImpl: this.fetchImpl, now: this.now,
+    this.bindingOptions = { vault: this.vault, key: 'notification-feishu-registration', fetchImpl: this.fetchImpl, now: this.now,
       canStart: () => check(!this.active.has('feishu') && !this.publicConfig('feishu').hasConnection, 'ALREADY_CONNECTED', '请先断开已有连接，再重新扫码。', 409),
       accept: (flow, complete) => {
         check(!this.active.has('feishu') && !this.publicConfig('feishu').hasConnection, 'ALREADY_CONNECTED', '连接已变化', 409);
@@ -54,7 +65,7 @@ export class DoctorNotifications {
         });
         return appId;
       }
-    });
+    };
   }
   config(channel) {
     check(CHANNELS.includes(channel), "INVALID_INPUT", "提醒渠道无效");
@@ -68,7 +79,7 @@ export class DoctorNotifications {
   }
   publicConfig(channel) {
     const config = this.config(channel), secret = this.vault.get(KEY(channel));
-    return { ...config, feishuBinding: channel === "feishu" ? this.binding.publicStatus() : undefined, appId: secret.appId, hasConnection: channel === "wechat" ? Boolean(secret.botToken && secret.userId) : Boolean(secret.webhook || (secret.appId && secret.appSecret && secret.userId)), hasSigningSecret: Boolean(secret.signingSecret), busy: this.active.has(channel), delivery: this.receipt(config), preview: this.preview(config.timezone) };
+    return { ...config, feishuBinding: channel === "feishu" ? this.bindingOrNull()?.publicStatus() ?? { status: "unavailable" } : undefined, appId: secret.appId, hasConnection: channel === "wechat" ? Boolean(secret.botToken && secret.userId) : Boolean(secret.webhook || (secret.appId && secret.appSecret && secret.userId)), hasSigningSecret: Boolean(secret.signingSecret), busy: this.active.has(channel), delivery: this.receipt(config), preview: this.preview(config.timezone) };
   }
   settings() { return { channels: CHANNELS.map(channel => this.publicConfig(channel)) }; }
   preview(timezone) {
@@ -107,7 +118,7 @@ export class DoctorNotifications {
     check(!this.active.has(channel), "BUSY", "正在处理该渠道，请稍后再断开", 409);
     check(config.revision === revision, "REVISION_CONFLICT", "配置已变化，请刷新后重试", 409);
     if (channel === "wechat") this.qr = null;
-    else this.binding.clearForChannel(config.connectionId);
+    else this.bindingOrNull()?.clearForChannel(config.connectionId);
     sqliteTransaction(this.db, () => { this.vault.delete(KEY(channel)); this.write({ ...config, enabled: false, connectionId: "", revision: config.revision + 1 }); });
     return this.publicConfig(channel);
   }
@@ -204,6 +215,6 @@ export class DoctorNotifications {
       if (config.enabled && !this.active.has(channel) && clock >= config.time && !this.receipt(config, day)) await this.send(channel).catch(() => {});
     }
   }
-  start() { if (!this.autoStart || this.timer) return; this.binding.start(); this.timer = setInterval(() => { void this.tick().catch(() => {}); }, this.pollMs); this.timer.unref?.(); void this.tick().catch(() => {}); }
-  async stop() { await this.binding.stop(); this.stopped = true; clearInterval(this.timer); for (const c of this.controllers) c.abort(); await Promise.allSettled([...this.active.values()]); }
+  start() { if (!this.autoStart || this.timer) return; this.bindingOrNull()?.start(); this.timer = setInterval(() => { void this.tick().catch(() => {}); }, this.pollMs); this.timer.unref?.(); void this.tick().catch(() => {}); }
+  async stop() { if (this._binding) await this._binding.stop(); this.stopped = true; clearInterval(this.timer); for (const c of this.controllers) c.abort(); await Promise.allSettled([...this.active.values()]); }
 }

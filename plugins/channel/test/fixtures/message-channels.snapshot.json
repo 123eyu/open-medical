@@ -1,0 +1,92 @@
+{
+  "empty": {
+    "status": 200,
+    "body": {
+      "model": {
+        "provider": "scripted",
+        "model": "scripted-baseline",
+        "baseUrl": "",
+        "local": false
+      },
+      "modelFingerprint": "1941a5a7dbd889f679eb9e0708a1314e81c70bfd8c00bdaf8d5be7daef3ee67b",
+      "feishuBinding": {
+        "status": "idle"
+      },
+      "channels": []
+    }
+  },
+  "seeded": {
+    "status": 200,
+    "body": {
+      "model": {
+        "provider": "scripted",
+        "model": "scripted-baseline",
+        "baseUrl": "",
+        "local": false
+      },
+      "modelFingerprint": "1941a5a7dbd889f679eb9e0708a1314e81c70bfd8c00bdaf8d5be7daef3ee67b",
+      "feishuBinding": {
+        "status": "idle"
+      },
+      "channels": [
+        {
+          "id": "snap-channel",
+          "platform": "feishu",
+          "name": "快照连接",
+          "appId": "cli_snapshot0001",
+          "enabled": false,
+          "revision": 1,
+          "consentModel": "",
+          "hasSecret": false,
+          "state": "disabled",
+          "needsConsent": true,
+          "peers": [
+            {
+              "id": "peer-snap",
+              "channelId": "snap-channel",
+              "chatId": "chat-snap",
+              "senderId": "user-snap",
+              "allowed": true,
+              "revision": 0,
+              "sessionId": "",
+              "firstSeen": 0
+            }
+          ],
+          "deliveries": [
+            {
+              "id": "inbox-snap",
+              "peerId": "peer-snap",
+              "status": "failed",
+              "sessionId": "",
+              "runId": "",
+              "at": 0,
+              "sentAt": null,
+              "error": "SNAP"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "invalidSave": {
+    "status": 400,
+    "body": {
+      "error": "渠道类型无效",
+      "code": "INVALID_INPUT"
+    }
+  },
+  "missingRemove": {
+    "status": 409,
+    "body": {
+      "error": "配置已变化，请刷新后操作",
+      "code": "REVISION_CONFLICT"
+    }
+  },
+  "unknownSubpath": {
+    "status": 404,
+    "body": {
+      "error": "接口不存在",
+      "code": "NOT_FOUND"
+    }
+  }
+}

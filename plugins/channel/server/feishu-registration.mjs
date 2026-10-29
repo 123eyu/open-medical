@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import { check } from "../errors.mjs";
+import { check } from "../../../server/errors.mjs";
 
 const KEY = "message-feishu-registration";
 const ENDPOINT = "https://accounts.feishu.cn/oauth/v1/app/registration";
