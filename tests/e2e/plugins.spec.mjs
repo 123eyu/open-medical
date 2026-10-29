@@ -67,7 +67,9 @@ test("启用 hello 插件后出现患者 tab 与设置面板，停用后消失",
       name: `启用 ${PLUGIN_TITLE}`,
     });
     await expect(toggle).toBeChecked();
-    await toggle.uncheck();
+    // The switch is controlled: it stays checked (and disabled) until the PUT
+    // response arrives, so click and let expect poll the final state.
+    await toggle.click();
     await expect(toggle).not.toBeChecked();
     await expect(
       page.getByRole("heading", { name: "Hello 插件设置面板" }),

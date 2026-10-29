@@ -89,6 +89,7 @@ function PluginSettings({ onPluginsChanged }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const busyRef = useRef(false);
   const panels = useSlot("settings.panels");
   useEffect(() => {
     let alive = true;
@@ -99,7 +100,10 @@ function PluginSettings({ onPluginsChanged }) {
     return () => { alive = false; };
   }, []);
   async function toggle(plugin) {
-    if (busy) return;
+    // The controlled checkbox only changes after the PUT response; this guard
+    // also prevents a same-tick double click before React disables the input.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(plugin.id);
     setError("");
     try {
@@ -113,6 +117,7 @@ function PluginSettings({ onPluginsChanged }) {
     } catch (value) {
       setError(value.message);
     } finally {
+      busyRef.current = false;
       setBusy("");
     }
   }
