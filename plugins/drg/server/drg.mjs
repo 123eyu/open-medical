@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { check, string } from "../errors.mjs";
+import { check, string } from "../../../server/errors.mjs";
 
 // Local DRG grouping over a bundled simplified CHS-DRG 1.1 public scheme:
 // principal diagnosis -> MDC -> ADRG (procedure-driven or medical) -> DRG

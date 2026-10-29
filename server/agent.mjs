@@ -61,7 +61,6 @@ import { RiskEngine } from "./medical/risk-rules.mjs";
 import { onlineCaseTools } from "./medical/online-cases.mjs";
 import { CaseLibrary, caseTools } from "./medical/cases.mjs";
 import { cohortProfileTool } from "./medical/cohort-profile.mjs";
-import { DrgService, drgTools } from "./medical/drg.mjs";
 import {
   evaluateMedicationSafety,
   specialPopulationCautions,
@@ -384,8 +383,6 @@ export function createServer(options = {}) {
   guidelines.beforeUpdateDocumentText = id => knowledgeOrganizer.assertTextEditable(id);
   guidelines.afterUpdateDocumentText = id => knowledgeOrganizer.invalidateTextAnalysis(id);
   const cases = options.cases || new CaseLibrary(store);
-  const drg = options.drg || new DrgService(store);
-  drg.load().catch(() => {});
   const medicationSafetyCheck = (args) => {
     const result = evaluateMedicationSafety(args);
     if (Array.isArray(args?.populations) && args.populations.length)
@@ -427,7 +424,6 @@ export function createServer(options = {}) {
     ...caseTools(cases),
     cohortProfileTool(),
     ...onlineCaseTools(literature),
-    ...drgTools(drg),
     {
       definition: {
         type: "function",
@@ -1209,7 +1205,9 @@ export function createServer(options = {}) {
             count: pluginService("clinical-ref")?.scales.list().length || 0,
           },
           labKnowledge: { enabled: true, count: "常见指标内置" },
-          drg: { enabled: true, ...drg.settings() },
+          drg: pluginActive("drg")
+            ? { enabled: true, ...pluginService("drg").settings() }
+            : { enabled: false },
           cases: cases.counts(),
           wechat: { enabled: followupService()?.chatFollowups.config("wechat").enabled === true },
         }); } finally { res.removeListener("close", disconnected); }
@@ -1991,20 +1989,6 @@ export function createServer(options = {}) {
               : undefined,
           }),
         );
-      if (parts[0] === "api" && parts[1] === "drg") {
-        await drg.load();
-        if (parts[2] === "group" && req.method === "POST")
-          return send(res, 200, await drg.group(await body(req)));
-        if (parts[2] === "batch" && req.method === "POST")
-          return send(res, 200, await drg.batchAnalyze(await body(req)));
-        if (parts[2] === "settings") {
-          if (req.method === "GET") return send(res, 200, drg.settings());
-          if (req.method === "POST")
-            return send(res, 200, drg.updateSettings(await body(req)));
-        }
-        if (parts[2] === "import" && req.method === "POST")
-          return send(res, 200, drg.importWeights((await body(req)).weights));
-      }
       if (
         parts[0] === "api" &&
         parts[1] === "cases" &&
@@ -2584,7 +2568,6 @@ export function createServer(options = {}) {
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
   server.risks = risks;
-  server.drg = drg;
   server.cases = cases;
   server.trialCandidates = trialCandidates;
   server.schedule = schedule;

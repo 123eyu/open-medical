@@ -1,6 +1,6 @@
-import { DEMO_DRG, DEMO_DRG_CSV } from "../shared/demo-experience.mjs";
+import { DEMO_DRG, DEMO_DRG_CSV } from "../../../shared/demo-experience.mjs";
 import { useEffect, useState } from "react";
-import { api } from "./agent-runtime";
+import { api } from "../../../src/agent-runtime";
 import { Calculator, FileSpreadsheet, Loader2, Settings2 } from "lucide-react";
 
 const fmt = (value) =>

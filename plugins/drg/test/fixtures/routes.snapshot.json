@@ -1,0 +1,69 @@
+{
+  "/api/drg/settings": {
+    "status": 200,
+    "body": {
+      "rate": 10000,
+      "hospital": "示例统筹区（未配置）",
+      "schemeVersion": "CHS-DRG 1.1 常见病组示例（代表性 ADRG 与权重，仅供参考，可导入覆盖）",
+      "overriddenCodes": 0
+    }
+  },
+  "/api/drg/group": {
+    "status": 200,
+    "body": {
+      "principalDx": "I50.900",
+      "mdc": "05 循环系统疾病",
+      "adrg": "FR2 心力衰竭及心律失常",
+      "adrgType": "medical",
+      "drgCode": "FR23",
+      "complication": {
+        "level": "cc",
+        "label": "伴一般并发症或合并症",
+        "matchedDiagnosis": "E11.900"
+      },
+      "rw": 0.75,
+      "rwSource": "builtin",
+      "estimatedCost": 7500,
+      "actualCost": 12000,
+      "costDeviation": 4500,
+      "schemeVersion": "CHS-DRG 1.1 常见病组示例（代表性 ADRG 与权重，仅供参考，可导入覆盖）",
+      "note": "DRG 结果为本地示例方案的测算草稿，仅供管理参考，不构成医疗或医保结论。"
+    }
+  },
+  "/api/drg/batch": {
+    "status": 200,
+    "body": {
+      "rows": 1,
+      "grouped": 1,
+      "ungrouped": 0,
+      "cmi": 0.75,
+      "totalEstimated": 7500,
+      "totalActual": 12000,
+      "distribution": {
+        "FR23": 1
+      },
+      "results": [
+        {
+          "principalDx": "I50.900",
+          "mdc": "05 循环系统疾病",
+          "adrg": "FR2 心力衰竭及心律失常",
+          "adrgType": "medical",
+          "drgCode": "FR23",
+          "complication": {
+            "level": "cc",
+            "label": "伴一般并发症或合并症",
+            "matchedDiagnosis": "E11.900"
+          },
+          "rw": 0.75,
+          "rwSource": "builtin",
+          "estimatedCost": 7500,
+          "actualCost": 12000,
+          "costDeviation": 4500,
+          "schemeVersion": "CHS-DRG 1.1 常见病组示例（代表性 ADRG 与权重，仅供参考，可导入覆盖）",
+          "note": "DRG 结果为本地示例方案的测算草稿，仅供管理参考，不构成医疗或医保结论。"
+        }
+      ],
+      "note": "CMI 与费用为示例方案下的测算草稿；未分组病例请检查诊断编码或导入本地方案。"
+    }
+  }
+}
