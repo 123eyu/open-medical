@@ -22,8 +22,6 @@ __pycache__/
 desktop-report.json
 desktop.png
 
-tests/
-test/
 __tests__/
 evals/
 coverage/
