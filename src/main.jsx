@@ -6,7 +6,7 @@ import { AppSettingsView } from "./app-settings";
 import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS } from "./navigation";
 import { DueNotifyWatcher } from "./due-notify";
 import { conversationRunIds } from "../shared/patient-conversations.mjs";
-import { PatientConversationNav } from "./patient-conversation-nav";
+import { PatientQuestionHistory } from "./patient-question-history";
 import { TaskResult, hasTaskResult } from "./task-result";
 import { SimilarCases } from "./similar-cases";
 import { ProjectDirectory, ToolDirectory, TaskDirectory } from "./work-directory";
@@ -491,7 +491,6 @@ function App() {
     [activeId, setActiveId] = useState(initialLocation.view === "workbench" ? initialLocation.id : ""),
     [draft, setDraftValue] = useState("");
   const [questionSelection, setQuestionSelection] = useState({});
-  const [readingOnly, setReadingOnly] = useState(false);
   const questionDrafts = useRef(new Map());
   const draftWorkflows = useRef(new Map());
   const rememberedQuestions = useRef(new Map());
@@ -844,7 +843,7 @@ function App() {
     setCurrentPatientId(id);
     localStorage.setItem("om.currentPatient", id || "");
   };
-  useLayoutEffect(() => { followOutput.current = true; lastScrollTop.current = 0; setReadingOnly(false); }, [activeId, questionRunId]);
+  useLayoutEffect(() => { followOutput.current = true; lastScrollTop.current = 0; }, [activeId, questionRunId]);
   useLayoutEffect(() => {
     const pane = endRef.current?.parentElement;
     if (pane && followOutput.current) {
@@ -1325,7 +1324,6 @@ function App() {
       setInspector(options.tab === "results" || options.tab === "materials");
       if (options.artifactId) setAcceptId(options.artifactId);
       if (options.newQuestion) {
-        setReadingOnly(false);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
       if (options.draft) {
@@ -1673,7 +1671,7 @@ function App() {
             />
           ) : (
             <div className={`shell ${inspector ? "with-inspector" : ""}`}>
-              <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""} ${readingOnly ? "reading-only" : ""}`}>
+              <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""}`}>
                 <div className="conversation-head">
                   <IconButton
                     title="显示会话列表"
@@ -1687,8 +1685,7 @@ function App() {
                     <h1>{session?.patientId ? `${patientDetail?.name || taskPatientContext(session, patientsList) || session.title} · 问答` : session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session?.patientId && !!patientDetail?.allergies?.length && <span className="patient-chat-allergy" title={patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}>过敏：{patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}</span>}
-                  {session?.patientId && !loading && !acceptArtifact && <PatientConversationNav session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
-                  {!!session?.messages.length && (!session.patientId || questionRunId) && <button type="button" className="text-button reading-toggle" aria-pressed={readingOnly} onClick={() => { setReadingOnly(!readingOnly); setInspector(false); }}>{readingOnly ? '返回提问' : '专注阅读'}</button>}
+                  {session?.patientId && questionRunId && !loading && !acceptArtifact && <button type="button" className="text-button new-question-button" disabled={busy} onClick={() => chooseQuestion(null)}>＋ 新问题</button>}
                   <button
                     className="secondary inspector-toggle"
                     aria-expanded={inspector}
@@ -1702,6 +1699,7 @@ function App() {
                     <details className="conversation-actions">
                       <summary aria-label="更多对话操作">更多</summary>
                       <div className="head-actions" onClick={event => { if (event.target.closest('button')) event.currentTarget.closest('details').open = false; }}>
+                      {session.patientId && !loading && !acceptArtifact && <PatientQuestionHistory session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
                       <button type="button" className="text-button"
                         title="重命名会话"
                         onClick={() => setModal("rename")}

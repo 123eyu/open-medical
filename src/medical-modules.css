@@ -383,20 +383,13 @@ fieldset.trial-form {
 .library-hub .library-delete-button { color: #a33a32; }
 .library-delete-confirm { border: 1px solid #d9a79d; background: #fffaf8; }
 .library-delete-confirm p { line-height: 1.7; }
-.patient-question-nav { flex-shrink: 0; margin: 0; padding: 12px 24px; border-bottom: 1px solid var(--border); }
-.patient-question-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.patient-question-actions p, .patient-question-history p { color: var(--muted); font-size: 13px; margin: 6px 0; }
-.patient-question-actions button { flex-shrink: 0; }
-.patient-question-history { margin-top: 12px; }
 .patient-question-history summary { cursor: pointer; font-size: 14px; }
 .patient-question-history > div { max-height: 260px; overflow: auto; display: grid; gap: 4px; margin-top: 8px; }
 .patient-question-history button { text-align: left; padding: 12px; display: flex; gap: 12px; justify-content: space-between; background: #f5f7f3; border: 1px solid transparent; border-radius: 8px; }
 .patient-question-history button[aria-current="true"] { border-color: #2b705b; }
 .patient-question-history button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.patient-question-history button small { flex-shrink: 0; color: #607267; }
 .patient-question-context { color: #53665b; font-size: var(--meta-size, 13px); line-height: 1.6; padding: 8px 4px; overflow-wrap: anywhere; }
 .patient-question-context span { display: block; white-space: normal; }
-@media (max-width: 600px) { .patient-question-actions { align-items: flex-start; } .patient-question-actions p { max-width: 22ch; } }
 
 .knowledge-auto { padding: 14px 18px; margin: 4px 0 14px; background: #f5f8f4; border: 1px solid #dce6dc; border-radius: 12px; }
 .knowledge-auto-head { display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; }
@@ -504,8 +497,6 @@ fieldset.trial-form {
 
 .patient-conversation .conversation-head { min-height:60px; padding-block:12px; }
 .patient-conversation .heading-copy h1 { margin-top:0; }
-.patient-conversation .patient-question-nav { padding-block:10px; }
-.patient-conversation .patient-question-history { margin-top:8px; }
 .patient-task-preparation { margin:0 0 12px; }
 .patient-task-preparation .prepare-materials { margin:0 0 8px; }
 .patient-task-options summary { cursor:pointer; color:var(--muted); font-size:var(--meta-size, 14px); }

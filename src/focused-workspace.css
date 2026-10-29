@@ -72,12 +72,7 @@
 
 /* Give answers a stable reading area; optional controls never grow the page. */
 .conversation > .conversation-head { flex-shrink:0; min-height:56px; padding:10px 24px; }
-.conversation .conversation-head .patient-question-nav { display:flex; align-items:center; gap:16px; padding:0; border:0; }
-.conversation .patient-question-actions { flex:1; }
-.conversation .patient-question-actions strong { font-size:14px; font-weight:500; }
-.conversation .patient-question-history { position:relative; margin:0; }
-.conversation .patient-question-history > div { position:absolute; right:0; top:32px; z-index:10; width:min(480px,75vw); max-height:min(320px,50dvh); background:var(--paper); padding:10px; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px #203b2518; }
-.conversation .patient-question-history > p { display:none; }
+.conversation .new-question-button { flex-shrink:0; }
 .conversation .composer-wrap { padding:8px 24px 12px; max-height:44dvh; overflow-y:auto; scrollbar-gutter:stable; }
 .conversation .composer { padding:12px 14px; box-shadow:none; border-radius:8px; }
 .conversation .composer > textarea { display:block; min-height:54px; max-height:120px; line-height:1.7; }
@@ -90,11 +85,10 @@
 .conversation .message-content .wb-markdown { line-height:1.85; }
 @media(max-width:700px) {
   .conversation .head-actions { display:none; }
-  .conversation > .conversation-head,.conversation .patient-question-nav { padding-inline:14px; }
+  .conversation > .conversation-head { padding-inline:14px; }
   .conversation .composer-wrap { padding:8px 12px; }
   .conversation .composer-submit { flex-basis:100%; }
   .conversation .message-list { padding:18px 14px; }
-  .conversation .patient-question-nav { flex-wrap:wrap; gap:8px; }
 }
 @media(max-height:700px) {
   .conversation .composer-note { display:none; }
@@ -108,10 +102,6 @@
 .literature-options { flex:1; }
 .literature-options summary { cursor:pointer; color:var(--muted); font-size:14px; }
 .literature-options>div { display:flex; flex-wrap:wrap; gap:10px; padding-top:12px; }
-.conversation.reading-only > .composer-wrap,
-.conversation.reading-only > .patient-question-nav { display:none; }
-.conversation .reading-toggle { flex-shrink:0; }
-.conversation.reading-only .message-list { padding-bottom:40px; }
 
 /* Patient questions have one navigation row and one place to compose. */
 .patient-conversation > .conversation-head { min-height:58px; box-sizing:border-box; flex-wrap:nowrap; }
@@ -123,6 +113,10 @@
 .conversation-actions > summary::-webkit-details-marker { display:none; }
 .conversation-actions[open] .head-actions { position:absolute; top:100%; right:0; z-index:20; display:flex; flex-direction:column; gap:4px; min-width:190px; padding:8px; background:var(--paper); border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px #203b2518; }
 .conversation-actions .head-actions button { justify-content:flex-start; white-space:nowrap; padding:10px; min-height:38px; }
+.conversation-actions .patient-question-history { margin:0; }
+.conversation-actions .patient-question-history > summary { padding:10px; color:var(--ink); }
+.conversation-actions .patient-question-history > div { width:min(360px,70vw); max-height:min(320px,45dvh); margin:0 0 4px; }
+.conversation-actions .patient-question-history button { min-width:0; }
 .patient-question-starters { margin:clamp(32px,10vh,100px) auto; max-width:640px; text-align:center; }
 .patient-question-starters p { color:var(--muted); line-height:1.8; margin-bottom:20px; }
 .patient-question-starters > div { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
@@ -131,5 +125,4 @@
   .patient-conversation > .conversation-head { gap:8px; padding-inline:12px; flex-wrap:wrap; }
   .patient-conversation .heading-copy { min-width:140px; }
   .patient-chat-allergy { max-width:120px; }
-  .conversation .conversation-head .patient-question-nav { gap:10px; }
 }
