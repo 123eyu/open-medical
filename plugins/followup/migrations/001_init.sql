@@ -1,6 +1,6 @@
 -- Followup plugin private tables. Every statement is IF NOT EXISTS and keeps
--- the historical column layout; follow_ups/followup_plans remain in the fixed
--- store until T11 and are declared through legacyTables.
+-- the historical column layout; follow_ups/followup_plans are adopted by
+-- migration 002 and are owned by this plugin.
 
 CREATE TABLE IF NOT EXISTS followup_applications (
   request_id TEXT PRIMARY KEY,

@@ -144,6 +144,30 @@ const proposalHandler = (type) => ({
   },
 });
 
+
+// Trial rows are plugin-owned; both patient deletion and demo cleanup stay
+// inside this module so the fixed region never names a trial_* table.
+function removePatientTrials(db, patientId) {
+  db.prepare("DELETE FROM trial_screenings WHERE patient_id=?").run(patientId);
+  db.prepare("DELETE FROM trial_enrollments WHERE patient_id=?").run(patientId);
+  db.prepare(
+    "DELETE FROM trial_ai_jobs WHERE json_extract(data,'$.patientId')=?",
+  ).run(patientId);
+}
+
+function removeTrial(db, trialId) {
+  for (const table of [
+    "trial_screenings",
+    "trial_enrollments",
+    "trial_batches",
+  ])
+    db.prepare(`DELETE FROM ${table} WHERE trial_id=?`).run(trialId);
+  db.prepare(
+    "DELETE FROM trial_ai_jobs WHERE json_extract(data,'$.trialId')=?",
+  ).run(trialId);
+  db.prepare("DELETE FROM trial_protocols WHERE id=?").run(trialId);
+}
+
 export default definePlugin({
   id: "trials",
   version: "1.0.0",
@@ -158,6 +182,38 @@ export default definePlugin({
     "trial-enrollment": proposalHandler("trial-enrollment"),
   },
   agendaSources: trialAgendaSources,
+  hooks: {
+    "patient.deleted": (payload, ctx) =>
+      removePatientTrials(ctx.db, payload.patientId),
+  },
+  demo: {
+    async install(ctx, demo) {
+      const screening = ctx.plugins.trials?.service?.screening;
+      if (!screening) return;
+      demo.own("trial", "trial", () =>
+        screening.create({
+          title: "示例·糖尿病随访观察方案（虚构）",
+          version: "演示 v1",
+          recruitment: "虚构练习，不招募",
+          inclusion:
+            "年龄 18–75 岁\n病历已记录2型糖尿病\n愿意提供近期血糖记录",
+          exclusion: "拒绝参与随访\n资料不足以核对患者身份",
+          protocolText:
+            "本方案仅用于练习逐条筛选。未知信息必须标记待补充，不推断符合；不存在真实招募或试验注册。",
+        }),
+      );
+    },
+    async clear(ctx, demo) {
+      for (const row of demo.pluginResources("trial"))
+        removeTrial(ctx.db, row.id);
+    },
+    exists(ctx, kind, id) {
+      return (
+        kind === "trial" &&
+        Boolean(ctx.db.prepare("SELECT 1 FROM trial_protocols WHERE id=?").get(id))
+      );
+    },
+  },
   setup(ctx) {
     const host = ctx.services.trialHost;
     const screening = new TrialScreening(ctx.store, host.patients);

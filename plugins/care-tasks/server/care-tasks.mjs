@@ -17,6 +17,37 @@ export class CareTasks {
     check(!p.archived, "PATIENT_ARCHIVED", "请先恢复患者档案再更新待跟进事项", 409);
     return p;
   }
+  // Fixed-region patient brief contribution. The SQL and shape are identical
+  // to the former fixed read, so enabling this plugin preserves the payload.
+  patientBrief(patientId) {
+    const careTaskCount = this.store.db
+      .prepare(
+        "SELECT COUNT(*) n FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled')",
+      )
+      .get(patientId).n;
+    const careTasks = this.store.db
+      .prepare(
+        "SELECT data FROM care_tasks WHERE patient_id=? AND status NOT IN ('completed','cancelled') ORDER BY due_at LIMIT 5",
+      )
+      .all(patientId)
+      .map((row) => {
+        const task = JSON.parse(row.data);
+        return {
+          id: task.id,
+          title: task.title,
+          status: task.status,
+          dueAt: task.dueAt,
+          note: task.note,
+          resultSource: task.resultSource,
+          reviewNote: task.reviewNote,
+          source: `待跟进事项 ${task.id}`,
+        };
+      });
+    return { careTaskCount, careTasks };
+  }
+  removePatient(patientId) {
+    this.store.db.prepare("DELETE FROM care_tasks WHERE patient_id=?").run(patientId);
+  }
   row(patientId, id) {
     identifier(id);
     const row = this.store.db.prepare("SELECT data FROM care_tasks WHERE id=? AND patient_id=?").get(id, patientId);

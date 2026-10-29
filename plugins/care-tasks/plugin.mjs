@@ -56,6 +56,40 @@ export default definePlugin({
     { method: "*", path: "/api/patients/:id/care-tasks/*" },
   ],
   agendaSources: careTasksAgendaSources,
+  patientBrief(ctx, patientId) {
+    return ctx.plugins["care-tasks"]?.service?.patientBrief(patientId) || {};
+  },
+  hooks: {
+    "patient.deleted": (payload, ctx) =>
+      ctx.plugins["care-tasks"]?.service?.removePatient(payload.patientId),
+  },
+  demo: {
+    async install(ctx, demo) {
+      const service = ctx.plugins["care-tasks"]?.service;
+      const patient = demo.patient(2);
+      if (!service || !patient || patient.archived) return;
+      demo.own("tracking", "tracking", () =>
+        service.create(patient.id, {
+          title: "示例·术后血常规报告跟进",
+          kind: "test",
+          dueAt: new Date(Date.now() + 86400000).toISOString(),
+          note: "练习登记结果、医生复核与告知状态，不创建真实检查医嘱。",
+        }),
+      );
+    },
+    async clear(ctx, demo) {
+      const service = ctx.plugins["care-tasks"]?.service;
+      if (!service) return;
+      for (const row of demo.resources().filter((item) => item.kind === "patient"))
+        service.removePatient(row.id);
+    },
+    exists(ctx, kind, id) {
+      return (
+        kind === "tracking" &&
+        Boolean(ctx.db.prepare("SELECT 1 FROM care_tasks WHERE id=?").get(id))
+      );
+    },
+  },
   setup(ctx) {
     // The followup plugin may be disabled while care tracking still works.
     // Resolve its service lazily and only when a completion asks for a new

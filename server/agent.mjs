@@ -619,6 +619,11 @@ export function createServer(options = {}) {
     // schedule 在下方才创建；建档发生在服务就绪后，闭包引用是安全的。
     onCreated: (patient) => schedule.baselinePatient(patient),
     learning: () => pluginActive("learning") ? pluginService("learning") : null,
+    // Plugin-owned patient data is reached through the host only. Deletion uses
+    // a synchronous transactional hook; list counts use active contributions.
+    hooks: (name, payload) => pluginHost.runHooks(name, payload),
+    summaries: (patientIds, options) =>
+      pluginHost.patientSummaries(patientIds, options),
     createSession: ({ title, patientId }) => {
       const projected = sessionBridge.createSession({ title, patientId });
       return { id: projected.id };
@@ -697,7 +702,7 @@ export function createServer(options = {}) {
     },
   });
   const patientBrief = new PatientBrief(store, patients, {
-    riskEnabled: () => pluginActive("risk-rules"),
+    briefContributions: (patientId) => pluginHost.patientBrief(patientId),
   });
   const patientImporter = new PatientImporter(store, patients);
   const labImporter = new LabImporter(patients, pending);
@@ -912,18 +917,12 @@ export function createServer(options = {}) {
     if (riskEngine())
       riskEngine().surveyAlertsProvider = (patient) =>
         followup.surveys.alerts(patient);
-  const trialService = pluginActive("trials") ? pluginService("trials") : null;
-  const careTasksService = pluginActive("care-tasks")
-    ? pluginService("care-tasks")
-    : null;
-  const demoPack = new DemoPack(patients, followup?.followups || null, store, {
+  const demoPack = new DemoPack(patients, store, {
     sessions: sessionBridge,
     cases,
-    trials: trialService?.screening || null,
     guidelines,
     schedule,
-    careTasks: careTasksService,
-    care: () => followup?.care || null,
+    host: pluginHost,
   });
   // The followup plugin owns its tools; the legacy MedicalRuntime gets the
   // same definitions through the host instead of importing plugin files.

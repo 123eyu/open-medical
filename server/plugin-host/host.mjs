@@ -224,6 +224,7 @@ export class PluginHost {
     this.pluginServices = {};
     this.providedServices = new Map();
     this.listeners = new Map();
+    this.hookListeners = new Map();
     this.legacyRoutes = [];
     this.statusCache = new Map();
     this.startedPlugins = new Set();
@@ -272,6 +273,7 @@ export class PluginHost {
     this.pluginServices = {};
     this.providedServices = new Map();
     this.listeners = new Map();
+    this.hookListeners = new Map();
     this.legacyRoutes = [];
     this.statusCache = new Map();
     this.startedPlugins = new Set();
@@ -639,6 +641,16 @@ export class PluginHost {
             );
             this.listeners.set(name, list);
           }
+        if (record.spec.hooks)
+          for (const [name, listener] of Object.entries(record.spec.hooks)) {
+            const list = this.hookListeners.get(name) || [];
+            list.push({
+              pluginId: record.id,
+              listener: (payload) =>
+                listener(payload, this.contextFor(record)),
+            });
+            this.hookListeners.set(name, list);
+          }
       } catch (error) {
         this._fail(record, `初始化失败：${errorMessage(error)}`);
       }
@@ -762,6 +774,103 @@ export class PluginHost {
       payload: legacy ? input : { input },
       summary: summary || `${record.spec.title}提案`,
     });
+  }
+
+
+  // Transactional hook bus for work that must share the caller's SQLite
+  // transaction. Unlike emit(), the first listener error is re-thrown so the
+  // fixed region can roll back every participant. Hooks are registered for
+  // every available plugin (including disabled ones): deleting a patient is a
+  // fixed-region housekeeping operation, and stale plugin rows would otherwise
+  // survive a temporarily disabled feature.
+  runHooks(name, payload) {
+    for (const entry of this.hookListeners.get(name) || []) {
+      try {
+        entry.listener(payload);
+      } catch (error) {
+        if (error && typeof error === "object" && !error.pluginId)
+          error.pluginId = entry.pluginId;
+        throw error;
+      }
+    }
+  }
+
+  // Patient-list count contributions. Each active plugin may return an object
+  // keyed by patient id; the fixed region merges only the fields it owns, so a
+  // disabled or missing plugin leaves the historical empty values in place.
+  patientSummaries(patientIds = [], options = {}) {
+    const merged = {};
+    for (const record of this.ordered) {
+      if (!this._isActive(record) || !record.spec?.patientSummary) continue;
+      try {
+        const value = record.spec.patientSummary(
+          this.contextFor(record),
+          patientIds,
+          options,
+        );
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          continue;
+        for (const [patientId, fields] of Object.entries(value)) {
+          if (!fields || typeof fields !== "object" || Array.isArray(fields))
+            continue;
+          merged[patientId] = { ...(merged[patientId] || {}), ...fields };
+        }
+      } catch (error) {
+        console.error(`插件 ${record.id} 患者计数贡献失败:`, error);
+      }
+    }
+    return merged;
+  }
+
+  // Patient-brief contributions. Plugins return only their own fields; the
+  // fixed region supplies the empty defaults when no active plugin answers.
+  patientBrief(patientId) {
+    const merged = {};
+    for (const record of this.ordered) {
+      if (!this._isActive(record) || !record.spec?.patientBrief) continue;
+      try {
+        const value = record.spec.patientBrief(
+          this.contextFor(record),
+          patientId,
+        );
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          continue;
+        Object.assign(merged, value);
+      } catch (error) {
+        console.error(`插件 ${record.id} 患者简报贡献失败:`, error);
+      }
+    }
+    return merged;
+  }
+
+  // Demo-pack contributions. Installation only runs for active plugins, while
+  // clear/exists also cover temporarily disabled plugins so their historical
+  // demo rows stay visible and removable.
+  async demoInstall(demo) {
+    for (const record of this.ordered) {
+      if (!this._isActive(record) || !record.spec?.demo?.install) continue;
+      await record.spec.demo.install(this.contextFor(record), demo);
+    }
+  }
+
+  async demoClear(demo) {
+    for (const record of this.ordered) {
+      if (!record.available || !record.spec?.demo?.clear) continue;
+      await record.spec.demo.clear(this.contextFor(record), demo);
+    }
+  }
+
+  demoExists(kind, id, demo) {
+    for (const record of this.ordered) {
+      if (!record.available || !record.spec?.demo?.exists) continue;
+      try {
+        if (record.spec.demo.exists(this.contextFor(record), kind, id, demo))
+          return true;
+      } catch (error) {
+        console.error(`插件 ${record.id} 示例资源检查失败:`, error);
+      }
+    }
+    return false;
   }
 
   emit(name, payload) {

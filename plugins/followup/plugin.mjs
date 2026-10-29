@@ -39,14 +39,102 @@ export default definePlugin({
   activation: { requiresConnection: true },
   capabilities: ["followup.agenda", "followup.tools"],
   legacyProposalTypes: legacyFollowupProposals(),
-  legacyTables: ["follow_ups", "followup_plans"],
   migrations: "./migrations",
-  // The plugin owns three historical table families. They stay in their
+  // The plugin owns four historical table families. They stay in their
   // original names and shapes; migrations only add missing tables.
-  tablePrefix: ["followup_", "chat_", "care_"],
+  tablePrefix: ["follow_", "followup_", "chat_", "care_"],
   legacyApiPaths: FOLLOWUP_LEGACY_API_PATHS,
   prompt: "./prompt.md",
   agendaSources: followupAgendaSources,
+  patientSummary(ctx, patientIds, options) {
+    return ctx.plugins.followup?.service?.patientSummary(patientIds, options) || {};
+  },
+  hooks: {
+    "patient.deleted": (payload, ctx) =>
+      ctx.plugins.followup?.service?.removePatient(payload.patientId),
+  },
+  demo: {
+    async install(ctx, demo) {
+      const service = ctx.plugins.followup?.service;
+      const patient = demo.patient(1);
+      if (!service || !patient || patient.archived) return;
+      if (
+        !service.followups
+          .list(patient.id)
+          .some((job) => job.questionnaire)
+      ) {
+        const job = service.followups.create(patient.id, {
+          name: "示例·血糖控制季度随访",
+          once: false,
+          intervalDays: 90,
+          firstDueAt: new Date(Date.now() + 60000).toISOString(),
+          checklist: ["近期血糖记录", "用药依从性"],
+          questionnaire: {
+            title: "示例·复诊资料回收",
+            questions: [
+              {
+                id: "q1",
+                type: "single",
+                text: "是否已准备近期测量记录？",
+                options: [{ label: "已准备" }, { label: "尚未准备" }],
+              },
+              {
+                id: "q2",
+                type: "text",
+                text: "这次希望医生帮助核对什么？",
+              },
+            ],
+          },
+        });
+        // Materialize one occurrence with the normal workflow, then leave the
+        // next occurrence in the future so the scheduler cannot duplicate it.
+        job.nextDue = Date.now() - 2 * 86400000;
+        await service.followups.execute(job);
+      }
+      const care = service.care;
+      if (!care) return;
+      const message = care.ingest({
+        patientId: patient.id,
+        text: "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？",
+        channel: "manual",
+        externalId: `demo:${patient.id}:message`,
+        historical: true,
+      });
+      demo.own("reply", "reply", () =>
+        care.createReply({
+          patientId: patient.id,
+          messageId: message.id,
+          channel: "manual",
+          mode: "manual",
+          text: "【示例草稿】复诊前请准备上次就诊记录、近期检验报告和当前用药清单；测量记录请保留日期、数值和单位。",
+          reason: "内置虚构草稿，供编辑和复核体验",
+        }),
+      );
+      demo.own("alert", "alert", () =>
+        care.createAlert({
+          patientId: patient.id,
+          messageId: message.id,
+          level: "attention",
+          reason: "示例·复诊资料需要医生核对",
+          localOnly: true,
+        }),
+      );
+    },
+    async clear(ctx, demo) {
+      const service = ctx.plugins.followup?.service;
+      if (!service) return;
+      for (const row of demo.resources().filter((item) => item.kind === "patient"))
+        service.removePatient(row.id);
+    },
+    exists(ctx, kind, id) {
+      const db = ctx.db;
+      if (kind === "reply")
+        return Boolean(db.prepare("SELECT 1 FROM care_replies WHERE id=?").get(id));
+      if (kind === "alert")
+        return Boolean(db.prepare("SELECT 1 FROM care_alerts WHERE id=?").get(id));
+      return false;
+    },
+  },
   setup(ctx) {
     const host = ctx.services.followupHost || {};
     return createFollowupService({

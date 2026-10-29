@@ -85,8 +85,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS patients (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS patient_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT, channel TEXT NOT NULL, direction TEXT NOT NULL, time TEXT NOT NULL, external_id TEXT UNIQUE, processed INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS patient_messages_patient ON patient_messages(patient_id,id);
-      CREATE TABLE IF NOT EXISTS follow_ups (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, status TEXT NOT NULL, next_due INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS follow_ups_due ON follow_ups(status,next_due);
       CREATE TABLE IF NOT EXISTS reminders (id TEXT PRIMARY KEY, patient_id TEXT NOT NULL, kind TEXT NOT NULL, due_at INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS reminders_due ON reminders(status,due_at);
       CREATE TABLE IF NOT EXISTS doctor_profile (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -97,7 +95,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS guideline_chunks (id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id TEXT NOT NULL, ord INTEGER NOT NULL, start_line INTEGER NOT NULL, end_line INTEGER NOT NULL, text TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS guideline_chunk_vectors (doc_id TEXT NOT NULL, ord INTEGER NOT NULL, model TEXT NOT NULL DEFAULT '', dim INTEGER NOT NULL, vector TEXT NOT NULL, PRIMARY KEY(doc_id, ord, model));
       CREATE INDEX IF NOT EXISTS guideline_chunks_doc ON guideline_chunks(doc_id,ord);
-      CREATE TABLE IF NOT EXISTS followup_plans (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS case_library (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS context_archives (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, run_id TEXT, hash TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS context_archives_session ON context_archives(session_id);

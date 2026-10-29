@@ -163,6 +163,39 @@ export function createFollowupService({
     get provider() {
       return getProvider();
     },
+    // Fixed-region read model: only aggregate values, no plugin table names
+    // cross the boundary. Called from the host's patientSummary extension.
+    patientSummary(patientIds = [], { now = Date.now() } = {}) {
+      const wanted = new Set(patientIds);
+      const result = {};
+      const rows = store.db
+        .prepare(
+          "SELECT patient_id,COUNT(*) n,SUM(CASE WHEN status='active' AND next_due<=? THEN 1 ELSE 0 END) due FROM follow_ups WHERE status IN ('active','running','paused') GROUP BY patient_id",
+        )
+        .all(now);
+      for (const row of rows) {
+        if (wanted.size && !wanted.has(row.patient_id)) continue;
+        result[row.patient_id] = {
+          activeFollowups: row.n,
+          dueFollowups: row.due,
+        };
+      }
+      return result;
+    },
+    // Transactional hook target. Patient-linked care/chat rows cascade when
+    // the fixed region deletes the patient; the followup tables without a
+    // foreign key are removed explicitly.
+    removePatient(patientId) {
+      for (const table of [
+        "follow_ups",
+        "followup_surveys",
+        "followup_creation_requests",
+        "followup_applications",
+      ])
+        store.db
+          .prepare(`DELETE FROM ${table} WHERE patient_id=?`)
+          .run(patientId);
+    },
     async start() {
       if (started || starting) return;
       starting = true;

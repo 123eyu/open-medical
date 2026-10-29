@@ -9,9 +9,14 @@ import { DIAGNOSIS_STATUS, mergeDiagnoses } from "../shared/diagnoses.mjs";
 // Patient registry: each patient links to one session that acts as the
 // clinical workspace (materials, runs, artifacts, review, schedules).
 export class PatientRegistry {
-  constructor(store, runtime, { createSession, removeSession, onIdentityChanged, onCreated, learning = null } = {}) {
+  constructor(store, runtime, { createSession, removeSession, onIdentityChanged, onCreated, learning = null, hooks = null, summaries = null } = {}) {
     this.store = store;
     this.runtime = runtime;
+    // The fixed region owns the patients table but not plugin data. These two
+    // seams are lazy: patient deletion emits a transactional hook, and list /
+    // detail counts merge active plugin contributions without naming tables.
+    this.hooks = hooks;
+    this.summaryProvider = summaries;
     // 统一内核：新患者病例会话由 SessionBridge 创建（kind:"session" 工作区）。
     this.createSession =
       createSession ||
@@ -52,23 +57,31 @@ export class PatientRegistry {
     check(row, "NOT_FOUND", "患者不存在", 404);
     return JSON.parse(row.data);
   }
+  pluginSummary(patientIds, now) {
+    if (typeof this.summaryProvider !== "function") return {};
+    try {
+      return this.summaryProvider(patientIds, { now }) || {};
+    } catch (error) {
+      // A summary contribution must never break the fixed patient list.
+      console.error("患者计数贡献失败:", error);
+      return {};
+    }
+  }
   counts(patientId, now = Date.now()) {
     const one = (sql, ...args) =>
       this.store.db.prepare(sql).get(...args)?.n || 0;
+    const contributed = this.pluginSummary([patientId], now)[patientId] || {};
     return {
       unprocessedMessages: one(
         "SELECT COUNT(*) n FROM patient_messages WHERE patient_id=? AND processed=0",
         patientId,
       ),
-      activeFollowups: one(
-        "SELECT COUNT(*) n FROM follow_ups WHERE patient_id=? AND status IN ('active','running','paused')",
-        patientId,
-      ),
-      dueFollowups: one(
-        "SELECT COUNT(*) n FROM follow_ups WHERE patient_id=? AND status='active' AND next_due<=?",
-        patientId,
-        now,
-      ),
+      activeFollowups: Number.isFinite(contributed.activeFollowups)
+        ? contributed.activeFollowups
+        : 0,
+      dueFollowups: Number.isFinite(contributed.dueFollowups)
+        ? contributed.dueFollowups
+        : 0,
       pendingReminders: one(
         "SELECT COUNT(*) n FROM reminders WHERE patient_id=? AND status='pending'",
         patientId,
@@ -82,11 +95,16 @@ export class PatientRegistry {
       return counts.get(id);
     };
     for (const row of this.store.db.prepare("SELECT patient_id,COUNT(*) n FROM patient_messages WHERE processed=0 AND patient_id IS NOT NULL GROUP BY patient_id").all()) entry(row.patient_id).unprocessedMessages = row.n;
-    for (const row of this.store.db.prepare("SELECT patient_id,COUNT(*) n,SUM(CASE WHEN status='active' AND next_due<=? THEN 1 ELSE 0 END) due FROM follow_ups WHERE status IN ('active','running','paused') GROUP BY patient_id").all(now)) {
-      entry(row.patient_id).activeFollowups = row.n;
-      entry(row.patient_id).dueFollowups = row.due;
-    }
     for (const row of this.store.db.prepare("SELECT patient_id,COUNT(*) n FROM reminders WHERE status='pending' GROUP BY patient_id").all()) entry(row.patient_id).pendingReminders = row.n;
+    const patientIds = this.store.db.prepare("SELECT id FROM patients").all().map((row) => row.id);
+    const contributed = this.pluginSummary(patientIds, now);
+    for (const [patientId, fields] of Object.entries(contributed)) {
+      const row = entry(patientId);
+      if (Number.isFinite(fields.activeFollowups))
+        row.activeFollowups = fields.activeFollowups;
+      if (Number.isFinite(fields.dueFollowups))
+        row.dueFollowups = fields.dueFollowups;
+    }
     return counts;
   }
   list({ query, group, includeArchived = false, summary = false } = {}) {
@@ -346,13 +364,17 @@ export class PatientRegistry {
       "请先停止该患者的执行再删除档案",
       409,
     );
-    this.store.db.prepare("DELETE FROM care_tasks WHERE patient_id=?").run(id);
-    this.store.db.prepare("DELETE FROM follow_ups WHERE patient_id=?").run(id);
-    this.store.db.prepare("DELETE FROM reminders WHERE patient_id=?").run(id);
-    this.store.db
-      .prepare("DELETE FROM patient_messages WHERE patient_id=?")
-      .run(id);
-    this.store.db.prepare("DELETE FROM patients WHERE id=?").run(id);
+    // Plugin-owned rows are removed through the synchronous hook bus in the
+    // same transaction as the fixed tables. A plugin failure rolls back every
+    // participant instead of leaving a half-deleted chart.
+    sqliteTransaction(this.store.db, () => {
+      this.hooks?.("patient.deleted", { patientId: id, patient });
+      this.store.db.prepare("DELETE FROM reminders WHERE patient_id=?").run(id);
+      this.store.db
+        .prepare("DELETE FROM patient_messages WHERE patient_id=?")
+        .run(id);
+      this.store.db.prepare("DELETE FROM patients WHERE id=?").run(id);
+    });
     if (this.removeSession) {
       this.removeSession(sessionId);
       return;

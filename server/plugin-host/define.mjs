@@ -33,6 +33,10 @@ export function definePlugin(spec = {}) {
     workflows = {},
     api,
     events = {},
+    hooks = {},
+    patientSummary,
+    patientBrief,
+    demo,
     legacyApiPaths = [],
     lifecycle,
     provides,
@@ -129,6 +133,8 @@ export function definePlugin(spec = {}) {
     ["tools", tools],
     ["api", api],
     ["status", status],
+    ["patientSummary", patientSummary],
+    ["patientBrief", patientBrief],
   ]) {
     check(
       value === undefined || typeof value === "function",
@@ -284,6 +290,36 @@ export function definePlugin(spec = {}) {
       "PLUGIN_SPEC",
       `插件 ${id} 的事件 ${name} 必须是函数`,
     );
+
+  // Transactional hooks are deliberately separate from events: an event
+  // listener failure is logged and isolated, while a hook failure propagates
+  // to the caller so the surrounding SQLite transaction can roll back.
+  check(isObject(hooks), "PLUGIN_SPEC", `插件 ${id} 的 hooks 必须是对象`);
+  for (const [name, hook] of Object.entries(hooks))
+    check(
+      typeof hook === "function",
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 hook ${name} 必须是函数`,
+    );
+
+  let normalizedDemo;
+  if (demo !== undefined) {
+    check(isObject(demo), "PLUGIN_SPEC", `插件 ${id} 的 demo 必须是对象`);
+    const allowed = new Set(["install", "clear", "exists"]);
+    for (const [name, hook] of Object.entries(demo)) {
+      check(allowed.has(name), "PLUGIN_SPEC", `插件 ${id} 的 demo 含未知钩子 ${name}`);
+      check(
+        hook === undefined || typeof hook === "function",
+        "PLUGIN_SPEC",
+        `插件 ${id} 的 demo.${name} 必须是函数`,
+      );
+    }
+    normalizedDemo = Object.freeze({
+      install: demo.install,
+      clear: demo.clear,
+      exists: demo.exists,
+    });
+  }
 
   const normalizeApiPath = (value, index) => {
     check(
@@ -444,6 +480,10 @@ export function definePlugin(spec = {}) {
     workflows: Object.freeze(normalizedWorkflows),
     api,
     events: Object.freeze({ ...events }),
+    hooks: Object.freeze({ ...hooks }),
+    patientSummary,
+    patientBrief,
+    demo: normalizedDemo,
     legacyApiPaths: Object.freeze(normalizedApiPaths),
     lifecycle: normalizedLifecycle,
     provides: normalizedProvides,

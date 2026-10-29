@@ -92,6 +92,13 @@ export default definePlugin({
     { method: "*", path: "/api/patients/:id/lab-monitors/*" },
   ],
   agendaSources: riskAgendaSources,
+  patientBrief(ctx, patientId) {
+    return ctx.plugins["risk-rules"]?.service?.patientBrief(patientId) || {};
+  },
+  hooks: {
+    "patient.deleted": (payload, ctx) =>
+      ctx.plugins["risk-rules"]?.service?.removePatient(payload.patientId),
+  },
   setup(ctx) {
     return new RiskEngine(ctx.store, ctx.services.followups);
   },

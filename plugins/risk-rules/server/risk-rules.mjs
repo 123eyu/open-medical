@@ -644,6 +644,19 @@ export class RiskEngine {
     });
     return { ok: true };
   }
+  patientBrief(patientId) {
+    return {
+      activeRisks: this.store.db
+        .prepare(
+          "SELECT COUNT(*) n FROM risk_alerts WHERE patient_id=? AND status='active'",
+        )
+        .get(patientId).n,
+    };
+  }
+  removePatient(patientId) {
+    this.store.db.prepare("DELETE FROM risk_alerts WHERE patient_id=?").run(patientId);
+    this.store.db.prepare("DELETE FROM lab_monitors WHERE patient_id=?").run(patientId);
+  }
   counts() {
     const one = (sql, ...args) =>
       this.store.db.prepare(sql).get(...args)?.n || 0;

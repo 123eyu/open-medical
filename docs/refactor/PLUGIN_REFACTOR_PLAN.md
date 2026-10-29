@@ -167,7 +167,14 @@ spec = {
     "similar-case-search": { artifactType: "similar_cases", detect, configure, answer },
   },
   api(ctx, req, url, io) -> Promise<boolean>, // 可选；返回 true 表示已处理；路由前缀必须是 /api/p/<id>/
-  events: { "patient.archived": (payload, ctx) => {} }, // 可选
+  events: { "patient.archived": (payload, ctx) => {} }, // 可选；错误隔离
+  hooks: { "patient.deleted": (payload, ctx) => {} },   // 可选；同步事务钩子，抛错回滚调用方
+  patientSummary(ctx, patientIds, { now }) {},         // 可选；患者列表计数贡献
+  patientBrief(ctx, patientId) {},                     // 可选；患者简报字段贡献
+  demo: {                            // 可选；示例数据由插件自己装卸
+    install(ctx, demo) {}, clear(ctx, demo) {},
+    exists(ctx, kind, id, demo) {},
+  },
   legacyApiPaths: [                  // 可选；接管旧业务路由
     { method: "GET", path: "/api/followup-plans" },
     { method: "*", path: "/api/patients/:id/followups/:jobId" },
@@ -342,6 +349,13 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 - `reminders`、`patient_messages`、`appointments`、`care_tasks` 等共享表：按设计仍由固定区拥有；随访插件只读写自己的表族。
 - 企微连接器与 care 的挂接回调、微信 bridge 配置：属于组合根装配，保留在 `agent.mjs` 作为薄适配，不持有第二个服务实例。
 - 设置页“插件”分组与固定区壳：属于 T4 固定插槽，不在 T7 迁移范围。
+
+#### T11a 完成情况（表归属收口）
+
+- 固定区不再直接读写 `follow_ups`、`followup_plans`、`care_tasks`、`risk_alerts`、`followup_surveys`、`trial_*` 等插件表。
+- 宿主新增同步事务钩子 `hooks`（`patient.deleted` 由插件清理自己的行，抛错时整笔删除回滚）、患者列表贡献 `patientSummary`、患者简报贡献 `patientBrief`、示例数据贡献 `demo.install/clear/exists`。
+- `follow_ups`、`followup_plans` 的建表移入 followup 插件迁移（`002_legacy_tables.sql`，同名同结构、`IF NOT EXISTS`），`legacyTables` 不再声明这两张表。
+- 新增表归属扫描测试：读取所有插件 migrations 与 `legacyTables` 的表名，扫描 `server/` 下非 `plugin-host` 的 `.mjs`；仅允许逐条登记的文件 + 表 + 行签名白名单（当前只有模型提示里作为工具名出现的 `wecom_groups`）。
 
 ---
 
