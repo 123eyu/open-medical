@@ -8,7 +8,6 @@ import {
   Plus,
   Search,
   Stethoscope,
-  Sigma,
   Globe,
   MessageSquare,
   Terminal,
@@ -175,7 +174,6 @@ const catalog = [
     BookOpen,
     "本地病例",
   ],
-  ["data-analysis", "科研统计", "上传 CSV，进行描述统计、组间比较、样本量估算与脱敏导出。", "科研工具", Sigma, "本地计算"],
 ];
 // The fixed catalog keeps its order while plugin cards slot in at the same
 // positions the old hard-coded rows used.
@@ -215,7 +213,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       .filter(
         (x) =>
           (medical ||
-            !["research", "clinical-ref", "cases", "drg", "data-analysis"].includes(
+            !["research", "clinical-ref", "cases", "drg"].includes(
               x[0],
             )) &&
           matches(
@@ -223,7 +221,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
             x[1],
             x[2],
             x[3],
-            {"clinical-ref":"评分 计算器 不良反应 药物", "research":"试验 入组 入排", "data-analysis":"数据分析 统计学 CSV", "documents":"Word Excel 报告"}[x[0]] || "",
+            {"clinical-ref":"评分 计算器 不良反应 药物", "research":"试验 入组 入排", "documents":"Word Excel 报告"}[x[0]] || "",
           ),
       )
       .map((row) => ({ kind: "fixed", id: row[0], order: CATALOG_ORDER[row[0]] ?? 100, row })),

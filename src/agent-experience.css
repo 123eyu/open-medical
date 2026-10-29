@@ -60,9 +60,6 @@
 .agent-template-grid button:hover { background: #edf3e8; }
 .agent-setup-note { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; background: #f3f0e6; padding: 14px 18px; border-radius: 8px; font-size: 13px; margin-top: 24px; }
 .agent-setup-note button { border: 0; background: transparent; color: var(--accent); min-height: 36px; font-weight: 600; }
-.research-import { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
-.research-import button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
-.research-import span { font-size: 14px; color: var(--muted); }
 @media (max-width:700px) {
   .page-trail { padding: 8px 18px; }
   .v6-shell .hub-page-head { margin-bottom: 24px; }

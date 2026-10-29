@@ -60,10 +60,7 @@ import { buildShareRecord } from "./medical/deidentify.mjs";
 import { RiskEngine } from "./medical/risk-rules.mjs";
 import { onlineCaseTools } from "./medical/online-cases.mjs";
 import { CaseLibrary, caseTools } from "./medical/cases.mjs";
-import {
-  ResearchService,
-  researchTools as researchToolPlugins,
-} from "./medical/research.mjs";
+import { cohortProfileTool } from "./medical/cohort-profile.mjs";
 import { DrgService, drgTools } from "./medical/drg.mjs";
 import {
   evaluateMedicationSafety,
@@ -390,7 +387,6 @@ export function createServer(options = {}) {
   guidelines.beforeUpdateDocumentText = id => knowledgeOrganizer.assertTextEditable(id);
   guidelines.afterUpdateDocumentText = id => knowledgeOrganizer.invalidateTextAnalysis(id);
   const cases = options.cases || new CaseLibrary(store);
-  const research = options.research || new ResearchService();
   const drg = options.drg || new DrgService(store);
   drg.load().catch(() => {});
   const medicationSafetyCheck = (args) => {
@@ -432,6 +428,7 @@ export function createServer(options = {}) {
     ...doctorMemoryTools(doctor),
     ...knowledgeTools(guidelines),
     ...caseTools(cases),
+    cohortProfileTool(),
     ...onlineCaseTools(literature),
     ...drgTools(drg),
     {
@@ -539,7 +536,6 @@ export function createServer(options = {}) {
     skills,
     toolPlugins: options.toolPlugins || [
       ...knowledgeToolPlugins,
-      ...localPlugins(researchToolPlugins(research)),
     ],
     doctor,
   });
@@ -578,8 +574,7 @@ export function createServer(options = {}) {
       // readOnly 约定与旧医疗会话一致）。
       sessionPlugins: [
         ...knowledgeToolPlugins,
-        ...localPlugins(researchToolPlugins(research)),
-        ...localPlugins(pendingActionTools(pending, doctor)),
+          ...localPlugins(pendingActionTools(pending, doctor)),
       ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
       ...localPlugins(labDisplayTools(() => patients)),
@@ -611,7 +606,6 @@ export function createServer(options = {}) {
     pluginHost,
     plugins: [
       ...knowledgeToolPlugins,
-      ...localPlugins(researchToolPlugins(research)),
       ...localPlugins(pendingActionTools(pending, doctor)),
       ...localPlugins(trialTools(() => trialCandidates, pending)),
       ...localPlugins(scheduleTools(() => schedule)),
@@ -839,6 +833,23 @@ export function createServer(options = {}) {
         sessionBridge.isSessionWorkspace(sessionId)
           ? sessionBridge.addMaterial(sessionId, input)
           : runtime.addFile(sessionId, input),
+    },
+    researchHost: {
+      sourcesOf: (sessionId) => {
+        const id = sessionId ? identifier(sessionId) : null;
+        if (!id) return [];
+        if (sessionBridge.isSessionWorkspace(id))
+          return (sessionBridge.materialsOf(id) || []).map(
+            ({ id: fid, name, text, hash, extraction }) => ({
+              id: fid,
+              name,
+              text,
+              hash,
+              extraction,
+            }),
+          );
+        return store.get(id).files;
+      },
     },
     knowledgeOrganizer,
     // Followup plugin inputs. All are fixed-region objects or accessors; the
@@ -2036,35 +2047,6 @@ export function createServer(options = {}) {
         }
         if (parts[2] === "import" && req.method === "POST")
           return send(res, 200, drg.importWeights((await body(req)).weights));
-      }
-      if (
-        parts[0] === "api" &&
-        parts[1] === "research" &&
-        req.method === "POST"
-      ) {
-        const b = await body(req);
-        const researchSessionId = b.sessionId ? identifier(b.sessionId) : null;
-        const sources = researchSessionId
-          ? sessionBridge.isSessionWorkspace(researchSessionId)
-            ? (sessionBridge.materialsOf(researchSessionId) || []).map(
-                ({ id: fid, name, text, hash, extraction }) => ({
-                  id: fid,
-                  name,
-                  text,
-                  hash,
-                  extraction,
-                }),
-              )
-            : store.get(researchSessionId).files
-          : [];
-        if (parts[2] === "profile")
-          return send(res, 200, research.profile({ ...b, sources }));
-        if (parts[2] === "test")
-          return send(res, 200, research.test({ ...b, sources }));
-        if (parts[2] === "sample-size")
-          return send(res, 200, research.sampleSize(b));
-        if (parts[2] === "deidentify")
-          return send(res, 200, research.deidentify({ ...b, sources }));
       }
       if (
         parts[0] === "api" &&

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./agent-runtime";
+import { api } from "../../../src/agent-runtime";
+import "./research-stats.css";
 import { Download, Loader2, Sigma, Upload } from "lucide-react";
 
 // Research analysis view: pick a session CSV, run deterministic descriptive

@@ -74,7 +74,6 @@ import { DoctorProfilePanel } from "./doctor-profile";
 import { KnowledgeLibraries } from "./knowledge-libraries";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
 import { CasesView } from "./cases";
-import { ResearchView } from "./research";
 import { TrialScreeningView } from "./trial-screening";
 import { DrgView } from "./drg";
 import { ClinicalRefView } from "./clinical-ref";
@@ -1665,8 +1664,6 @@ function App() {
             <CasesView />
           ) : view === "research" && medical ? (
             <TrialScreeningView onOpenTask={openTask} onOpenPatient={id=>openPatient({id})} />
-          ) : view === "data-analysis" ? (
-            <ResearchView />
           ) : view === "drg" ? (
             <DrgView />
           ) : TOOL_VIEWS.includes(view) ? (

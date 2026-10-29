@@ -4023,10 +4023,6 @@ blockquote p {
   resize: vertical;
 }
 
-/* ---- research view ---- */
-.research-view {
-  width: min(860px, 100%);
-}
 .research-table {
   width: 100%;
   border-collapse: collapse;
