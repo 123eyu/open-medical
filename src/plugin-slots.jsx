@@ -21,6 +21,20 @@ export const SLOTS = [
 const KEYED_SLOTS = new Set(["chat.resultCards", "proposal.renderers"]);
 const ACTION_SLOT = "patient.actions";
 const PLUGIN_ID = /^[a-z][a-z0-9-]{1,39}$/;
+const COMPONENT_TYPES = new Set([
+  Symbol.for("react.lazy"),
+  Symbol.for("react.memo"),
+  Symbol.for("react.forward_ref"),
+]);
+
+// React.lazy/memo/forwardRef are objects, not functions. Treat every valid
+// React component type as renderable so the lazy wrapper is not mistaken for a
+// missing contribution.
+function isComponentType(value) {
+  if (typeof value === "function") return true;
+  if (!value || typeof value !== "object") return false;
+  return COMPONENT_TYPES.has(value.$$typeof);
+}
 
 const registrations = new Map();
 const listeners = new Set();
@@ -168,7 +182,10 @@ export function useSlot(name) {
   return slotsByName.get(name) || EMPTY;
 }
 
-class PluginErrorBoundary extends Component {
+// Exported so the server-render regression test can exercise the fallback
+// directly: React's streaming SSR intentionally defers component errors inside
+// a Suspense boundary to client rendering, so it cannot observe this fallback.
+export class PluginErrorBoundary extends Component {
   state = { error: null };
 
   static getDerivedStateFromError(error) {
@@ -193,16 +210,16 @@ class PluginErrorBoundary extends Component {
 // Renders one contribution with its own lazy boundary. It intentionally adds
 // no wrapper element: an empty slot produces no DOM at all.
 export function SlotItem({ contribution, ...props }) {
-  if (typeof contribution?.component !== "function") return null;
+  if (!isComponentType(contribution?.component)) return null;
   const Content = contribution.component;
   return (
-    <PluginErrorBoundary
-      key={`${contribution.pluginId}:${contribution.id || contribution.type}`}
-    >
-      <Suspense fallback={null}>
+    <Suspense fallback={null}>
+      <PluginErrorBoundary
+        key={`${contribution.pluginId}:${contribution.id || contribution.type}`}
+      >
         <Content {...props} />
-      </Suspense>
-    </PluginErrorBoundary>
+      </PluginErrorBoundary>
+    </Suspense>
   );
 }
 
