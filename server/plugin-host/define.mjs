@@ -2,6 +2,8 @@ import { check } from "../errors.mjs";
 
 const PLUGIN_ID = /^[a-z][a-z0-9-]{1,39}$/;
 const TABLE_PREFIX = /^[a-z][a-z0-9_]{0,39}$/;
+const HTTP_METHOD = /^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|\*)$/;
+const API_SEGMENT = /^(?::[A-Za-z_][A-Za-z0-9_]*|[A-Za-z0-9._~-]+|\*)$/;
 
 const isObject = (value) =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -30,6 +32,11 @@ export function definePlugin(spec = {}) {
     workflows = {},
     api,
     events = {},
+    legacyApiPaths = [],
+    lifecycle,
+    provides,
+    status,
+    capabilities,
   } = spec;
 
   check(
@@ -53,14 +60,19 @@ export function definePlugin(spec = {}) {
     `插件 ${id} 的 enabledByDefault 必须是布尔值`,
   );
   check(isObject(requires), "PLUGIN_SPEC", `插件 ${id} 的 requires 必须是对象`);
-  const requiredPlugins = requires.plugins ?? {};
+  const rawRequiredPlugins = requires.plugins ?? {};
+  // Both the canonical object form ({ id: range }) and the shorthand array
+  // form ([id]) are accepted; the array form means "any version".
+  const requiredPlugins = Array.isArray(rawRequiredPlugins)
+    ? Object.fromEntries(rawRequiredPlugins.map((key) => [key, "*"]))
+    : rawRequiredPlugins;
   check(
     isObject(requiredPlugins) &&
       Object.entries(requiredPlugins).every(
-        ([key, value]) => PLUGIN_ID.test(key) && typeof value === "string",
+        ([key, value]) => PLUGIN_ID.test(key) && typeof value === "string" && value.trim(),
       ),
     "PLUGIN_SPEC",
-    `插件 ${id} 的 requires.plugins 必须是 { 插件id: 版本范围 }`,
+    `插件 ${id} 的 requires.plugins 必须是 { 插件id: 版本范围 } 或插件 id 数组`,
   );
   const anyOf = requires.anyOf ?? [];
   check(
@@ -105,6 +117,7 @@ export function definePlugin(spec = {}) {
     ["setup", setup],
     ["tools", tools],
     ["api", api],
+    ["status", status],
   ]) {
     check(
       value === undefined || typeof value === "function",
@@ -220,6 +233,125 @@ export function definePlugin(spec = {}) {
       `插件 ${id} 的事件 ${name} 必须是函数`,
     );
 
+  const normalizeApiPath = (value, index) => {
+    check(
+      typeof value === "string" && value.startsWith("/api/") && !/[?#]/.test(value),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyApiPaths[${index}].path 必须是以 /api/ 开头的路径`,
+    );
+    const segments = value.slice(5).split("/");
+    check(
+      segments.length > 0 &&
+        segments.every((segment) => segment && API_SEGMENT.test(segment)),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyApiPaths[${index}].path 含非法片段`,
+    );
+    const wildcard = segments.indexOf("*");
+    check(
+      wildcard === -1 || wildcard === segments.length - 1,
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyApiPaths[${index}].path 中 * 只能位于末尾`,
+    );
+    return value;
+  };
+
+  check(
+    Array.isArray(legacyApiPaths),
+    "PLUGIN_SPEC",
+    `插件 ${id} 的 legacyApiPaths 必须是数组`,
+  );
+  const normalizedApiPaths = [];
+  const seenApiPaths = new Set();
+  legacyApiPaths.forEach((entry, index) => {
+    check(
+      isObject(entry),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyApiPaths[${index}] 必须是对象`,
+    );
+    const method = String(entry.method || "GET").toUpperCase();
+    check(
+      HTTP_METHOD.test(method),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyApiPaths[${index}].method 无效`,
+    );
+    const path = normalizeApiPath(entry.path, index);
+    const key = `${method} ${path}`;
+    if (seenApiPaths.has(key)) return;
+    seenApiPaths.add(key);
+    normalizedApiPaths.push(Object.freeze({ method, path }));
+  });
+
+  let normalizedLifecycle;
+  if (lifecycle !== undefined) {
+    check(
+      isObject(lifecycle),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 lifecycle 必须是对象`,
+    );
+    // definePlugin is intentionally idempotent: the host re-validates the
+    // object a plugin module already normalized. Undefined hooks are omitted
+    // rather than rejected so that second pass is lossless.
+    const hooks = {};
+    for (const [name, hook] of Object.entries(lifecycle)) {
+      check(
+        ["start", "stop", "drain"].includes(name),
+        "PLUGIN_SPEC",
+        `插件 ${id} 的 lifecycle 含未知钩子 ${name}`,
+      );
+      check(
+        hook === undefined || typeof hook === "function",
+        "PLUGIN_SPEC",
+        `插件 ${id} 的 lifecycle.${name} 必须是函数`,
+      );
+      if (typeof hook === "function") hooks[name] = hook;
+    }
+    normalizedLifecycle = Object.freeze(hooks);
+  }
+
+  let normalizedProvides;
+  if (provides !== undefined) {
+    check(
+      isObject(provides) &&
+        typeof provides.service === "string" &&
+        PLUGIN_ID.test(provides.service),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 provides.service 必须匹配 /^[a-z][a-z0-9-]{1,39}$/`,
+    );
+    const apiVersion = provides.apiVersion ?? 1;
+    check(
+      Number.isInteger(apiVersion) && apiVersion > 0,
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 provides.apiVersion 必须是正整数`,
+    );
+    normalizedProvides = Object.freeze({
+      ...provides,
+      service: provides.service,
+      apiVersion,
+    });
+  }
+
+  const normalizeCapabilities = (value, field) => {
+    if (value === undefined) return undefined;
+    if (Array.isArray(value)) {
+      check(
+        value.every((item) => typeof item === "string" && item.trim()),
+        "PLUGIN_SPEC",
+        `插件 ${id} 的 ${field} 必须是非空字符串数组`,
+      );
+      return Object.freeze([...value]);
+    }
+    check(
+      isObject(value),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 ${field} 必须是数组或对象`,
+    );
+    return Object.freeze({ ...value });
+  };
+  const normalizedCapabilities = normalizeCapabilities(
+    capabilities,
+    "capabilities",
+  );
+
   return Object.freeze({
     id,
     version,
@@ -241,5 +373,10 @@ export function definePlugin(spec = {}) {
     workflows: Object.freeze(normalizedWorkflows),
     api,
     events: Object.freeze({ ...events }),
+    legacyApiPaths: Object.freeze(normalizedApiPaths),
+    lifecycle: normalizedLifecycle,
+    provides: normalizedProvides,
+    status,
+    capabilities: normalizedCapabilities,
   });
 }

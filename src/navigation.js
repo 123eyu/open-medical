@@ -16,13 +16,19 @@ export function isPluginTab(tab) {
   return typeof tab === "string" && /^p:[a-z][a-z0-9-]{1,39}:[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(tab);
 }
 
+// A plugin can take over an existing patient tab via legacyTab without adding a
+// new whitelisted name. Keep the grammar as narrow as defineUiPlugin's check.
+export function isLegacyTab(tab) {
+  return typeof tab === "string" && /^[a-z][a-z0-9-]*$/.test(tab);
+}
+
 export function readLocation() {
   const params = new URLSearchParams(window.location.search);
   const requested = params.get("view");
   const view = requested === "review" ? "tasks" : Object.hasOwn(VIEW_LABELS, requested) ? requested : "home";
   const tabs = view === "patients" ? ["overview", "diagnoses", "clinical", "medications", "labs", "visits", "library", "assistance", "messages", "appointments", "followups", "tracking"] : view === "workspaces" ? ["files", "review", "media", "browser", "terminal", "extensions", "history", "settings"] : view === "workbench" ? ["materials", "results", "runs", "knowledge"] : [];
   const requestedTab = params.get("tab");
-  const tab = tabs.includes(requestedTab) || (view === "patients" && isPluginTab(requestedTab)) ? requestedTab : undefined;
+  const tab = tabs.includes(requestedTab) || (view === "patients" && (isPluginTab(requestedTab) || isLegacyTab(requestedTab))) ? requestedTab : undefined;
   return {
     view,
     id: params.get(view === "patients" ? "patient" : view === "workspaces" ? "workspace" : "session") || "",

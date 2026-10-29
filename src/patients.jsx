@@ -33,7 +33,7 @@ import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
 import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
-import { SlotItem, useSlot } from "./plugin-slots";
+import { SlotItem, findPatientTab, mergePatientTabs, useSlot } from "./plugin-slots";
 
 const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
@@ -100,9 +100,7 @@ export function PatientsView({
   const [tab, setTab] = useState("overview");
   const pluginTabs = useSlot("patient.tabs");
   const pluginActions = useSlot("patient.actions");
-  const activePluginTab = pluginTabs.find(
-    (item) => tab === `p:${item.pluginId}:${item.id}`,
-  );
+  const activePluginTab = findPatientTab(pluginTabs, tab);
   const [clinicalEditRequest, setClinicalEditRequest] = useState(null);
   useEffect(() => { setClinicalEditRequest(null); }, [detail?.id]);
   // 时间轴「查看原文」跨标签跳转的目标材料：状态放在父级，因为按 tab 切换
@@ -417,6 +415,26 @@ export function PatientsView({
       )}
     </div>
   );
+  const activeArea =
+    activePluginTab?.area === "communication" ||
+    ["messages", "appointments", "followups", "tracking"].includes(tab)
+      ? "communication"
+      : "record";
+  const recordTabs = mergePatientTabs(pluginTabs, {
+    area: "record",
+    builtin: RECORD_TABS,
+  });
+  const communicationTabs = mergePatientTabs(pluginTabs, {
+    area: "communication",
+    builtin: [
+      ["messages", `消息记录${detail?.counts?.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`, 10],
+      ["appointments", "复诊预约", 20],
+      ["followups", "随访计划", 30],
+      ["tracking", "检查与转诊", 40],
+    ],
+  });
+  const patientSectionTabs =
+    activeArea === "communication" ? communicationTabs : recordTabs;
   return (
     <section ref={panelRoot} onScroll={rememberListScroll} id="main" className={`patients-view ${detail ? "has-patient" : ""}`} aria-label="患者档案">
       {!detail && <div className="patients-toolbar">
@@ -616,7 +634,7 @@ export function PatientsView({
               </div></details>
             </div>
           </div>
-          {config?.modelConfigured && tab === "messages" && (
+          {config?.modelConfigured && !activePluginTab && tab === "messages" && (
             <label className="consent">
               <input
                 type="checkbox"
@@ -628,22 +646,21 @@ export function PatientsView({
             </label>
           )}
           <nav className="tab-row patient-area-tabs" aria-label="患者工作内容">
-            <button className={isRecordTab(tab) || activePluginTab ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
+            <button className={isRecordTab(tab) || activePluginTab?.area === "record" ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
             <button className={tab === "assistance" ? "active" : ""} onClick={() => setTab("assistance")}>诊疗辅助</button>
-            <button className={["messages", "followups", "tracking", "appointments"].includes(tab) ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
+            <button className={["messages", "followups", "tracking", "appointments"].includes(tab) || activePluginTab?.area === "communication" ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
           </nav>
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
-            {(isRecordTab(tab) || activePluginTab ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
-            {pluginTabs.map((item) => {
-              const key = `p:${item.pluginId}:${item.id}`;
-              return <button key={key} aria-current={tab === key ? "page" : undefined} className={tab === key ? "active" : ""} onClick={() => openRecordTab(key)}>{item.label}</button>;
+            {patientSectionTabs.map((entry) => {
+              const current = tab === entry.key || (tab === "clinical" && entry.id === "diagnoses");
+              return <button key={entry.key} aria-current={current ? "page" : undefined} className={current ? "active" : ""} onClick={() => openRecordTab(entry.key)}>{entry.label}</button>;
             })}
           </nav>}
           {activePluginTab && <SlotItem key={`${activePluginTab.pluginId}:${activePluginTab.id}`} contribution={activePluginTab} patient={detail} onChanged={refreshPatient} onNavigate={openRecordTab} />}
-          {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
-          {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
-          {tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
-          {isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={<RiskList
+          {!activePluginTab && tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
+          {!activePluginTab && tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
+          {!activePluginTab && tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
+          {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={<RiskList
                 alerts={[...risks].sort(
                   (a, b) =>
                     (a.status === "active" ? 0 : 1) -
@@ -670,8 +687,8 @@ export function PatientsView({
                   await refreshPatient();
                 }}
               />}/></div>}
-          {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} onOpenTask={onOpenWorkspace}/>}
-          {tab === "messages" && (
+          {!activePluginTab && tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} onOpenTask={onOpenWorkspace}/>}
+          {!activePluginTab && tab === "messages" && (
             <div className="detail-panel">
               <WeComPanel key={detail.id} patientId={detail.id} />
               <div className="digest-row">
@@ -739,7 +756,7 @@ export function PatientsView({
               </div>
             </div>
           )}
-          {tab === "followups" && (
+          {!activePluginTab && tab === "followups" && (
             <div className="detail-panel patient-followup-workspace">
               <div className="digest-row"><div><h2>随访计划</h2><p className="muted">先处理到期事项，再安排下一次联系。</p></div>
                 <button

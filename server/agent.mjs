@@ -1029,7 +1029,7 @@ export function createServer(options = {}) {
         res.once("close", disconnected);
         try { return send(res, 200, {
           token: secret,
-          plugins: pluginHost.list(),
+          plugins: await pluginHost.listWithStatus(),
           demoEntryHidden: store.db.prepare("SELECT value FROM meta WHERE key=?").get("ui:demo-entry-hidden")?.value === "true",
           // 与 server/platform.mjs 的 App Shell 契约一致：本服务是融合
           // 应用，显式声明医疗能力可用（前端 medicalEnabled 优先读
@@ -1127,6 +1127,17 @@ export function createServer(options = {}) {
         res.on("close",()=>stream.destroy());stream.on("error",()=>res.destroy());stream.pipe(res);return;
       }
       if (path.startsWith("/api/")) guard(req, true);
+      // 旧版业务路径由插件声明接管。必须在固定业务路由（尤其
+      // /api/patients/:id/... 分支）之前匹配，且已在 guard 之后。
+      if (
+        (await pluginHost.handleLegacyApi(req, url, {
+          body: () => body(req),
+          send: (status, data) => send(res, status, data),
+          error: (error) => errorResponse(res, error),
+          res,
+        }))
+      )
+        return;
       // 插件 HTTP 路由只接受 /api/p/<id>/...；鉴权与其它 /api 一致。
       if (
         path.startsWith("/api/p/") &&
@@ -2710,12 +2721,19 @@ export function createServer(options = {}) {
     chatFollowups.start();
     care.start();
     extensions.start();
+    // 插件生命周期在固定区服务启动后统一开始；单个插件失败已在 host 内隔离。
+    pluginHost.startAll().catch((error) => {
+      console.error("插件启动失败:", error);
+    });
   });
   server.shutdown = () => {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     guidelines.stopStatusQueries?.();
     shutdownPromise = (async () => {
+    // 先停插件后台任务并等待其收尾，再关闭固定区服务与数据库连接。
+    await pluginHost.stopAll();
+    await pluginHost.drainAll();
     await personalRegression.stop();
     workspaces.stopping = true;
     scheduler.stop();

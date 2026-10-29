@@ -74,6 +74,128 @@ export function validateMigrationSql(sql, tablePrefix) {
 const errorMessage = (error) =>
   String(error?.message || error || "未知错误").slice(0, 1000);
 
+const VERSION = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-+].*)?$/;
+
+function parseVersion(value) {
+  const match = VERSION.exec(String(value || "").trim());
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2] || 0), Number(match[3] || 0)];
+}
+
+function compareVersions(left, right) {
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
+function bumpVersion(version, index) {
+  const next = [...version];
+  next[index] += 1;
+  for (let cursor = index + 1; cursor < next.length; cursor += 1) next[cursor] = 0;
+  return next;
+}
+
+// Small, dependency-free semver range support for plugin compatibility. It
+// covers the forms used by plugin manifests: "*", exact versions, comparators,
+// caret and tilde ranges, and space-separated comparator sets.
+export function satisfiesVersion(version, range = "*") {
+  const current = parseVersion(version);
+  if (!current) return false;
+  const raw = String(range || "*").trim();
+  if (!raw || raw === "*" || raw === "x") return true;
+  return raw.split("||").some((alternative) =>
+    alternative
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .every((token) => {
+        if (token === "*" || token === "x") return true;
+        let operator = "=";
+        let value = token;
+        for (const candidate of [">=", "<=", ">", "<", "=", "^", "~"]) {
+          if (token.startsWith(candidate)) {
+            operator = candidate;
+            value = token.slice(candidate.length);
+            break;
+          }
+        }
+        const wanted = parseVersion(value);
+        if (!wanted) return false;
+        if (operator === "=") return compareVersions(current, wanted) === 0;
+        if (operator === ">") return compareVersions(current, wanted) > 0;
+        if (operator === ">=") return compareVersions(current, wanted) >= 0;
+        if (operator === "<") return compareVersions(current, wanted) < 0;
+        if (operator === "<=") return compareVersions(current, wanted) <= 0;
+        if (operator === "^") {
+          const upper = wanted[0] > 0
+            ? bumpVersion(wanted, 0)
+            : wanted[1] > 0
+              ? bumpVersion(wanted, 1)
+              : bumpVersion(wanted, 2);
+          return (
+            compareVersions(current, wanted) >= 0 &&
+            compareVersions(current, upper) < 0
+          );
+        }
+        const upper = bumpVersion(wanted, 1);
+        return (
+          compareVersions(current, wanted) >= 0 &&
+          compareVersions(current, upper) < 0
+        );
+      }),
+  );
+}
+
+function patternSegments(path) {
+  return path.split("/").filter(Boolean);
+}
+
+export function matchLegacyPath(pattern, pathname) {
+  const expected = patternSegments(pattern);
+  const actual = patternSegments(pathname);
+  const params = {};
+  for (let index = 0; index < expected.length; index += 1) {
+    const segment = expected[index];
+    if (segment === "*") {
+      params.rest = actual.slice(index).join("/");
+      return index < actual.length || expected.length === index + 1
+        ? params
+        : null;
+    }
+    if (index >= actual.length) return null;
+    if (segment.startsWith(":")) {
+      const name = segment.slice(1);
+      const value = actual[index];
+      if (!value) return null;
+      params[name] = decodeURIComponent(value);
+      continue;
+    }
+    if (segment !== actual[index]) return null;
+  }
+  return expected.length === actual.length ? params : null;
+}
+
+function legacyPathRank(path) {
+  const segments = patternSegments(path);
+  if (segments.includes("*")) return 0;
+  if (segments.some((segment) => segment.startsWith(":"))) return 1;
+  return 2;
+}
+
+function withTimeout(promise, timeoutMs, description) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${description}超时（${timeoutMs}ms）`)),
+      timeoutMs,
+    );
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() =>
+    clearTimeout(timer),
+  );
+}
+
 export class PluginHost {
   constructor({
     db,
@@ -97,7 +219,14 @@ export class PluginHost {
     this.ordered = [];
     this.byId = new Map();
     this.pluginServices = {};
+    this.providedServices = new Map();
     this.listeners = new Map();
+    this.legacyRoutes = [];
+    this.statusCache = new Map();
+    this.startedPlugins = new Set();
+    this.drainedPlugins = new Set();
+    this.lifecycleStates = new Map();
+    this.lifecycleErrors = new Map();
     this.loaded = false;
     this._ensureTables();
   }
@@ -138,7 +267,14 @@ export class PluginHost {
     this.ordered = [];
     this.byId = new Map();
     this.pluginServices = {};
+    this.providedServices = new Map();
     this.listeners = new Map();
+    this.legacyRoutes = [];
+    this.statusCache = new Map();
+    this.startedPlugins = new Set();
+    this.drainedPlugins = new Set();
+    this.lifecycleStates = new Map();
+    this.lifecycleErrors = new Map();
     for (const directory of this.pluginDirs) {
       if (!existsSync(directory) || !statSync(directory).isDirectory()) continue;
       // A pluginDir may be either a plugins/ container or one plugin folder;
@@ -248,26 +384,35 @@ export class PluginHost {
             failure = `依赖插件 ${dependency} 未启用`;
             break;
           }
+          if (!satisfiesVersion(target.spec?.version, range)) {
+            failure = `依赖插件 ${dependency} 版本 ${target.spec?.version || "未知"} 不满足 ${range}`;
+            break;
+          }
+          if (target._visiting) {
+            failure = `依赖存在环：${[...trail, record.id, dependency].join(" -> ")}`;
+            break;
+          }
           if (!resolveRecord(target, [...trail, record.id])) {
-            failure = `依赖插件 ${dependency} 不可用`;
+            failure = /依赖存在环/.test(target.reason)
+              ? target.reason
+              : `依赖插件 ${dependency} 不可用`;
             break;
           }
         }
-        if (!failure) {
-          for (const group of record.spec.requires.anyOf) {
-            const satisfied = group.some((dependency) => {
-              const target = this.byId.get(dependency);
-              return Boolean(
-                target &&
-                  target.enabled &&
-                  resolveRecord(target, [...trail, record.id]),
-              );
-            });
-            if (!satisfied) {
-              failure = `需要启用以下插件之一：${group.join(" / ")}`;
-              break;
-            }
-          }
+        if (!failure && record.spec.requires.anyOf.length) {
+          // anyOf is an OR across all listed alternatives. A single group with
+          // several ids and several singleton groups behave the same way.
+          const alternatives = record.spec.requires.anyOf.flat();
+          const satisfied = alternatives.some((dependency) => {
+            const target = this.byId.get(dependency);
+            return Boolean(
+              target &&
+                target.enabled &&
+                resolveRecord(target, [...trail, record.id]),
+            );
+          });
+          if (!satisfied)
+            failure = `需要启用以下插件之一：${alternatives.join(" / ")}`;
         }
       }
       record._visiting = false;
@@ -282,18 +427,30 @@ export class PluginHost {
     for (const record of this.records) delete record._resolved;
   }
 
+  _startupDependencies(record) {
+    if (!record.spec) return [];
+    const dependencies = Object.keys(record.spec.requires.plugins);
+    const anyOfTarget = record.spec.requires.anyOf
+      .flat()
+      .map((id) => this.byId.get(id))
+      .find(
+        (candidate) => candidate && candidate.enabled && candidate.available,
+      );
+    if (anyOfTarget) dependencies.push(anyOfTarget.id);
+    return [...new Set(dependencies)];
+  }
+
   _order() {
     const ordered = [];
     const seen = new Set();
     const visit = (record) => {
       if (seen.has(record.id)) return;
       seen.add(record.id);
-      if (record.enabled && record.spec) {
-        for (const dependency of Object.keys(record.spec.requires.plugins)) {
+      if (record.enabled && record.spec)
+        for (const dependency of this._startupDependencies(record)) {
           const target = this.byId.get(dependency);
           if (target) visit(target);
         }
-      }
       ordered.push(record);
     };
     for (const record of [...this.records].sort((a, b) =>
@@ -303,10 +460,63 @@ export class PluginHost {
     this.ordered = ordered;
   }
 
+  _buildLegacyRoutes() {
+    const buckets = new Map();
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec) continue;
+      for (const route of record.spec.legacyApiPaths) {
+        const key = `${route.method} ${route.path}`;
+        const list = buckets.get(key) || [];
+        list.push(record);
+        buckets.set(key, list);
+      }
+    }
+    const conflicts = new Map();
+    for (const [key, records] of buckets) {
+      const unique = [...new Set(records)];
+      if (unique.length < 2) continue;
+      for (const record of unique)
+        conflicts.set(
+          record,
+          `legacy API 路由冲突：${key} 同时由 ${unique
+            .map((item) => item.id)
+            .join(" / ")} 声明`,
+        );
+    }
+    for (const [record, reason] of conflicts) this._fail(record, reason);
+
+    const routes = [];
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec) continue;
+      for (const route of record.spec.legacyApiPaths)
+        routes.push({
+          record,
+          method: route.method,
+          path: route.path,
+          rank: legacyPathRank(route.path),
+        });
+    }
+    routes.sort(
+      (a, b) =>
+        b.rank - a.rank ||
+        (a.method === "*" ? 1 : 0) - (b.method === "*" ? 1 : 0) ||
+        a.record.id.localeCompare(b.record.id) ||
+        a.path.localeCompare(b.path),
+    );
+    this.legacyRoutes = routes;
+    return routes;
+  }
+
   _fail(record, reason) {
     record.available = false;
     record.reason = reason;
-    if (record.spec) delete this.pluginServices[record.spec.id];
+    if (record.spec) {
+      delete this.pluginServices[record.spec.id];
+      for (const [serviceId, entry] of this.providedServices) {
+        if (entry.pluginId === record.spec.id)
+          this.providedServices.delete(serviceId);
+      }
+    }
   }
 
   migrate() {
@@ -343,30 +553,37 @@ export class PluginHost {
   }
 
   setup() {
+    // Route conflicts are detected before any setup side effect: a conflicting
+    // plugin becomes unavailable while the rest of the server keeps running.
+    this._buildLegacyRoutes();
     for (const record of this.ordered) {
       if (!record.available || !record.spec) continue;
       if (record.enabled) {
         const missing = Object.keys(record.spec.requires.plugins).find(
           (dependency) => {
             const target = this.byId.get(dependency);
-            return !target || !target.enabled || !target.available;
+            if (!target || !target.enabled || !target.available) return true;
+            return !satisfiesVersion(
+              target.spec?.version,
+              record.spec.requires.plugins[dependency],
+            );
           },
         );
         if (missing) {
           this._fail(record, `依赖插件 ${missing} 不可用`);
           continue;
         }
-        const unsatisfied = record.spec.requires.anyOf.find(
-          (group) =>
-            !group.some((dependency) => {
-              const target = this.byId.get(dependency);
-              return target && target.enabled && target.available;
-            }),
-        );
-        if (unsatisfied) {
+        const alternatives = record.spec.requires.anyOf.flat();
+        if (
+          alternatives.length &&
+          !alternatives.some((dependency) => {
+            const target = this.byId.get(dependency);
+            return target && target.enabled && target.available;
+          })
+        ) {
           this._fail(
             record,
-            `需要启用以下插件之一：${unsatisfied.join(" / ")}`,
+            `需要启用以下插件之一：${alternatives.join(" / ")}`,
           );
           continue;
         }
@@ -375,8 +592,26 @@ export class PluginHost {
         const service = record.spec.setup
           ? record.spec.setup(this.contextFor(record))
           : undefined;
-        if (service !== undefined)
-          this.pluginServices[record.spec.id] = service;
+        if (service !== undefined) this.pluginServices[record.spec.id] = service;
+        if (record.spec.provides) {
+          const provided = record.spec.provides;
+          check(
+            service !== undefined,
+            "PLUGIN_SPEC",
+            `插件 ${record.id} 声明 provides.service=${provided.service} 但 setup 未返回服务`,
+          );
+          const existing = this.providedServices.get(provided.service);
+          check(
+            !existing || existing.pluginId === record.id,
+            "PLUGIN_SPEC",
+            `服务 ${provided.service} 同时由 ${existing?.pluginId} 与 ${record.id} 提供`,
+          );
+          this.providedServices.set(provided.service, {
+            pluginId: record.id,
+            apiVersion: provided.apiVersion,
+            service,
+          });
+        }
         if (record.spec.events)
           for (const [name, listener] of Object.entries(record.spec.events)) {
             const list = this.listeners.get(name) || [];
@@ -389,6 +624,8 @@ export class PluginHost {
         this._fail(record, `初始化失败：${errorMessage(error)}`);
       }
     }
+    // Failure while wiring a later plugin must not leave its routes active.
+    this._buildLegacyRoutes();
     return this.list();
   }
 
@@ -396,14 +633,54 @@ export class PluginHost {
     return { ...this.baseServices, ...this.pluginServices };
   }
 
+  resolveService(id, options = {}) {
+    const { apiVersion } =
+      typeof options === "number" ? { apiVersion: options } : options || {};
+    const entry = this.providedServices.get(id);
+    check(
+      entry,
+      "PLUGIN_SERVICE_UNAVAILABLE",
+      `插件服务 ${id || "(未指定)"} 不存在或未提供`,
+      503,
+    );
+    const target = this.byId.get(entry.pluginId);
+    check(
+      target?.available && target?.enabled,
+      "PLUGIN_SERVICE_UNAVAILABLE",
+      `插件服务 ${id} 所属插件 ${entry.pluginId} 不可用或未启用`,
+      503,
+    );
+    if (apiVersion !== undefined)
+      check(
+        entry.apiVersion === apiVersion,
+        "PLUGIN_SERVICE_VERSION",
+        `插件服务 ${id} 的版本为 ${entry.apiVersion}，需要 ${apiVersion}`,
+        409,
+      );
+    return entry.service;
+  }
+
   contextFor(record) {
     const appendReason = (error) => {
       this._fail(record, `运行时错误：${errorMessage(error)}`);
     };
+    const plugins = {};
+    for (const entry of this.providedServices.values()) {
+      const target = this.byId.get(entry.pluginId);
+      plugins[entry.pluginId] = Object.freeze({
+        id: entry.pluginId,
+        service: entry.service,
+        apiVersion: entry.apiVersion,
+        available: Boolean(target?.available),
+        enabled: Boolean(target?.enabled),
+      });
+    }
     return Object.freeze({
       db: this.db,
       store: this.store,
       services: this._services(),
+      service: (id, options) => this.resolveService(id, options),
+      plugins: Object.freeze(plugins),
       events: Object.freeze({
         emit: (name, payload) => this.emit(name, payload),
         on: (name, listener) => this.on(name, listener),
@@ -665,6 +942,44 @@ export class PluginHost {
     return items;
   }
 
+  _matchLegacyRoute(method, pathname) {
+    for (const route of this.legacyRoutes) {
+      if (route.method !== "*" && route.method !== method) continue;
+      if (!route.record.available || !route.record.enabled) continue;
+      if (!route.record.spec?.api) continue;
+      const params = matchLegacyPath(route.path, pathname);
+      if (params) return { route, params };
+    }
+    return null;
+  }
+
+  // Legacy API paths keep their historical URLs while their implementation
+  // lives in a plugin. Returning false means "not handled" so the fixed shell
+  // can continue with its own routes; a handler error becomes a normal 500.
+  async handleLegacyApi(req, url, io) {
+    if (!url.pathname.startsWith("/api/")) return false;
+    const matched = this._matchLegacyRoute(req.method, url.pathname);
+    if (!matched) return false;
+    const { route, params } = matched;
+    try {
+      const handled = await route.record.spec.api(
+        this.contextFor(route.record),
+        req,
+        url,
+        { ...io, params: Object.freeze(params) },
+      );
+      return handled === true;
+    } catch (error) {
+      if (io.error) io.error(error);
+      else
+        io.send(Number.isInteger(error?.status) ? error.status : 500, {
+          error: errorMessage(error),
+          code: error?.code || "PLUGIN_API_ERROR",
+        });
+      return true;
+    }
+  }
+
   async handleApi(req, url, io) {
     if (!url.pathname.startsWith("/api/p/")) return false;
     const parts = url.pathname.split("/").filter(Boolean);
@@ -704,6 +1019,100 @@ export class PluginHost {
     return true;
   }
 
+  async startAll() {
+    const results = [];
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec?.lifecycle)
+        continue;
+      const state = this.lifecycleStates.get(record.id);
+      if (state === "started" || state === "starting") continue;
+      this.lifecycleStates.set(record.id, "starting");
+      this.startedPlugins.add(record.id);
+      this.drainedPlugins.delete(record.id);
+      try {
+        if (record.spec.lifecycle.start)
+          await record.spec.lifecycle.start(this.contextFor(record));
+        this.lifecycleStates.set(record.id, "started");
+        this.lifecycleErrors.delete(record.id);
+        results.push({ id: record.id, ok: true });
+      } catch (error) {
+        this.lifecycleStates.set(record.id, "failed");
+        this.lifecycleErrors.set(record.id, errorMessage(error));
+        console.error(`插件 ${record.id} 启动失败:`, error);
+        results.push({
+          id: record.id,
+          ok: false,
+          error: errorMessage(error),
+        });
+      }
+    }
+    return results;
+  }
+
+  // Stopping walks the dependency order backwards. Each plugin is isolated:
+  // one slow/failing stop never prevents the others from cleaning up.
+  async stopAll() {
+    const results = [];
+    for (const record of [...this.ordered].reverse()) {
+      if (
+        !this.startedPlugins.has(record.id) ||
+        !record.spec?.lifecycle ||
+        this.lifecycleStates.get(record.id) === "stopped"
+      )
+        continue;
+      try {
+        if (record.spec.lifecycle.stop)
+          await record.spec.lifecycle.stop(this.contextFor(record));
+        this.lifecycleStates.set(record.id, "stopped");
+        results.push({ id: record.id, ok: true });
+      } catch (error) {
+        this.lifecycleErrors.set(record.id, `停止失败：${errorMessage(error)}`);
+        console.error(`插件 ${record.id} 停止失败:`, error);
+        results.push({
+          id: record.id,
+          ok: false,
+          error: errorMessage(error),
+        });
+      }
+    }
+    return results;
+  }
+
+  // Drain waits for in-flight work after stop; a plugin that never settles is
+  // abandoned after the timeout so shutdown cannot hang forever.
+  async drainAll({ timeoutMs = 5000, timeout } = {}) {
+    const limit = Number.isFinite(timeout) ? timeout : timeoutMs;
+    const results = [];
+    for (const record of [...this.ordered].reverse()) {
+      if (
+        !this.startedPlugins.has(record.id) ||
+        !record.spec?.lifecycle?.drain ||
+        this.drainedPlugins.has(record.id)
+      )
+        continue;
+      try {
+        await withTimeout(
+          record.spec.lifecycle.drain(this.contextFor(record)),
+          limit,
+          `插件 ${record.id} drain `,
+        );
+        this.drainedPlugins.add(record.id);
+        results.push({ id: record.id, ok: true });
+      } catch (error) {
+        this.lifecycleErrors.set(record.id, `drain 失败：${errorMessage(error)}`);
+        // A timed-out drain is abandoned, not retried during the same shutdown.
+        this.drainedPlugins.add(record.id);
+        console.error(`插件 ${record.id} drain 失败:`, error);
+        results.push({
+          id: record.id,
+          ok: false,
+          error: errorMessage(error),
+        });
+      }
+    }
+    return results;
+  }
+
   setEnabled(id, enabled) {
     check(typeof enabled === "boolean", "INVALID_INPUT", "enabled 必须是布尔值");
     const record = this.byId.get(id);
@@ -716,27 +1125,84 @@ export class PluginHost {
       )
       .run(id, enabled ? 1 : 0, time);
     record.enabled = enabled;
+    if (!enabled) this.statusCache.delete(id);
+    this._buildLegacyRoutes();
     return this.list().find((item) => item.id === id);
+  }
+
+  _describe(record) {
+    const spec = record.spec;
+    const cached = this.statusCache.get(record.id);
+    const staticCapabilities = spec?.capabilities ?? [];
+    return {
+      id: record.id,
+      title: spec?.title || record.id,
+      version: spec?.version || "0.0.0",
+      enabled: record.enabled,
+      available: record.available,
+      connected: cached ? cached.connected : null,
+      capabilities:
+        cached && cached.capabilities !== undefined
+          ? cached.capabilities
+          : staticCapabilities,
+      status: !record.available
+        ? "unavailable"
+        : record.enabled
+          ? "ready"
+          : "disabled",
+      reason: record.reason,
+    };
+  }
+
+  // Status hooks are optional and may be async. A hook error only affects the
+  // reported connection state; it must never take down bootstrap or the host.
+  async listWithStatus() {
+    for (const record of this.ordered) {
+      if (!record.spec) continue;
+      let connected = null;
+      let capabilities = record.spec.capabilities;
+      if (record.available && record.enabled && record.spec.status) {
+        try {
+          const value = await withTimeout(
+            record.spec.status(this.contextFor(record)),
+            5000,
+            `插件 ${record.id} status `,
+          );
+          if (typeof value === "boolean") connected = value;
+          else if (value && typeof value === "object") {
+            if (typeof value.connected === "boolean")
+              connected = value.connected;
+            else if (typeof value.state === "string")
+              connected = value.state === "ready";
+            if (value.capabilities !== undefined)
+              capabilities =
+                Array.isArray(capabilities) &&
+                Array.isArray(value.capabilities)
+                  ? [
+                      ...new Set([
+                        ...capabilities,
+                        ...value.capabilities,
+                      ]),
+                    ]
+                  : value.capabilities;
+          }
+        } catch (error) {
+          this.lifecycleErrors.set(
+            record.id,
+            `状态检查失败：${errorMessage(error)}`,
+          );
+          console.error(`插件 ${record.id} 状态检查失败:`, error);
+        }
+      }
+      this.statusCache.set(record.id, { connected, capabilities });
+    }
+    return this.list();
   }
 
   list() {
     return this.ordered
       .filter((record) => record.spec || record.reason)
-      .map((record) => {
-        const spec = record.spec;
-        return {
-          id: record.id,
-          title: spec?.title || record.id,
-          version: spec?.version || "0.0.0",
-          enabled: record.enabled,
-          status: !record.available
-            ? "unavailable"
-            : record.enabled
-              ? "ready"
-              : "disabled",
-          reason: record.reason,
-        };
-      })
+      .map((record) => this._describe(record))
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 }

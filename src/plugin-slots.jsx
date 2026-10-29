@@ -16,11 +16,18 @@ export const SLOTS = [
   "proposal.renderers",
   "settings.panels",
   "tools.directory",
+  "legacyViews",
 ];
 
-const KEYED_SLOTS = new Set(["chat.resultCards", "proposal.renderers"]);
+const KEYED_SLOTS = new Set([
+  "chat.resultCards",
+  "proposal.renderers",
+  "legacyViews",
+]);
 const ACTION_SLOT = "patient.actions";
 const PLUGIN_ID = /^[a-z][a-z0-9-]{1,39}$/;
+const LEGACY_TAB = /^[a-z][a-z0-9-]*$/;
+const PATIENT_AREAS = new Set(["record", "communication"]);
 const COMPONENT_TYPES = new Set([
   Symbol.for("react.lazy"),
   Symbol.for("react.memo"),
@@ -54,6 +61,29 @@ function rebuild() {
       next.set(name, list);
     }
   }
+  // A legacy tab can only be owned by one enabled plugin; keep the first by
+  // plugin id and ignore later duplicates instead of rendering two buttons
+  // with the same URL.
+  const legacyOwners = new Map();
+  for (const name of ["patient.tabs", "settings.panels"]) {
+    const kept = [];
+    for (const item of next.get(name) || []) {
+      if (!item.legacyTab) {
+        kept.push(item);
+        continue;
+      }
+      const owner = legacyOwners.get(`${name}:${item.legacyTab}`);
+      if (owner && owner !== item.pluginId) {
+        console.error(
+          `插件 ${item.pluginId} 的 ${name} legacyTab ${item.legacyTab} 与 ${owner} 冲突，已忽略`,
+        );
+        continue;
+      }
+      legacyOwners.set(`${name}:${item.legacyTab}`, item.pluginId);
+      kept.push(item);
+    }
+    next.set(name, kept);
+  }
   for (const [name, list] of next) {
     list.sort(
       (a, b) =>
@@ -74,6 +104,68 @@ function subscribe(listener) {
 }
 
 const getSnapshot = () => version;
+
+export function isLegacyTab(value) {
+  return typeof value === "string" && LEGACY_TAB.test(value);
+}
+
+// A plugin tab with legacyTab keeps its historical URL; otherwise it uses the
+// namespaced p:<plugin>:<tab> form so two plugins can never collide.
+export function patientTabKey(item) {
+  if (!item) return "";
+  return item.legacyTab || `p:${item.pluginId}:${item.id}`;
+}
+
+export function findPatientTab(contributions, tab) {
+  return (contributions || []).find((item) => patientTabKey(item) === tab) || null;
+}
+
+// Merge fixed patient tabs with plugin contributions for one area. A plugin
+// legacyTab replaces the same fixed tab; other plugin tabs are appended and the
+// whole list is sorted by the declared order (stable on plugin/id).
+export function mergePatientTabs(
+  contributions = [],
+  { area = "record", builtin = [] } = {},
+) {
+  const merged = (builtin || []).map(([id, label, order], index) => ({
+    id,
+    key: id,
+    label,
+    order: Number.isFinite(order) ? order : (index + 1) * 10,
+    builtin: true,
+  }));
+  for (const item of contributions || []) {
+    if ((item.area || "record") !== area) continue;
+    const entry = {
+      id: item.id,
+      key: patientTabKey(item),
+      label: item.label,
+      order: Number.isFinite(item.order) ? item.order : 100,
+      pluginId: item.pluginId,
+      area: item.area || "record",
+      legacyTab: item.legacyTab,
+      replacesBuiltin: Boolean(item.replacesBuiltin),
+      contribution: item,
+    };
+    const replacement = item.legacyTab
+      ? merged.findIndex((candidate) => candidate.id === item.legacyTab)
+      : -1;
+    if (replacement >= 0) merged[replacement] = entry;
+    else merged.push(entry);
+  }
+  return merged.sort(
+    (left, right) =>
+      left.order - right.order ||
+      String(left.pluginId || "").localeCompare(String(right.pluginId || "")) ||
+      String(left.key).localeCompare(String(right.key)),
+  );
+}
+
+export function findSettingsPanel(panels, section) {
+  return (
+    (panels || []).find((item) => item.legacyTab === section) || null
+  );
+}
 
 // A UI plugin declaration is pure data: ids, labels, order and lazy component
 // loaders. React.lazy is created once here so toggling a plugin cannot rebuild
@@ -144,6 +236,7 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
       );
       continue;
     }
+    const legacyTabs = new Set();
     normalized[name] = Object.freeze(
       value.map((item, index) => {
         if (!item || typeof item !== "object")
@@ -154,11 +247,41 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
           throw new Error(
             `插件 ${id} 的插槽 ${name}.${item.id} 缺少 component 加载函数`,
           );
+        const legacyTab = item.legacyTab;
+        if (legacyTab !== undefined && !isLegacyTab(legacyTab))
+          throw new Error(
+            `插件 ${id} 的插槽 ${name}.${item.id} 的 legacyTab 必须匹配 /^[a-z][a-z0-9-]*$/`,
+          );
+        if (legacyTab !== undefined) {
+          if (legacyTabs.has(legacyTab))
+            throw new Error(
+              `插件 ${id} 的插槽 ${name} 重复声明 legacyTab ${legacyTab}`,
+            );
+          legacyTabs.add(legacyTab);
+        }
+        const area = item.area ?? "record";
+        if (name === "patient.tabs" && !PATIENT_AREAS.has(area))
+          throw new Error(
+            `插件 ${id} 的插槽 patient.tabs.${item.id} 的 area 必须是 record 或 communication`,
+          );
+        if (item.replacesBuiltin !== undefined && typeof item.replacesBuiltin !== "boolean")
+          throw new Error(
+            `插件 ${id} 的插槽 ${name}.${item.id} 的 replacesBuiltin 必须是布尔值`,
+          );
         return Object.freeze({
           pluginId: id,
           id: item.id,
           label: item.label || item.id,
           order: Number.isFinite(item.order) ? item.order : 100,
+          ...(name === "patient.tabs"
+            ? {
+                area,
+                legacyTab,
+                replacesBuiltin: item.replacesBuiltin === true || Boolean(legacyTab),
+              }
+            : name === "settings.panels"
+              ? { legacyTab }
+              : {}),
           component: lazy(item.component),
         });
       }),
@@ -258,6 +381,26 @@ export function Slot({ name, ...props }) {
         />
       ))}
     </>
+  );
+}
+
+export function useLegacyView(view) {
+  const views = useSlot("legacyViews");
+  return views.find((item) => item.type === view) || null;
+}
+
+// legacyViews keeps the historical ?view= URL while rendering a plugin
+// component. Missing contributions return the fixed shell's own renderer.
+export function LegacyView({ view, fallback = null, ...props }) {
+  const contribution = useLegacyView(view);
+  if (!contribution)
+    return typeof fallback === "function" ? fallback() : fallback;
+  return (
+    <SlotItem
+      contribution={contribution}
+      view={view}
+      {...props}
+    />
   );
 }
 

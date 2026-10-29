@@ -4,7 +4,7 @@ import { ChatConnectionSettings } from "./chat-followups";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
-import { SlotItem, useSlot } from "./plugin-slots";
+import { SlotItem, findSettingsPanel, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
@@ -24,9 +24,10 @@ const PERSONAL_SECTIONS = [
   ["learning", "学习与记忆"],
 ];
 
-function settingsGroup(section) {
+function settingsGroup(section, legacyPanels = []) {
   if (section === "transcription") return "connections";
   if (section === "plugins") return "plugins";
+  if (legacyPanels.some((panel) => panel.legacyTab === section)) return "channels";
   if (CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
   return section;
@@ -159,16 +160,23 @@ function PluginSettings({ onPluginsChanged }) {
 
 export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange, onPluginsChanged }) {
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
+  const pluginPanels = useSlot("settings.panels");
+  const legacyPanels = pluginPanels.filter((panel) => panel.legacyTab);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
   const [section, updateSection] = useState(() => {
     const initial = takeSettingsTab() || param || "general";
     const requested = initial === "personal" ? "skills" : initial;
-    const group = settingsGroup(requested);
+    const group = settingsGroup(requested, legacyPanels);
     if (["channels", "personal"].includes(group) && !medicalEnabled(config)) return "general";
     if (requested === "desktop" && !window.omwDesktop) return "general";
     return ["general", "desktop", "connections", "channels", "personal", "backup", "plugins"].includes(group) ? requested : "general";
   });
-  const group = settingsGroup(section);
+  const group = settingsGroup(section, legacyPanels);
+  const legacyPanel = findSettingsPanel(pluginPanels, section);
+  const channelSections = [...CHANNEL_SECTIONS];
+  for (const panel of legacyPanels)
+    if (!channelSections.some(([id]) => id === panel.legacyTab))
+      channelSections.push([panel.legacyTab, panel.label]);
   function setSection(next) {
     updateSection(next);
     const url = new URL(window.location.href);
@@ -214,8 +222,8 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {section === "backup" && <BackupPanel />}
         {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} />}
         {group === "channels" && <>
-          <SettingsSubnav label="消息渠道用途" items={CHANNEL_SECTIONS} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
-          {section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>
+          <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
+          {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>
             <ChatConnectionSettings />
           </>}
         </>}
