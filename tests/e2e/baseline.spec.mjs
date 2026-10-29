@@ -1,7 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const FIXED_TIME = new Date("2026-10-28T10:00:00+08:00");
-const PATIENT_NAME = "示例·张沪生";
+import { PATIENT_NAME, capture, open } from "./helpers.mjs";
 
 let patientId = "";
 
@@ -21,60 +19,6 @@ test.beforeAll(async ({ request }) => {
   expect(patient, `${PATIENT_NAME} should be seeded`).toBeTruthy();
   patientId = patient.id;
 });
-
-async function open(page, path) {
-  await page.clock.install({ time: FIXED_TIME });
-  await page.goto(path, { waitUntil: "domcontentloaded" });
-  await page.evaluate(() => document.fonts.ready);
-}
-
-const MAX_SCREENSHOT_HEIGHT = 4000;
-
-// The app shell is a fixed 100dvh frame with an internal scroll area, so
-// fullPage alone only captures the first viewport. Grow the viewport until the
-// page's own scroller has no overflow; width stays 1440.
-async function expandMainContent(page, selector) {
-  const scroller = page.locator(selector).first();
-  await expect(scroller).toBeVisible();
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const { scrollHeight, clientHeight } = await scroller.evaluate((element) => ({
-      scrollHeight: element.scrollHeight,
-      clientHeight: element.clientHeight,
-    }));
-    if (scrollHeight <= clientHeight + 1) break;
-
-    const viewport = page.viewportSize();
-    const height = Math.min(
-      MAX_SCREENSHOT_HEIGHT,
-      viewport.height + (scrollHeight - clientHeight) + 32,
-    );
-    if (height <= viewport.height) break;
-    await page.setViewportSize({ width: viewport.width, height });
-    await page.waitForTimeout(100);
-  }
-
-  await scroller.evaluate((element) => { element.scrollTop = 0; });
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.evaluate(() => document.fonts.ready);
-}
-
-async function capture(page, name, { scroll, mask = [] } = {}) {
-  // Wait for all page-initiated requests (including the patient attention card
-  // and demo/task lists) before freezing the layout for the frame.
-  await page.waitForLoadState("networkidle");
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(250);
-  if (scroll) await expandMainContent(page, scroll);
-  await expect(page).toHaveScreenshot(name, {
-    fullPage: true,
-    animations: "disabled",
-    caret: "hide",
-    threshold: 0.02,
-    maxDiffPixels: 0,
-    mask,
-  });
-}
 
 test("新建任务首页", async ({ page }) => {
   await open(page, "/?view=home");
