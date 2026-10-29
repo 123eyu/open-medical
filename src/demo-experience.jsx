@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { ArrowRight, BookOpen, Loader2 } from "lucide-react";
 import { api } from "./agent-runtime";
 import { usePluginActive } from "./plugin-slots";
-import { DEMO_SCENARIOS } from "../shared/demo-experience.mjs";
+import {
+  DEMO_SCENARIOS,
+  demoScenarioDetail,
+  demoScenarioVisible,
+} from "../shared/demo-experience.mjs";
 import "./demo-experience.css";
 
 export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged, entryHidden, preferenceBusy, onEntryHiddenChange }) {
@@ -52,7 +56,12 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
       patient: ["discharge-summary", "handoff", "case-report"].includes(flow.id) ? 2 : 0,
       ...(flow.id === "followup" ? { patient: 1, tab: "followups" } : {}),
       next: "会先打开示例材料与任务要求。核对后发送，可继续追问、调整草稿和查看成果。",
-    })) : DEMO_SCENARIOS.filter(s => s.group === group && (followupActive || (s.flow !== "followup" && s.tab !== "followups")));
+    })) : DEMO_SCENARIOS
+    .filter((scenario) => scenario.group === group && demoScenarioVisible(scenario, followupActive))
+    .map((scenario) => ({
+      ...scenario,
+      detail: demoScenarioDetail(scenario, followupActive),
+    }));
   return <main id="main" className="demo-experience work-directory">
     <header className="directory-heading"><div><span className="agent-eyebrow">从一份现成资料开始</span><h1>示例体验</h1><p>选一个场景，材料会自动准备好。看看数据，试着问一句，再继续操作。</p></div><button className="text-button" disabled={preferenceBusy} onClick={() => onEntryHiddenChange(!entryHidden)}>{entryHidden ? "显示入口" : "隐藏入口"}</button></header>
     {entryHidden && <p role="status">侧栏和首页入口已隐藏，可在设置中恢复。示例资料仍然保留。</p>}

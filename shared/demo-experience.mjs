@@ -38,3 +38,28 @@ export const DEMO_SCENARIOS = [
   { id: "customize", group: "工作台能力", title: "定制模板与自动化", detail: "通过对话提出模板要求，查看提案并决定是否应用。", question: "请为我新增一个名为「示例·复诊资料清单」的任务模板，要求核对日期、原文出处、检验单位与待补充项。先展示提案，供我确认。", next: "模型生成提案后核对内容，在设置的工作台定制中管理。需已连接模型。" },
   { id: "workspace", group: "工作台能力", title: "文件、成果与任务记录", detail: "打开带示例 CSV 和说明书的任务，体验材料阅读、问答、文件生成和历史。", task: true, question: "请读取示例研究数据.csv，检查缺失值和字段，生成一份数据字典 Markdown 文件与数据质量报告。数据为虚构练习，不能据此形成临床结论。", next: "在示例任务中查看材料、成果与执行记录，继续追问或下载产物。" },
 ];
+
+// Demo cards that operate the followup/care surface. They must disappear while
+// the followup plugin is dormant (no connected WeChat/WeCom channel).
+export function isFollowupDemoScenario(scenario) {
+  return Boolean(
+    scenario &&
+      (scenario.flow === "followup" ||
+        scenario.tab === "followups" ||
+        scenario.view === "care" ||
+        scenario.id === "messages"),
+  );
+}
+
+export function demoScenarioVisible(scenario, followupActive) {
+  return Boolean(followupActive) || !isFollowupDemoScenario(scenario);
+}
+
+export function demoScenarioDetail(scenario, followupActive) {
+  if (!scenario) return "";
+  // Today's agenda still exists without followup, but it only contains visit
+  // and shared reminders then.
+  if (scenario.id === "agenda" && !followupActive)
+    return "查看由示例复诊和提醒汇总的工作清单。";
+  return scenario.detail || "";
+}
