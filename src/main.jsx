@@ -1,18 +1,21 @@
 import "./medical-modules.css";
+import "./learning-loop.css";
 import { PatientQuestionStarters } from "./patient-question-starters";
-import { DoctorAgenda } from "./doctor-agenda";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
-import { AppSettingsView } from "./app-settings";
+// 路由懒加载后仍由固定入口提供这些页面的样式，保持原 CSS 顺序与层叠。
+import "./backup-panel.css";
+import "./doctor-notifications.css";
+import "./message-channels.css";
 import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS } from "./navigation";
 import { DueNotifyWatcher } from "./due-notify";
 import { conversationRunIds } from "../shared/patient-conversations.mjs";
 import { PatientQuestionHistory } from "./patient-question-history";
 import { TaskResult, hasTaskResult } from "./task-result";
-import { ProjectDirectory, ToolDirectory, TaskDirectory } from "./work-directory";
+import "./task-context.css";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import { IntakeBackground } from "./intake-background";
 import { MaterialDetails } from "./material-details";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -63,8 +66,10 @@ import "./clinical-workflow.css";
 import { importMaterial, uploadScannedPages, uploadProgressText } from "./import-material";
 import { TaskCenter } from "./task-center";
 import { PatientsView } from "./patients";
-import { WorkspacesView } from "./workspaces";
-import { DemoExperience } from "./demo-experience";
+import "./workspaces.css";
+import "highlight.js/styles/github.css";
+import "./workbench/workbench.css";
+import "./demo-experience.css";
 import { WorkbenchHome, MEDICAL_WORKFLOWS } from "./workbench-home";
 import { CommandPalette, usePaletteHotkey } from "./command-palette";
 import { RichMessage } from "./workbench/message";
@@ -72,9 +77,9 @@ import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
 import { consultationLookupIssue } from "./workbench/run-status";
 import { blockedText, runDerivedStatus } from "./workbench/run-status";
 import { DoctorProfilePanel } from "./doctor-profile";
-import { KnowledgeLibraries } from "./knowledge-libraries";
+import "./knowledge-map.css";
+import "./knowledge-workspace.css";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
-import { CasesView } from "./cases";
 import { IconButton, Badge, Modal, STATUS } from "./components";
 import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
 import { loadUiPluginModules } from "./plugin-registry";
@@ -87,6 +92,27 @@ import {
   StepsFlow,
   modeToRequest,
 } from "./ui";
+// 固定区页面按路由懒加载；首页/对话工作区/患者仍静态进入首屏。
+// CSS 继续由固定入口静态导入，保证加载顺序和层叠关系不变。
+const lazyView = (loader, name) =>
+  lazy(() => loader().then((module) => ({ default: module[name] })));
+const LazyDemoExperience = lazyView(() => import("./demo-experience"), "DemoExperience");
+const LazyAppSettingsView = lazyView(() => import("./app-settings"), "AppSettingsView");
+const LazyProjectDirectory = lazyView(() => import("./work-directory"), "ProjectDirectory");
+const LazyToolDirectory = lazyView(() => import("./work-directory"), "ToolDirectory");
+const LazyTaskDirectory = lazyView(() => import("./work-directory"), "TaskDirectory");
+const LazyWorkspacesView = lazyView(() => import("./workspaces"), "WorkspacesView");
+const LazyDoctorAgenda = lazyView(() => import("./doctor-agenda"), "DoctorAgenda");
+const LazyKnowledgeLibraries = lazyView(() => import("./knowledge-libraries"), "KnowledgeLibraries");
+const LazyCasesView = lazyView(() => import("./cases"), "CasesView");
+const RouteFallback = () => (
+  <main id="main" className="workbench-hub">
+    <div className="loading-state" role="status">
+      <Loader2 className="spin" />
+      正在加载页面…
+    </div>
+  </main>
+);
 const WORKFLOWS = [
   {
     id: "observations",
@@ -1619,8 +1645,8 @@ function App() {
                 </div> : <div className="loading-state" role="status">
                   <Loader2 className="spin" />正在连接本地运行时…
                 </div>}
-              </main>) : legacyView ? <SlotItem contribution={legacyView} view={view} config={config} onNavigate={navigate} onOpenTask={openTask} onOpenPatient={openPatient} onSettings={() => navigate("settings")} /> : view === "examples" && medical ? <DemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <AppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} onPluginsChanged={plugins => setConfig(current => ({ ...current, plugins }))} /> : view === "projects" && config ? <ProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <ToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <TaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
-            <WorkspacesView
+              </main>) : <Suspense fallback={<RouteFallback />}> {legacyView ? <SlotItem contribution={legacyView} view={view} config={config} onNavigate={navigate} onOpenTask={openTask} onOpenPatient={openPatient} onSettings={() => navigate("settings")} /> : view === "examples" && medical ? <LazyDemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <LazyAppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} onPluginsChanged={plugins => setConfig(current => ({ ...current, plugins }))} /> : view === "projects" && config ? <LazyProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <LazyToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <LazyTaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
+            <LazyWorkspacesView
               key={`ws-${homeKey}-${workspaceTarget?.id || ""}-${workspaceTarget?.create || ""}`}
               config={config}
               initialPanel={workspaceTarget?.panel || "files"}
@@ -1640,7 +1666,7 @@ function App() {
                 refreshList().catch(() => {});
               }}
             />
-          ) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><DoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
+          ) : view === "agenda" && medical ? (<main id="main" className="work-directory agenda-page"><LazyDoctorAgenda onPatient={openPatient} onOpenTask={openTask} onView={navigate}/></main>) : view === "patients" && medical ? (
             <PatientsView
               key={`${patientRoute.id || "list"}-${patientRoute.tab || "overview"}-${patientRoute.create || false}-${patientRoute.import || false}-${patientRoute.intakeOpen || ""}-${patientRoute.navigationKey || ""}`}
               config={config}
@@ -1655,9 +1681,9 @@ function App() {
               onChanged={refreshList}
             />
           ) : view === "knowledge" ? (
-            <KnowledgeLibraries onOpenTask={openTask} />
+            <LazyKnowledgeLibraries onOpenTask={openTask} />
           ) : view === "cases" ? (
-            <CasesView />
+            <LazyCasesView />
           ) : TOOL_VIEWS.includes(view) ? (
             <main id="main" className="module-page" aria-label="功能未启用">
               <section className="module-card" style={{ maxWidth: 560, margin: "48px auto", textAlign: "center" }}>
@@ -2756,6 +2782,8 @@ function App() {
               </aside>
             </div>
           )}
+          </Suspense>
+          }
         </div>
         <KnowledgeSourcePanel contextKey={`${view}:${activeId}`} />
       </div>

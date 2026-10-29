@@ -102,3 +102,41 @@ computing gzip size...
 
 - 本次仅执行 T0：未修改任何源码、配置或测试，未运行 `npm test` / `npm run test:e2e`（不属于 T0 范围，且当前仓库尚无测试）。
 - `node_modules/` 与 `dist/` 均为已存在/生成产物，不纳入提交。
+
+## 6. T11b 路由懒加载前后包体积
+
+记录时间：2026-10-29。对比基准为 T11b 第一部分的 `HEAD`（固定区页面全部静态 import），后值为同一环境执行 `npm run build` 的产物。
+
+统计口径：首屏 JS = `dist/index.html` 直接引用的 `script` / `modulepreload` 文件，加上它们通过静态 `import` 递归依赖，按文件去重；不包含任何 `import()` 动态 chunk。gzip 为对单个文件分别压缩后的字节数之和。
+
+### 6.1 首屏 JS
+
+| 指标 | 懒加载前 | 懒加载后 | 变化 |
+| :--- | ---: | ---: | ---: |
+| 首屏 JS 原始字节 | 1,254,678 | 1,076,008 | -178,670（-14.24%） |
+| 首屏 JS gzip 字节 | 387,900 | 336,812 | -51,088（-13.17%） |
+| 入口 `medical-*.js` 原始字节 | 1,244,775 | 1,066,105 | -178,670 |
+| 入口 `medical-*.js` gzip 字节 | 383,738 | 332,650 | -51,088 |
+
+首屏文件仍为 `medical-*.js`、`rolldown-runtime-*.js`、`jsx-runtime-*.js`、`createLucideIcon-*.js`，没有新增静态依赖。
+
+### 6.2 最大的 5 个 JS 文件
+
+| 排名 | 懒加载前 | 字节 | 懒加载后 | 字节 |
+| ---: | :--- | ---: | :--- | ---: |
+| 1 | `elk-276RUBZZ-CReZlBwf.js` | 1,456,419 | `elk-276RUBZZ-B9Ovzm9x.js` | 1,456,419 |
+| 2 | `medical-DHMdRa6r.js` | 1,244,775 | `medical-C2iE_Nmc.js` | 1,066,105 |
+| 3 | `exceljs.min-DgbhWywh.js` | 929,569 | `exceljs.min-DgbhWywh.js` | 929,569 |
+| 4 | `chunk-FOHPRMQF-CoA4358r.js` | 662,096 | `chunk-FOHPRMQF-CoA4358r.js` | 662,096 |
+| 5 | `mammoth.browser-DxYSvrvr.js` | 492,150 | `mammoth.browser-DxYSvrvr.js` | 492,150 |
+
+### 6.3 路由 chunk
+
+原来静态进入首屏的固定区页面拆成按路由加载的 chunk，例如：`app-settings` 约 11 kB、`workspaces` 约 78 kB、`knowledge-libraries` 约 41 kB、`work-directory` 约 9 kB（projects/tools/tasks 共用）、`doctor-agenda` 约 9 kB、`cases` 约 12 kB、`demo-experience` 约 7 kB。首页、对话工作区、患者页没有改为懒加载。
+
+### 6.4 CSS
+
+- 懒加载前后均生成 7 个 CSS 文件（1 个固定区主 CSS + 6 个既有插件 UI CSS）。
+- 固定区主 CSS：`medical-BzhlDtYk.css`，288,060 字节，SHA-256 `046bfd77cc5366ede06fcccedfbeb75de7582db5c727c638d4632d25ae56f395`。
+- 懒加载后文件名和内容哈希与懒加载前**完全一致**，6 个插件 CSS 的哈希也逐一一致；没有产生新的异步 CSS chunk。
+- 做法：懒加载页面原本 import 的 CSS 继续从 `src/main.jsx` 固定入口静态导入，并按原构建块顺序排列（包括 `highlight.js/styles/github.css`），因此没有新增样式规则，也没有改变层叠顺序。
