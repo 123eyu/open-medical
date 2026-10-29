@@ -17,6 +17,7 @@ export function LiteratureView({ onOpenTask }) {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState({});
   const importsInFlight = useRef(new Set());
+  const searchInFlight = useRef(false);
   const importSessions = useRef(new Map());
   const [importing, setImporting] = useState({});
   const [abstractErrors, setAbstractErrors] = useState({});
@@ -32,7 +33,8 @@ export function LiteratureView({ onOpenTask }) {
   const runSearch = async (event, options = {}) => {
     event?.preventDefault();
     const searchQuery = options.query ?? query;
-    if (!searchQuery.trim()) return;
+    if (searchInFlight.current || !searchQuery.trim()) return;
+    searchInFlight.current = true;
     setBusy(true);
     setError("");
     setResults(null);
@@ -41,6 +43,7 @@ export function LiteratureView({ onOpenTask }) {
         const session = await api("/api/sessions", "POST", { title: `${mode === "research" ? "文献研究" : "文献检索"} · ${searchQuery.slice(0, 40)}` });
         const scope = [yearFrom && `起始年：${yearFrom}`, yearTo && `结束年：${yearTo}`].filter(Boolean).join('；');
         await onOpenTask(session.id, {
+          submit: true,
           draft: `${mode === "research" ? '请围绕这个问题查阅文献，比较研究证据并给出综合结论：' : '请查找以下主题的论文：'}\n${searchQuery}\n\n优先来源：${options.source || source}${scope ? `；${scope}` : ''}。`,
           ...(mode === "research" ? { workflow: "literature-research" } : {}),
         });
@@ -63,6 +66,7 @@ export function LiteratureView({ onOpenTask }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      searchInFlight.current = false;
       setBusy(false);
     }
   };
@@ -188,7 +192,7 @@ export function LiteratureView({ onOpenTask }) {
           </div></details>
           <button type="submit" disabled={busy || !query.trim()}>
             {busy ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
-            {mode === "research" ? "进入研究对话" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
+            {mode === "research" ? "开始研究" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
           </button>
         </form>
 

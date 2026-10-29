@@ -1,0 +1,10 @@
+.clinical-assistance { width:100%; max-width:820px; margin:48px auto; }
+.clinical-assistance h1 { font-size:24px; margin:0 0 24px; }
+.clinical-assistance textarea { box-sizing:border-box; width:100%; min-height:160px; resize:vertical; padding:16px; line-height:1.8; font:inherit; border:1px solid var(--border); border-radius:8px; }
+.assistance-submit { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; }
+.assistance-submit span { color:var(--muted); font-size:12px; }
+.clinical-assistance .patient-question-starters { margin:28px 0; text-align:left; }
+.clinical-assistance .patient-question-starters p { display:none; }
+.clinical-assistance .patient-question-starters > div { justify-content:flex-start; }
+.clinical-assistance :is(textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+@media(max-width:600px) { .clinical-assistance { margin:24px auto; } .clinical-assistance h1 { font-size:21px; } }

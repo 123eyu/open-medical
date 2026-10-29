@@ -1,5 +1,4 @@
 import { PatientQuestionStarters } from "./patient-question-starters";
-import { ModelConsent } from "./model-consent";
 import { DoctorAgenda } from "./doctor-agenda";
 import { CareInbox } from "./care-inbox";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
@@ -490,8 +489,7 @@ function App() {
     [sessions, setSessions] = useState([]),
     [session, setSession] = useState(null),
     [activeId, setActiveId] = useState(initialLocation.view === "workbench" ? initialLocation.id : ""),
-    [draft, setDraftValue] = useState(""),
-    [consent, setConsent] = useState(false);
+    [draft, setDraftValue] = useState("");
   const [questionSelection, setQuestionSelection] = useState({});
   const [readingOnly, setReadingOnly] = useState(false);
   const questionDrafts = useRef(new Map());
@@ -528,7 +526,6 @@ function App() {
     if (draftContext.current.key === key) activateDraft(key);
   };
   const draftKeyFor = (data, runId) => data.patientId ? `${data.id}:${runId || "new"}` : data.id;
-  const [accessMode, setAccessMode] = useState("each");
   const [thinking, setThinking] = useState("disabled");
   const [pickedSkills, setPickedSkills] = useState([]),
     [mention, setMention] = useState(null),
@@ -695,7 +692,7 @@ function App() {
   const acceptArtifact = session?.artifacts.find((a) => a.id === acceptId);
   const materialIdsFor = data => (fileSelection[data?.id] || data?.files.map(file => file.id) || [])
     .filter(id => data?.files.some(file => file.id === id));
-  const selectedFileIds = materialIdsFor(session);
+  const selectedFileIds = session?.kind === "session" ? session.files.map(file => file.id) : materialIdsFor(session);
   // 能力驱动刷新:通用模式(无医疗能力)只拉工作区列表,不请求 /api/sessions
   // 医疗列表分别读取，失败时保留已加载数据并提供重试。
   // init 的闭包可能捕获旧 config,因此允许显式传入 bootstrap 结果。
@@ -769,7 +766,6 @@ function App() {
     setMeters({ chars: 0, tokens: 0, rounds: 0, retrievals: 0, compacted: false });
     activeRef.current = id;
     setActiveId(id);
-    setConsent(false);
     setSidebar(false);
     setReferencedPatients([]);
     setAcceptId("");
@@ -887,7 +883,6 @@ function App() {
       setLoading(false);
       activateDraft(data.id);
       setDraft("");
-      setConsent(false);
       setSidebar(false);
       setArtifactId("");
       setAcceptId("");
@@ -930,7 +925,6 @@ function App() {
                               if (original) {
                                 pendingWorkflowRef.current = r.policy?.workflow || "";
                                 setDraft(original.content);
-                                setConsent(false);
                                 if (r.fileIds.some(id => !session.files.some(f => f.id === id))) setError("原任务的部分材料已删除，本次重试只载入仍存在的材料，请核对依据范围。");
                                 setFileSelection((prev) => ({
                                   ...prev,
@@ -966,9 +960,9 @@ function App() {
   async function send(e, override = {}, refreshedSession, retryOnConflict = false, submissionContext) {
     e?.preventDefault();
     const text = override.message || draft.trim();
-    if (!text || loading) return;
+    if (!text || (loading && !refreshedSession)) return;
     const pendingWorkflow = override.workflow ?? pendingWorkflowRef.current;
-    const modelEnabled = Boolean(config?.modelConfigured) && accessMode !== "local";
+    const modelEnabled = Boolean(config?.modelConfigured);
     if (["knowledge-answer", "literature-research"].includes(pendingWorkflow) && !modelEnabled) {
       setError(pendingWorkflow === "literature-research" ? "文献研究需要模型进行阅读和综合。请先配置模型，或在文献页使用查找论文。问题已保留。" : "知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
       return;
@@ -986,7 +980,7 @@ function App() {
         await api(`/api/workspaces/${session.id}/steer`, "POST", {
           runId: persistedRunning.id,
           message: text,
-          externalConsent: accessMode === "auto" ? true : consent,
+          externalConsent: modelEnabled,
           requestId: crypto.randomUUID(),
         });
         setNotice("补充要求已加入队列，助手会在下一步接收。");
@@ -999,8 +993,9 @@ function App() {
     let current = refreshedSession || session;
     if (!current) current = await create();
     if (!current || sendingRef.current.has(current.id)) return;
-    const submittedFileIds = materialIdsFor(current);
-    if (submittedFileIds.length > 10) {
+    const automaticContext = current.kind === "session";
+    const submittedFileIds = automaticContext ? [] : materialIdsFor(current);
+    if (!automaticContext && submittedFileIds.length > 10) {
       setError("每轮最多选择 10 份材料，请先核对材料范围并取消多余选择；文件和输入已保留。");
       setTab('materials'); setInspector(true);
       return;
@@ -1031,7 +1026,7 @@ function App() {
         {
           message: req.message,
           mode: req.mode,
-          externalConsent: accessMode === "auto" ? true : consent,
+          externalConsent: modelEnabled,
           ...(thinking === "enabled" && modelEnabled
             ? { thinking: "enabled" }
             : {}),
@@ -1041,7 +1036,7 @@ function App() {
           ...(current.patientId ? { conversationParentRunId: current.id === session?.id && canFollowQuestion ? questionRunId : null } : {}),
           ...override,
           sessionRevision: current.revision,
-          fileIds: submittedFileIds,
+          ...(automaticContext ? { contextMode: "auto" } : { fileIds: submittedFileIds }),
           requestId: crypto.randomUUID(),
         },
         (event) => {
@@ -1093,8 +1088,6 @@ function App() {
               });
           if (event.type === "message.complete" && activeRef.current === id) {
             setTab("results");
-            // 逐次确认档：每轮结束后收回外发授权，下一轮需重新勾选。
-            if (accessMode === "each") setConsent(false);
           }
         },
       );
@@ -1160,7 +1153,6 @@ function App() {
   const selectWorkflow = async (flow) => {
     if (!session) await create();
     setDraft(flow.prompt);
-    setConsent(false);
     inputRef.current?.focus();
   };
   const upload = async (e) => {
@@ -1194,7 +1186,6 @@ function App() {
         }
       }
       setUploadProgress(null);
-      setConsent(false);
       await updateSession();
       setTab("materials");
       setNotice("材料已保存。图片保留原图，可用本地 OCR 或视觉模型读取；PDF、Word、Excel 保存抽取文本，请核对来源和缺失信息。");
@@ -1312,6 +1303,7 @@ function App() {
   const openTask = async (id, options = {}) => {
     setView("workbench", { id, tab: options.tab });
     const data = await select(id);
+    if (!data && options.submit) throw new Error("暂时无法打开这段问答，请稍后重试。问题已保留。");
     if (data) {
       if (data.patientId && (options.draft || options.newQuestion)) {
         rememberedQuestions.current.set(data.id, null);
@@ -1339,8 +1331,10 @@ function App() {
       if (options.draft) {
         setNotice("");
         setDraft(options.draft);
-        setConsent(false);
         setTimeout(() => inputRef.current?.focus(), 100);
+      }
+      if (options.submit && options.draft?.trim()) {
+        await send(null, { message: options.draft.trim(), workflow: options.workflow || "", conversationParentRunId: null }, data);
       }
     }
   };
@@ -1362,7 +1356,6 @@ function App() {
     } else if (patient) data = await select(patient.sessionId);
     else data = await create(title);
     if (!data) throw new Error("任务准备失败，请刷新连接后重试。");
-    setConsent(false);
     setTab("materials");
     setInspector(false);
     setHomeDraft({});
@@ -1376,10 +1369,10 @@ function App() {
     setQuestionSelection({ sessionId: data.id, runId: null });
     rememberedQuestions.current.set(data.id, null);
     activateDraft(draftKeyFor(data, null));
-    send(null, { message: prompt, skills, conversationParentRunId: null }, data);
+    await send(null, { message: prompt, skills, conversationParentRunId: null }, data);
   };
   const modelEnabled =
-    Boolean(config?.modelConfigured) && accessMode !== "local";
+    Boolean(config?.modelConfigured);
   // 领域能力:医疗模式渲染完整医疗工作台,通用模式只渲染领域无关 App Shell。
   const medical = medicalEnabled(config);
   usePaletteHotkey(setPaletteOpen);
@@ -1414,7 +1407,6 @@ function App() {
     return () => window.removeEventListener("keydown", close);
   }, [inspector]);
   const recentConversations = sessions.filter(item => item.userMessageCount > 0).slice(0, 15);
-  const effectiveConsentRequired = modelEnabled && accessMode === "each";
   const fileContent = citation
     ? citation.snapshot?.text || session?.files.find((f) => f.id === citation.sourceId)?.text ||
       session?.messages.find((m) => m.id === citation.sourceId)?.content
@@ -1666,15 +1658,8 @@ function App() {
               projects={wsList}
               onOpenProjects={startProjectTask}
               onClearDraft={() => { resetHomePending(); setHomeDraft({}); setHomeKey(value => value + 1); }}
-              accessMode={accessMode}
-              onAccessModeChange={(value) => {
-                setAccessMode(value);
-                setConsent(value === "auto");
-              }}
               thinking={thinking}
               onThinkingChange={setThinking}
-              consent={consent}
-              onConsentChange={setConsent}
               onModelSettings={() => setModal("model")}
               onAttach={homeAttach}
               attachmentError={error}
@@ -1708,7 +1693,7 @@ function App() {
                     className="secondary inspector-toggle"
                     aria-expanded={inspector}
                     aria-controls="task-reference-panel"
-                    onClick={() => setInspector(!inspector)}
+                    onClick={() => { if (!inspector && session?.patientId) setTab("materials"); setInspector(!inspector); }}
                   >
                     <FolderOpen size={16} />
                     {inspector ? "收起资料" : session?.patientId ? "患者资料" : "查看资料"}
@@ -1880,8 +1865,6 @@ function App() {
                           disabled={!config || uploading}
                           onClick={() => {
                             if (session?.files.length) {
-                              // 大范围材料核对影响任务耗时与费用，先和医生确认范围。
-                              if (selectedFileIds.length > 5 && !window.confirm(`即将把选中的 ${selectedFileIds.length} 份材料全部交给模型核对，可能较慢并产生较多模型调用。继续吗？（也可在材料页只勾选需要的几份）`)) return;
                               setTab("materials");
                               setInspector(true);
                             } else fileRef.current?.click();
@@ -1889,14 +1872,13 @@ function App() {
                         >
                           <Paperclip size={15} />
                           {session?.files.length
-                            ? `核对本次选中的 ${selectedFileIds.length} 份材料`
+                            ? `查看已添加的 ${session.files.length} 份资料`
                             : "添加任务材料"}
                         </button>}
                         {!draft.trim() && (session?.patientId ? <PatientQuestionStarters onChoose={({ prompt, workflow = '' }) => {
                           setDraft(prompt);
                           pendingWorkflowRef.current = workflow;
                           draftWorkflows.current.set(draftContext.current.key, workflow);
-                          setConsent(false);
                           inputRef.current?.focus();
                         }}/> : (
                           <div className="workflow-grid">
@@ -1915,7 +1897,7 @@ function App() {
                         ))}
                         {!session?.patientId && <div className="welcome-note">
                           <ShieldCheck size={14} />
-                          未配置模型时自动本地整理；智能模式下，输入与材料外发前需勾选同意。
+                          未配置模型时使用本地整理；配置后可直接提问。
                         </div>}
                       </div>
                     )}
@@ -2260,24 +2242,6 @@ function App() {
                       </button>
                       <details className="composer-advanced"><summary>设置</summary>
                         <div className="composer-advanced-fields">
-                      <label
-                        className="tb-item"
-                        title="选择每次发送前确认，或持续同意当前应用使用已配置的模型服务；关闭应用后失效"
-                      >
-                        使用模型
-                        <select
-                          value={accessMode}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setAccessMode(v);
-                            setConsent(v === "auto");
-                          }}
-                          disabled={busy || loading}
-                        >
-                          <option value="each">每次询问</option>
-                          <option value="auto">持续同意</option>
-                        </select>
-                      </label>
                       {config?.modelConfigured && (
                         <label
                           className="tb-item"
@@ -2297,9 +2261,6 @@ function App() {
                         </div>
                       </details>
                       <div className="composer-submit">
-                      {accessMode === "each" && config?.modelConfigured && !busy && (
-                        <ModelConsent config={config} patient={Boolean(session?.patientId || referencedPatients.length)} checked={consent} onChange={setConsent}/>
-                      )}
                       {busy && (
                         <button
                           type="button"
@@ -2319,8 +2280,7 @@ function App() {
                             !draft.trim() ||
                             loading ||
                             !config ||
-                            uploading ||
-                            effectiveConsentRequired && !consent
+                            uploading
                           }
                         >
                           <ArrowUp size={19} />
@@ -2435,7 +2395,7 @@ function App() {
                         <>
                           <div className="panel-section-head">
                             <h3>
-                              本会话材料 · 本轮选中 {selectedFileIds.length} 份
+                              {session?.kind === "session" ? `资料 · ${session.files.length} 份` : `本会话材料 · 本轮选中 ${selectedFileIds.length} 份`}
                             </h3>
                             <IconButton
                               title="添加会话材料"
@@ -2519,7 +2479,7 @@ function App() {
                             session.files.map((file) => (
                               <div className="file-card" key={file.id}>
                                 <div>
-                                  <input
+                                  {session.kind !== "session" && <input
                                     className="file-selection"
                                     type="checkbox"
                                     aria-label={`本轮使用 ${file.name}`}
@@ -2535,7 +2495,6 @@ function App() {
                                         );
                                         return;
                                       }
-                                      setConsent(false);
                                       setFileSelection((prev) => ({
                                         ...prev,
                                         [activeId]: selectedFileIds.includes(
@@ -2547,7 +2506,7 @@ function App() {
                                           : [...selectedFileIds, file.id],
                                       }));
                                     }}
-                                  />
+                                  />}
                                   <FileText size={17} />
                                   <button
                                     onClick={() =>
@@ -2569,7 +2528,6 @@ function App() {
                                           `/api/sessions/${activeId}/files/${file.id}`,
                                           { method: "DELETE" },
                                         );
-                                        setConsent(false);
                                         await updateSession();
                                       } catch (err) {
                                         setError(err.message);

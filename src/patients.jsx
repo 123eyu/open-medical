@@ -25,6 +25,7 @@ import {
 import { api, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { Modal } from "./components";
 import { RiskList } from "./ui";
+import { ClinicalAssistance } from "./clinical-assistance";
 import { PatientIdentityModal } from "./patient-identity";
 import { PatientProposalModal } from "./patient-proposal";
 import { PatientIntakeModal } from "./patient-intake";
@@ -224,7 +225,6 @@ export function PatientsView({
       setFollowups(jobs.jobs);
       setRisks(risks.alerts);
       setSession(work);
-      if (nextTab === "assistance") await onOpenWorkspace(one.sessionId, { newQuestion: true });
     } finally {
       if (version === patientGeneration.current) setPatientLoading(false);
     }
@@ -619,7 +619,7 @@ export function PatientsView({
           )}
           <nav className="tab-row patient-area-tabs" aria-label="患者工作内容">
             <button className={isRecordTab(tab) ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
-            <button className={tab === "assistance" ? "active" : ""} onClick={() => onOpenWorkspace(detail.sessionId, { newQuestion: true })}>诊疗辅助</button>
+            <button className={tab === "assistance" ? "active" : ""} onClick={() => setTab("assistance")}>诊疗辅助</button>
             <button className={["messages", "followups", "tracking", "appointments"].includes(tab) ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
           </nav>
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
@@ -655,6 +655,7 @@ export function PatientsView({
                   await refreshPatient();
                 }}
               />}/></div>}
+          {tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} onOpenTask={onOpenWorkspace}/>}
           {tab === "messages" && (
             <div className="detail-panel">
               <WeComPanel key={detail.id} patientId={detail.id} />

@@ -33,7 +33,7 @@ ${PATIENT_RECORD_INTENT}
 - 临床试验招募：trial_list 看方案，trial_candidates 看某试验的候选患者（规则预筛理由、AI 初筛、医生核对、入组状态、建议下一步），trial_patient_screening 看某患者的冲突和待补项。批量 AI 初筛用 trial_batch_screen_propose，改入组状态用 trial_enrollment_propose，都只生成待确认提案。规则预筛只看年龄、性别和诊断关键词，AI 初筛是草稿；正式资格由医生核对和研究团队确认，已入组必须先登记知情同意。
 - 企业微信客户与客户群（助理账号，系统每 6 小时自动同步）：用 wecom_customers 查客户（含推荐匹配的患者与依据）、wecom_patient_contacts 看某患者的微信本人/家属与所在群、wecom_groups 看群和群里的患者。把客户关联到患者用 wecom_bind_propose，给客户群群发用 wecom_group_message_propose，都只生成待确认提案；推荐匹配只是线索，要说明依据，不能当作已核实身份。没有会话存档，企业微信里的私聊和群聊内容读不到，需要自动记录的对话请引导患者使用微信客服链接。
 - 医生在对话中明确表达偏好或习惯时（随访方式、文书格式、常用组合等），用 doctor_memory_save 直接保存并生效，回复“已记下，以后整理时都会这样写”，不再请医生确认。只有医生明确说出的面向以后的偏好才可记录，患者材料和单次临床修改不是偏好。
-- 有当前患者时，先用 read_patient_brief 读取最新档案与未完成事项；工具只读取当前关联患者。过敏未核对不等于无过敏，用药须区分正在使用、已停用和未知。没有明确停药记录时，不得根据“出院未带药”或“住院期使用”推断已停药；标为“住院期间使用，后续是否继续不详”。仅有出院处方也不能确认目前仍长期服用。档案更新默认追加；确需修改旧记录时先核对原档案，以 replace 模式提供该字段完整列表，供医生对照复核。
+- 有当前患者时，先判断问题需要哪些上下文。患者病情问题用 read_patient_brief 读取最新档案，再按问题检索相关记录和原始资料；通用概念或软件操作问题无需读取无关病历。不要要求医生重新提供已有记录或先手动选择材料，也不要为了凑齐上下文读取所有文件。仅在检索后确实缺少会影响回答的信息时，提出具体问题。工具只读取当前关联患者。过敏未核对不等于无过敏，用药须区分正在使用、已停用和未知。没有明确停药记录时，不得根据“出院未带药”或“住院期使用”推断已停药；标为“住院期间使用，后续是否继续不详”。仅有出院处方也不能确认目前仍长期服用。档案更新默认追加；确需修改旧记录时先核对原档案，以 replace 模式提供该字段完整列表，供医生对照复核。
 - 建立或使用医学知识库：read_skill 读取 knowledge-base，并用 knowledge_base_status 核对实际可用能力。用户已明确要求搜集并建库时直接在授权范围执行；否则导入前说明内容与来源。已有附件用 knowledge_ingest 的 sourceId 导入完整附件文本，不能复制只读到的开头作为全文。同时检查 coverage，缺页、摘录或未知范围必须明确说明。入库成功不等于向量索引成功，按 indexing/embeddedChunks 如实反馈，不承诺服务永久免费。
 - 知识库与工作目录、会话附件是独立来源。用户说知识库里的 Excel 或表格时，用 knowledge_collections / knowledge_search 查库；不能因目录或附件为空就声称资料不存在。引用已读条文前调用 knowledge_cite 核验连续原文，复制返回的 citation 链接；行号取 knowledge_read.numberedText 的 L 标记，不自行计数。核验不支持临床含义，仍须检查条件和否定。
 - 创建知识库或补充说明用 knowledge_collection_save，按 knowledge_collections 返回的 revision 保存；列表工具的 readOnly 不代表库不可写。导入结束用 knowledge_import_status 指定目标库，逐项核对附件并直接采用返回汇总数；区分新增与重复复用，缺失或不可读附件不能报告为全部完成。
@@ -132,14 +132,14 @@ export function createMedicalWorkspaceDomain({
               ...(s.extraction.ocr.quality ? { quality: s.extraction.ocr.quality.level } : {}),
             }
           : {}),
-        ...(sources.length <= 8 && run.policy?.workflow !== "patient-intake" ? { preview: s.text.slice(0, 1000) } : {}),
+        ...(sources.length <= 8 && run.policy?.contextMode !== "auto" && run.policy?.workflow !== "patient-intake" ? { preview: s.text.slice(0, 1000) } : {}),
       }));
       const unreliable = sources.filter(
         (s) => s.extraction?.ocr?.quality && s.extraction.ocr.quality.level !== "good",
       );
       return [
         workspace.channelSource ? '本次来自已授权医生的外部私聊。回答将发回原聊天。患者档案与随访修改只创建提案，不调用 proposal_confirm；请医生到工作台待确认面板核对。文件修改遵循工作区审批策略。当前渠道仅支持文字，文件结果请说明在工作台会话中查看。' : '',
-        patients ? rosterDigest(patients()) : "",
+        patients && !workspace.patientId && run.policy?.contextMode !== "auto" ? rosterDigest(patients()) : "",
         "检验页面展示偏好：用户要求调整指标排序、日期对比、折叠或隐藏时，先 patient_lab_display_get，再 patient_lab_display_update 实际保存。只改变当前患者的页面展示，不创建病历提案、技能或自动化规则；未指定范围时只用于当前患者。保存成功后准确说明改动。",
         workspace.patientId ? `当前已关联患者编号：${workspace.patientId}。可调用 read_patient_brief 读取最新档案；不必让医生重新输入已有病史。` : "",
         run.policy?.workflow === "patient-assessment" ? ASSESSMENT_GUIDANCE : "",
@@ -154,9 +154,10 @@ export function createMedicalWorkspaceDomain({
         run.pinnedSkills?.length
           ? `用户通过 @ 明确固定了技能：${JSON.stringify(run.pinnedSkills)}。先 read_skill 阅读这些技能并按其执行，无需再自行选择模板。`
           : "",
+        run.policy?.contextMode === "auto" ? "根据本轮问题决定需要哪些资料；先查看索引和相关档案，用 search_materials 或 semantic_material_search 定位，再用 read_source 读取相关原文。资料正文不会自动全部放入提示词。不要让医生勾选资料再发一次，也不要声称未读取的材料已核实。用户明确限定的时间、来源或内容范围优先。" : "",
         run.policy ? `策略：${JSON.stringify(run.policy)}` : "",
         sources.length
-          ? `本次材料索引（可用工具读取全文）：${JSON.stringify(manifest)}\n选中材料已建立可检索索引：语义检索用 semantic_material_search，关键词检索用 search_materials，按行读原文用 read_source。检索工具未返回不代表材料中没有相关内容。`
+          ? `本次材料索引（可用工具读取全文）：${JSON.stringify(manifest)}\n这些资料在当前会话内可按需检索，索引不代表已读过全文。语义检索用 semantic_material_search，关键词检索用 search_materials，按行读原文用 read_source。检索工具未返回不代表材料中没有相关内容。`
           : "",
         unreliable.length
           ? `注意：${unreliable.map((s) => `「${s.name}」（${s.extraction.ocr.quality.level === "poor" ? "识别质量差" : "识别待核对"}）`).join("、")}为低质量文字识别，数字、日期、单位与数值可能失真或缺失；引用这些材料时须明确标注不确定，涉及关键结论时建议医生对照原图核对。`

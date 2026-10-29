@@ -1,4 +1,3 @@
-import { ModelConsent } from "./model-consent";
 import "./focused-workspace.css";
 import { BackupStatus } from "./backup-panel";
 import { patientOptionLabel } from "./patient-labels";
@@ -276,12 +275,8 @@ export function WorkbenchHome({
   onOpenProjects,
   projects = [],
   onClearDraft,
-  accessMode,
-  onAccessModeChange,
   thinking,
   onThinkingChange,
-  consent,
-  onConsentChange,
   draftState = {},
   onDraftChange,
   attachmentError,
@@ -341,8 +336,6 @@ export function WorkbenchHome({
     : [];
   // 材料已附加后，本次任务的目标会话已定，锁定类型与患者切换
   const attached = attachedCount > 0 || Boolean(attachedFiles.length);
-  const consentRequired =
-    Boolean(config?.modelConfigured) && accessMode === "each";
   useEffect(() => {
     let live = true;
     // 双保险:无医疗能力时不请求患者/提醒/收件/风险接口(通用服务上这些
@@ -403,7 +396,6 @@ export function WorkbenchHome({
   const submit = async (e) => {
     e?.preventDefault();
     if (starting || uploading) return;
-    if (consentRequired && !consent && !isFollowup) { setError("请先确认本轮允许将内容发送给配置的模型。"); return; }
     setError("");
     if (patientId && !selectedPatient) {
       setError("所选患者已不可用，请重新选择。");
@@ -765,20 +757,6 @@ export function WorkbenchHome({
                   </button>
                   <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>设置</button>
                   {runtimeOptions && <><span className="tb-divider" />
-                  <label
-                    className="tb-item"
-                    title="选择每次发送前确认，或持续同意当前应用使用已配置的模型服务；关闭应用后失效"
-                  >
-                    权限
-                    <select
-                      value={accessMode}
-                      onChange={(e) => onAccessModeChange(e.target.value)}
-                      disabled={starting}
-                    >
-                      <option value="each">每次询问</option>
-                      <option value="auto">持续同意</option>
-                    </select>
-                  </label>
                   {config?.modelConfigured && (
                     <label
                       className="tb-item"
@@ -798,10 +776,7 @@ export function WorkbenchHome({
                 </>
               )}
               <span className="composer-spacer" />
-              {consentRequired && !isFollowup && (
-                <ModelConsent config={config} patient={Boolean(patientId)} checked={consent} onChange={onConsentChange} disabled={starting}/>
-              )}
-              <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !prompt.trim() || (Boolean(patientId) && !data) || (consentRequired && !consent))}>
+              <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !prompt.trim() || (Boolean(patientId) && !data))}>
                 {starting ? <Loader2 size={17} className="spin"/> : isFollowup ? <ArrowRight size={17}/> : <ArrowUp size={17}/>}
                 {starting ? "正在开始…" : isFollowup ? "进入随访" : "开始任务"}
               </button>

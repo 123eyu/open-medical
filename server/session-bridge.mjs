@@ -728,7 +728,11 @@ export class SessionBridge {
   // ---------- 发送：构建 sources 并分派 ----------
   // fileIds 语义与旧引擎一致：undefined = 不带材料（摘要类任务）；
   // 数组 = 显式选择，未知材料 ID 视为越权引用（404）。
-  selectMaterials(w, fileIds) {
+  selectMaterials(w, fileIds, contextMode) {
+    check(contextMode === undefined || contextMode === "auto" || contextMode === "selected", "INVALID_INPUT", "资料读取方式无效");
+    // Make this session's library searchable locally; the agent chooses what to
+    // read. This does not preload material text into the model prompt.
+    if (contextMode === "auto") return (w.materials || []).map(file => file.id);
     check(
       (fileIds || []).length <= 100,
       "INVALID_INPUT",
@@ -799,6 +803,7 @@ export class SessionBridge {
     const requestedMode = body.mode || "local";
     const mode = resolveMode(requestedMode);
     const policy = medicalPolicy(message);
+    if (body.contextMode === "auto") policy.contextMode = "auto";
     if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
     if (body.requestId !== undefined)
       check(
@@ -844,10 +849,10 @@ export class SessionBridge {
           policy,
           message,
           sources: [
-            ...this.buildSources(w, message, this.selectMaterials(w, body.fileIds)),
+            ...this.buildSources(w, message, this.selectMaterials(w, body.fileIds, body.contextMode)),
             ...(policy.intent === "medication_safety" && w.patientId && this.patientRecord ? [this.localPatientSource(w.patientId)] : []),
           ],
-          fileIds: this.selectMaterials(w, body.fileIds),
+          fileIds: this.selectMaterials(w, body.fileIds, body.contextMode),
           requestId: body.requestId || randomUUID(),
         },
       };
@@ -870,9 +875,9 @@ export class SessionBridge {
     if (similarCases) { policy.workflow = "similar-case-search"; policy.intent = "similar_cases"; policy.searchScope = similarCaseSearchScope(message); }
     policy.presentation = policy.workflow === "literature-research" ? "literature" : taskPresentation(message);
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
-    const fileIds = this.selectMaterials(w, body.fileIds);
+    const fileIds = this.selectMaterials(w, body.fileIds, body.contextMode);
     const sources = this.buildSources(w, message, fileIds);
-    if (policy.workflow === "patient-assessment" && this.patientRecord) sources.push(assessmentPatientSource(this.patientRecord(w.patientId)));
+    if (w.patientId && this.patientRecord && (policy.workflow === "patient-assessment" || body.contextMode === "auto")) sources.push(assessmentPatientSource(this.patientRecord(w.patientId)));
     const handle = this.service.prepare(id, {
       revision: body.sessionRevision ?? body.revision ?? w.revision,
       message,
