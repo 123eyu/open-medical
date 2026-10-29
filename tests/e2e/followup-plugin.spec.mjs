@@ -54,6 +54,21 @@ test("停用 followup 后患者沟通与随访 tab 消失，重新启用后恢�
     await expect(
       tabs.getByRole("button", { name: "检查与转诊", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText("随访事项已汇总到今日待办"),
+    ).toHaveCount(0);
+
+    await tabs.getByRole("button", { name: "复诊预约", exact: true }).click();
+    await expect(page.getByText("提醒草稿读取失败")).toHaveCount(0);
+    await expect(page.getByText("接口不存在")).toHaveCount(0);
+
+    await page.goto("/?view=patients", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.getByRole("heading", { name: "患者管理", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("随访事项已汇总到今日待办"),
+    ).toHaveCount(0);
 
     await page.goto("/?view=settings&settingsTab=followup", {
       waitUntil: "domcontentloaded",

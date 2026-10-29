@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { api } from "./agent-runtime";
+import { usePluginEnabled } from "./plugin-slots";
 
 // 患教素材工具条：允许对外引用的素材可按患者分组批量群发
 // (走待确认托盘,确认后逐患者创建企业微信单发任务,成员仍需手动点发送)。
 export function EducationTools({ onCreated, onProposed, onError }) {
+  const followupEnabled = usePluginEnabled("followup");
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: "", body: "" });
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function EducationTools({ onCreated, onProposed, onError }) {
     <section className="education-tools" aria-label="患教素材工具">
       <div className="toolbar-actions">
         <button className="secondary" onClick={() => setCreating(!creating)}>{creating ? "收起新建" : "新建患教素材"}</button>
-        <button className="secondary" onClick={startBroadcast}>按分组批量发送</button>
+        {followupEnabled && <button className="secondary" onClick={startBroadcast}>按分组批量发送</button>}
         <small className="muted">智能回复仅引用已允许对外使用的素材。</small>
       </div>
       {creating && (
@@ -88,7 +90,7 @@ export function EducationTools({ onCreated, onProposed, onError }) {
           </div>
         </form>
       )}
-      {broadcast && (
+      {followupEnabled && broadcast && (
         <div className="education-broadcast" role="dialog" aria-label="按分组批量发送患教">
           <h4>按分组批量发送患教</h4>
           <div className="education-broadcast-row">

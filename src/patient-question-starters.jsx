@@ -10,7 +10,8 @@ const starters = [
 
 export function PatientQuestionStarters({ onChoose }) {
   const similarCasesEnabled = usePluginEnabled("similar-cases");
-  const available = starters.filter(([id]) => id !== "similar" || similarCasesEnabled);
+  const followupEnabled = usePluginEnabled("followup");
+  const available = starters.filter(([id]) => (id !== "similar" || similarCasesEnabled) && (id !== "followup" || followupEnabled));
   return <div className="patient-question-starters">
     <p>直接输入问题，或选择一个方向开始。</p>
     <div aria-label="常用患者问题">{available.map(([id, label, prompt]) => <button type="button" className="secondary" key={id} onClick={() => onChoose({ prompt, ...(id === 'literature' ? { workflow: 'literature-research' } : {}) })}>{label}</button>)}</div>

@@ -3,6 +3,7 @@ import { patientPhone, PATIENT_PHONE_HINT } from "../shared/patient-phone.mjs";
 import { parsePastedMessages } from "../shared/message-import.mjs";
 import { messageChannelLabel } from "../shared/message-provenance.mjs";
 import { PatientDashboard } from "./patient-dashboard";
+import { loadPatientCore, loadPatientOptional } from "./patient-detail-data";
 import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -25,7 +26,7 @@ import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
 import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
-import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useSlot } from "./plugin-slots";
+import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, usePluginEnabled, useSlot } from "./plugin-slots";
 
 const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
@@ -90,6 +91,7 @@ export function PatientsView({
   const [inbox, setInbox] = useState([]);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
+  const followupEnabled = usePluginEnabled("followup");
   const pluginTabs = useSlot("patient.tabs");
   const pluginActions = useSlot("patient.actions");
   const activePluginTab = findPatientTab(pluginTabs, tab);
@@ -111,6 +113,7 @@ export function PatientsView({
     if (nextTab === "followups" && opts.focusFollowupId) setFollowupFocus({ id: opts.focusFollowupId, token: Date.now() });
   };
   const [patientLoading, setPatientLoading] = useState(false);
+  const [optionalVersion, setOptionalVersion] = useState(0);
   useEffect(() => { if (detail) onLocationChange?.(detail.id, tab); }, [detail?.id, tab]);
   useEffect(() => {
     if (detail || !listLoading) panelRoot.current?.scrollTo({ top: detail ? 0 : listScroll.current });
@@ -174,15 +177,24 @@ export function PatientsView({
   const refresh = async () => {
     setListLoading(true);
     try {
+      // Reminders and unassigned messages belong to the followup plugin. When
+      // it is disabled their routes are gone, so do not call them at all.
+      const optional = (promise, fallback) => promise.catch(() => fallback);
+      const todoRequest = followupEnabled
+        ? optional(api("/api/reminders"), { reminders: [] })
+        : Promise.resolve({ reminders: [] });
+      const inboxRequest = followupEnabled
+        ? optional(api("/api/inbox"), { messages: [] })
+        : Promise.resolve({ messages: [] });
       const [list, todo, box, pending] = await Promise.all([
         api("/api/patients?summary=1&archived=1"),
-        api("/api/reminders"),
-        api("/api/inbox"),
+        todoRequest,
+        inboxRequest,
         api("/api/pending-actions?status=pending").catch(() => ({ actions: [] })),
       ]);
       setPatients(list.patients);
-      setReminders(todo.reminders);
-      setInbox(box.messages);
+      setReminders(Array.isArray(todo?.reminders) ? todo.reminders : []);
+      setInbox(Array.isArray(box?.messages) ? box.messages : []);
       setCreateProposals(
         (pending.actions || []).filter((a) => a.type === "patient-create"),
       );
@@ -197,6 +209,10 @@ export function PatientsView({
   const openPatient = async (id, nextTab = "overview") => {
     if (!detail) listScroll.current = panelRoot.current?.scrollTop || 0;
     const version = ++patientGeneration.current;
+    if (detail?.id !== id) {
+      setMessages([]);
+      setFollowups([]);
+    }
     setError("");
     setNotice("");
     setPatientLoading(true);
@@ -204,21 +220,16 @@ export function PatientsView({
     setConsent(false);
     setPaste("");
     try {
-      const [one, msgs, jobs, risks] = await Promise.all([
-        api(`/api/patients/${encodeURIComponent(id)}`),
-        api(`/api/patients/${id}/messages`),
-        api(`/api/patients/${id}/followups`),
-        api(`/api/risk-alerts?patientId=${id}`),
-      ]);
-      const work = await api(`/api/sessions/${one.sessionId}`);
+      // The fixed record must open even when optional plugin routes are gone.
+      const core = await loadPatientCore(api, id);
+      const work = await api(`/api/sessions/${core.patient.sessionId}`);
       if (version !== patientGeneration.current) return;
       setTab(nextTab);
       onSwitchCurrent?.(id);
-      setDetail(one);
-      setMessages(msgs.messages);
-      setFollowups(jobs.jobs);
-      setRisks(risks.alerts);
+      setDetail(core.patient);
+      setRisks(core.risks);
       setSession(work);
+      setOptionalVersion((value) => value + 1);
     } finally {
       if (version === patientGeneration.current) setPatientLoading(false);
     }
@@ -263,6 +274,48 @@ export function PatientsView({
       );
     return () => { patientGeneration.current++; };
   }, []);
+  // Optional followup data arrives after the fixed record. Every open/refresh
+  // bumps optionalVersion; disabling the plugin clears the data without
+  // touching the patient overview.
+  useEffect(() => {
+    if (!detail || !followupEnabled) {
+      setMessages([]);
+      setFollowups([]);
+      return;
+    }
+    let live = true;
+    loadPatientOptional(api, detail.id, { followupEnabled }).then((data) => {
+      if (!live) return;
+      setMessages(data.messages);
+      setFollowups(data.followups);
+    });
+    return () => { live = false; };
+  }, [detail?.id, optionalVersion, followupEnabled]);
+  // Bootstrap enables plugin UI after the first render. Reload the list-level
+  // optional data when that status flips, without refetching on every render.
+  const lastFollowupEnabled = useRef(followupEnabled);
+  useEffect(() => {
+    if (lastFollowupEnabled.current === followupEnabled) return;
+    lastFollowupEnabled.current = followupEnabled;
+    let live = true;
+    if (!followupEnabled) {
+      setReminders([]);
+      setInbox([]);
+      return () => { live = false; };
+    }
+    Promise.all([
+      api("/api/reminders").then((todo) => todo?.reminders || []).catch(() => []),
+      api("/api/inbox").then((box) => box?.messages || []).catch(() => []),
+    ]).then(([nextReminders, nextInbox]) => {
+      if (!live) return;
+      setReminders(nextReminders);
+      setInbox(nextInbox);
+    });
+    return () => { live = false; };
+  }, [followupEnabled]);
+  useEffect(() => {
+    if (!followupEnabled && sortBy === "followup") setSortBy("updated");
+  }, [followupEnabled, sortBy]);
   const digest = async () => {
     if (busy) return;
     setBusy(true);
@@ -373,15 +426,15 @@ export function PatientsView({
             )}
           </span>
           <span className="patient-counts">
-            {p.counts.dueFollowups > 0 && (
+            {followupEnabled && p.counts.dueFollowups > 0 && (
               <em className="pill warn">{p.counts.dueFollowups} 项随访到期</em>
             )}
-            {p.counts.unprocessedMessages > 0 && (
+            {followupEnabled && p.counts.unprocessedMessages > 0 && (
               <em className="pill warn">
                 {p.counts.unprocessedMessages} 条新消息
               </em>
             )}
-            {p.counts.pendingReminders > 0 && (
+            {followupEnabled && p.counts.pendingReminders > 0 && (
               <em className="pill">{p.counts.pendingReminders} 条提醒</em>
             )}
             {Boolean(p.archived) && <em className="pill">已归档</em>}
@@ -493,8 +546,8 @@ export function PatientsView({
       )}
       {!detail && (
         <>
-          {reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
-          {inbox.length > 0 && (
+          {followupEnabled && reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
+          {followupEnabled && inbox.length > 0 && (
             <details className="todo-panel patient-inbox"><summary><Inbox size={15} /> 消息归属 · {inbox.length} 条</summary>
               {inbox.map((m) => (
                 <div className="todo-row" key={m.id}>
@@ -526,7 +579,7 @@ export function PatientsView({
             <select aria-label="排序方式" title="患者列表排序" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPatientPage(0); }}>
               <option value="updated">最近更新</option>
               <option value="visit">最近就诊</option>
-              <option value="followup">随访到期优先</option>
+              {followupEnabled && <option value="followup">随访到期优先</option>}
               <option value="name">按姓名</option>
             </select>
             <label className="search">
