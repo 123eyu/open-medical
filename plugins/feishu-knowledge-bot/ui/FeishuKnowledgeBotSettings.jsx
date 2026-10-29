@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from './agent-runtime';
-import './doctor-notifications.css';
-import './message-channels.css';
-import { FeishuBinding } from './feishu-binding';
+import { api } from '../../../src/agent-runtime';
+import { FeishuBinding } from '../../../src/feishu-binding';
 
 export function FeishuKnowledgeBotSettings() {
   const [config, setConfig] = useState(null), [form, setForm] = useState(null);

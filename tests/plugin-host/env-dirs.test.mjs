@@ -66,6 +66,7 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
       "channel-wecom",
       "clinical-ref",
       "drg",
+      "feishu-knowledge-bot",
       "followup",
       "hello",
       "legacy-agenda",

@@ -1,8 +1,8 @@
-import { externalUseAllowed } from './knowledge-metadata.mjs';
+import { externalUseAllowed } from '../../../server/medical/knowledge-metadata.mjs';
 import * as Lark from '@larksuiteoapi/node-sdk';
 import { randomUUID } from 'node:crypto';
-import { check, AppError } from '../errors.mjs';
-import { sqliteTransaction } from '../sqlite-transaction.mjs';
+import { check, AppError } from '../../../server/errors.mjs';
+import { sqliteTransaction } from '../../../server/sqlite-transaction.mjs';
 
 const KEY = 'feishu-knowledge-bot';
 const BASE = 'https://open.feishu.cn/open-apis';
@@ -16,9 +16,6 @@ export class FeishuKnowledgeBot {
   constructor(store, vault, library, { fetchImpl = fetch, createSocket = socketFactory, now = () => Date.now(), autoStart = true, getProvider = () => null, createFeishuRegistration = null } = {}) {
     Object.assign(this, { db: store.db, vault, library, fetchImpl, createSocket, now, autoStart, getProvider, createFeishuRegistration });
     this.state = 'disabled'; this.message = ''; this.generation = 0; this.jobs = new Set(); this.controllers = new Set(); this.contexts = new Map(); this.queues = new Map(); this.busy = false;
-    this.db.exec(`CREATE TABLE IF NOT EXISTS knowledge_bot_settings(id INTEGER PRIMARY KEY,data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS knowledge_bot_groups(app_id TEXT,chat_id TEXT,data TEXT NOT NULL,PRIMARY KEY(app_id,chat_id));
-      CREATE TABLE IF NOT EXISTS knowledge_bot_messages(app_id TEXT,message_id TEXT,at INTEGER,PRIMARY KEY(app_id,message_id));`);
     this.initializeBinding();
   }
   get binding() {

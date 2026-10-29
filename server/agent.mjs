@@ -44,7 +44,6 @@ import { PatientImporter } from "./medical/patient-import.mjs";
 import { LabImporter } from "./medical/lab-import.mjs";
 import { Backups } from "./medical/backups.mjs";
 import { DemoPack } from "./medical/demo-pack.mjs";
-import { FeishuKnowledgeBot } from "./medical/feishu-knowledge-bot.mjs";
 import { DoctorNotifications } from "./medical/doctor-notifications.mjs";
 import { PatientSchedule } from "./medical/patient-schedule.mjs";
 import { Extensions } from "./medical/extensions.mjs";
@@ -708,14 +707,6 @@ export function createServer(options = {}) {
   const patientBrief = new PatientBrief(store, patients, {
     riskEnabled: () => pluginActive("risk-rules"),
   });
-  const knowledgeBot = new FeishuKnowledgeBot(store, models.vault, guidelines, {
-    getProvider: () => providerConfigured(provider) ? provider : null,
-    // The registration implementation belongs to the channel plugin; resolve
-    // it lazily so fixed modules never import plugins/channel files.
-    createFeishuRegistration: (input) =>
-      pluginService("channel")?.createFeishuRegistration(input),
-    ...options.knowledgeBotOptions,
-  });
   const doctorNotifications = new DoctorNotifications(store, models.vault, {
     createFeishuRegistration: (input) =>
       pluginService("channel")?.createFeishuRegistration(input),
@@ -867,8 +858,16 @@ export function createServer(options = {}) {
       vault: models.vault,
       bridge: sessionBridge,
       getProvider: () => provider,
-      getKnowledgeBot: () => knowledgeBot,
+      getKnowledgeBot: () => pluginService("feishu-knowledge-bot"),
       options: options.messageGatewayOptions || {},
+    },
+    // Knowledge-bot plugin inputs. The bot owns its own tables and routes;
+    // the fixed shell only supplies the knowledge library and model access.
+    knowledgeBotHost: {
+      vault: models.vault,
+      library: guidelines,
+      getProvider: () => (providerConfigured(provider) ? provider : null),
+      options: options.knowledgeBotOptions || {},
     },
     // The plugin constructs the WeCom connector; the followup plugin attaches
     // it to the care service through this callback.
@@ -1721,23 +1720,13 @@ export function createServer(options = {}) {
             );
         }
       }
-      const feishuBindings = [
-        ["/api/knowledge-bot/feishu-binding", knowledgeBot.bindingOrNull()],
-        ["/api/doctor-notifications/feishu-binding", doctorNotifications.bindingOrNull()],
-      ].filter(([, binding]) => binding);
-      for (const [base, binding] of feishuBindings) {
-        if (path === base && req.method === "POST") return send(res, 200, await track(binding.begin()));
-        if (path === base && req.method === "DELETE") return send(res, 200, binding.cancel((await body(req)).id));
-        if (path === base + "/status" && req.method === "POST") return send(res, 200, await track(binding.poll((await body(req)).id)));
+      if (path === "/api/doctor-notifications/feishu-binding" && doctorNotifications.bindingOrNull()) {
+        const binding = doctorNotifications.bindingOrNull();
+        if (req.method === "POST") return send(res, 200, await track(binding.begin()));
+        if (req.method === "DELETE") return send(res, 200, binding.cancel((await body(req)).id));
       }
-      if (path === "/api/knowledge-bot" && req.method === "DELETE") return send(res, 200, await track(knowledgeBot.disconnect((await body(req)).expectedRevision)));
-      if (path === "/api/knowledge-bot/reset-context" && req.method === "POST") return send(res, 200, await track(knowledgeBot.resetContext((await body(req)).expectedRevision)));
-      if (path === "/api/knowledge-bot" && req.method === "GET") return send(res, 200, knowledgeBot.settings());
-      if (path === "/api/knowledge-bot" && req.method === "PUT") {
-        const input = await body(req);
-        check(!input.enabled || !(pluginService("channel")?.rows('message_channels') || []).some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
-        return send(res, 200, await track(knowledgeBot.save(input)));
-      }
+      if (path === "/api/doctor-notifications/feishu-binding/status" && req.method === "POST" && doctorNotifications.bindingOrNull())
+        return send(res, 200, await track(doctorNotifications.bindingOrNull().poll((await body(req)).id)));
       if (path === "/api/doctor-notifications" && req.method === "GET") return send(res, 200, doctorNotifications.settings());
       if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 3 && req.method === "PUT") return send(res, 200, doctorNotifications.save(parts[2], await body(req)));
       if (parts[0] === "api" && parts[1] === "doctor-notifications" && parts.length === 4 && req.method === "POST") {
@@ -2494,7 +2483,11 @@ export function createServer(options = {}) {
   server.scheduler = scheduler;
   server.patients = patients;
   server.doctor = runtime.doctor;
-  server.knowledgeBot = knowledgeBot;
+  Object.defineProperty(server, "knowledgeBot", {
+    enumerable: true,
+    configurable: true,
+    get: () => pluginService("feishu-knowledge-bot"),
+  });
   server.doctorNotifications = doctorNotifications;
   Object.defineProperty(server, "literature", {
     enumerable: true,
@@ -2548,8 +2541,6 @@ export function createServer(options = {}) {
     workspaces.scheduler.start();
     workspaces.recovery.start();
     doctorNotifications.start();
-    if (pluginService("channel")) knowledgeBot.binding.start();
-    knowledgeBot.start();
     // 与迁移前 messageGateway.start() 的位置一致：监听开始后、聊天随访前。
     // 插件生命周期统一由 host 按依赖拓扑启动，单个插件失败已隔离。
     pluginHost.startAll().catch((error) => {
@@ -2569,8 +2560,6 @@ export function createServer(options = {}) {
     workspaces.scheduler.stop();
     workspaces.recovery.stop();
     await doctorNotifications.stop();
-    if (pluginService("channel")) await knowledgeBot.binding.stop();
-    await knowledgeBot.stop();
     // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
     await pluginHost.stopAll();
     await pluginHost.drainAll();
