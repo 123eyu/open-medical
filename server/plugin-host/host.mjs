@@ -741,8 +741,9 @@ export class PluginHost {
   }
 
   createProposal(record, { kind, patientId, input, summary } = {}) {
+    const legacy = record?.spec?.legacyProposalTypes?.[kind];
     check(
-      record?.spec?.proposals?.[kind],
+      record?.spec?.proposals?.[kind] || legacy,
       "PLUGIN_PROPOSAL",
       `插件 ${record?.id || ""} 未定义提案类型 ${kind || ""}`,
     );
@@ -756,7 +757,9 @@ export class PluginHost {
     return pending.propose({
       type: kind,
       patientId,
-      payload: { input },
+      // Historical types keep their original top-level payload shape; new
+      // plugin proposals keep the { input } envelope.
+      payload: legacy ? input : { input },
       summary: summary || `${record.spec.title}提案`,
     });
   }
@@ -871,23 +874,35 @@ export class PluginHost {
     if (typeof kind !== "string") return null;
     for (const record of this.ordered) {
       if (!record.available || !record.enabled) continue;
-      const handler = record.spec?.proposals?.[kind];
+      const direct = record.spec?.proposals?.[kind];
+      const legacy = direct ? null : record.spec?.legacyProposalTypes?.[kind];
+      const handler = direct || legacy;
       if (!handler) continue;
       return {
         pluginId: record.id,
-        validate: (input) =>
+        legacy: Boolean(legacy),
+        revisionScoped: handler.revisionScoped === true,
+        validate: (input, meta) =>
           handler.validate
-            ? handler.validate(input, this.contextFor(record))
+            ? handler.validate(input, this.contextFor(record), meta)
             : input,
-        apply: (input, tx) =>
-          handler.apply(
-            input,
-            this.contextFor(record),
-            tx ?? this.db,
-          ),
+        apply: (input, tx, meta) =>
+          handler.apply(input, this.contextFor(record), tx ?? this.db, meta),
       };
     }
     return null;
+  }
+
+  // Listing historical proposals must keep working while their plugin is
+  // disabled or unavailable. Confirmation still goes through proposalHandler,
+  // which only resolves enabled plugins and therefore yields PLUGIN_UNAVAILABLE.
+  knowsProposalType(kind) {
+    if (typeof kind !== "string") return false;
+    return this.records.some(
+      (record) =>
+        record.spec?.proposals?.[kind] !== undefined ||
+        record.spec?.legacyProposalTypes?.[kind] !== undefined,
+    );
   }
 
   // Workflow hooks are only exposed while the owning plugin is enabled. The

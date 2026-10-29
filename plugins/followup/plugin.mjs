@@ -3,6 +3,7 @@ import { createFollowupService } from "./service.mjs";
 import { createFollowupApi, FOLLOWUP_LEGACY_API_PATHS } from "./api/followup.mjs";
 import { registerFollowupTools } from "./tools.mjs";
 import { followupAgendaSources } from "./agenda.mjs";
+import { legacyFollowupProposals } from "./proposals.mjs";
 
 export default definePlugin({
   id: "followup",
@@ -15,6 +16,7 @@ export default definePlugin({
   },
   provides: { service: "followup", apiVersion: 1 },
   capabilities: ["followup.agenda", "followup.tools"],
+  legacyProposalTypes: legacyFollowupProposals(),
   legacyTables: ["follow_ups", "followup_plans"],
   migrations: "./migrations",
   // The plugin owns three historical table families. They stay in their

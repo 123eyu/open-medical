@@ -186,3 +186,26 @@ test("同时停用两个渠道插件后 followup 变为 unavailable，服务仍�
   assert.equal((await second.request("/api/followup-plans")).status, 404);
   assert.equal((await second.request("/api/agent/health")).status, 200);
 });
+
+test("care 历史提案由插件 legacyProposalTypes 委派，确认后生效且 type 不变", async (t) => {
+  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  t.after(() => app.close());
+
+  const service = app.server.pluginHost.pluginServices.followup;
+  const marker = `迁移关注词${Date.now() % 100000}`;
+  const proposal = app.server.pending.propose({
+    type: "care-settings",
+    payload: { scope: "global", changes: { redFlags: { extra: [marker] } } },
+    summary: "迁移后修改患者管理关注词",
+  });
+  assert.equal(proposal.type, "care-settings", "历史提案 type 字符串不能改变");
+
+  const confirmed = await app.request(
+    `/api/pending-actions/${proposal.id}/confirm`,
+    { method: "POST", body: {} },
+  );
+  assert.equal(confirmed.status, 200);
+  assert.equal(confirmed.body.action.type, "care-settings");
+  assert.equal(confirmed.body.action.status, "applied");
+  assert.ok(service.care.publicSettings().redFlags.extra.includes(marker));
+});

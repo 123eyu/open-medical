@@ -20,21 +20,13 @@ const TYPES = [
   "patient-create",
   "patient-update",
   "patient-grouping",
-  "followup-create",
   "case-save",
-  "care-message",
-  "care-campaign",
-  "care-settings",
-  "care-bind",
-  "care-group-message",
-  "care-education-broadcast",
   "patient-group-suggest",
   "trial-batch",
   "trial-enrollment",
   "ext-change",
   "ext-install",
 ];
-const isCare = (type) => type.startsWith("care-");
 const isTrial = (type) => type.startsWith("trial-");
 const isExt = (type) => type.startsWith("ext-");
 const confirmationFingerprint = (value) => {
@@ -70,17 +62,11 @@ export class PendingActions {
   get patients() {
     return this.services.patients();
   }
-  get followups() {
-    return this.services.followups();
-  }
   get cases() {
     return this.services.cases();
   }
   get doctor() {
     return this.services.doctor?.();
-  }
-  get care() {
-    return this.services.care?.() || null;
   }
   get trials() {
     return this.services.trials?.() || null;
@@ -124,11 +110,20 @@ export class PendingActions {
     return sqliteTransaction(this.store.db, () => this.proposeTransaction(input));
   }
   proposeTransaction({ type, patientId, payload = {}, summary, prepare, provenance } = {}) {
-    const pluginHandler = !TYPES.includes(type)
-      ? this.pluginHost?.proposalHandler(type)
-      : null;
+    const fixedType = TYPES.includes(type);
+    const pluginKnown = !fixedType && this.pluginHost?.knowsProposalType(type);
+    const pluginHandler = fixedType
+      ? null
+      : this.pluginHost?.proposalHandler(type);
+    if (pluginKnown)
+      check(
+        pluginHandler,
+        "PLUGIN_UNAVAILABLE",
+        "插件未启用或不可用，无法执行该提案",
+        409,
+      );
     check(
-      TYPES.includes(type) || pluginHandler,
+      fixedType || pluginHandler,
       "INVALID_INPUT",
       `提案类型须为：${TYPES.join("/")}`,
     );
@@ -147,7 +142,7 @@ export class PendingActions {
     }
     let resolvedPatientId = null;
     let baseRevision = null;
-    if (type === "patient-update" || type === "followup-create") {
+    if (type === "patient-update") {
       check(patientId, "INVALID_INPUT", "该提案需要患者编号");
       const patient = this.patients.row(patientId);
       resolvedPatientId = patient.id;
@@ -156,15 +151,28 @@ export class PendingActions {
     if (pluginHandler && patientId) {
       const patient = this.patients.row(patientId);
       resolvedPatientId = patient.id;
-      baseRevision = patient.revision;
+      // Legacy care proposals only reference a patient for display and never
+      // overwrite the chart. They keep baseRevision=null like before the move.
+      baseRevision =
+        pluginHandler.legacy && !pluginHandler.revisionScoped
+          ? null
+          : patient.revision;
     }
     let normalized = payload;
-    if (isCare(type)) {
-      check(this.care, "CARE_UNAVAILABLE", "患者管理模块未启用", 503);
-      normalized = this.care.normalizeProposal(type, { ...payload, ...(patientId ? { patientId } : {}) });
-      // Care proposals reference the patient for display only; they never
-      // overwrite the clinical record, so no revision check applies.
-      if (normalized.patientId) resolvedPatientId = this.patients.row(normalized.patientId).id;
+    if (pluginHandler?.legacy) {
+      const descriptor = { type, patientId, payload };
+      const validated = pluginHandler.validate(descriptor);
+      normalized =
+        validated === undefined || validated === descriptor
+          ? payload
+          : validated;
+      check(
+        normalized && typeof normalized === "object" && !Array.isArray(normalized),
+        "PLUGIN_PROPOSAL",
+        "插件提案校验结果必须是对象",
+      );
+      if (normalized.patientId)
+        resolvedPatientId = this.patients.row(normalized.patientId).id;
     }
     if (isExt(type)) {
       check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
@@ -196,13 +204,6 @@ export class PendingActions {
         ...normalizePatientCreate(payload),
       };
       if (prepare) normalized = prepare(normalized);
-    }
-    if (type === "followup-create") {
-      check(
-        payload && typeof payload.name === "string" && payload.name.trim(),
-        "INVALID_INPUT",
-        "随访提案需要 name",
-      );
     }
     if (type === "patient-grouping") {
       // 多患者分组提案：逐人快照姓名与当前分组，供托盘展示和确认时核对；
@@ -312,7 +313,15 @@ export class PendingActions {
     const where = [];
     const args = [];
     check(Number.isSafeInteger(limit) && limit >= 1 && limit <= 100 && Number.isSafeInteger(offset) && offset >= 0, "INVALID_INPUT", "提案分页参数无效");
-    if (type !== undefined) { check(TYPES.includes(type) || this.pluginHost?.proposalHandler(type), "INVALID_INPUT", "提案类型无效"); where.push("type=?"); args.push(type); }
+    if (type !== undefined) {
+      check(
+        TYPES.includes(type) || this.pluginHost?.knowsProposalType(type),
+        "INVALID_INPUT",
+        "提案类型无效",
+      );
+      where.push("type=?");
+      args.push(type);
+    }
     if (sourceSessionId !== undefined) {
       where.push("json_extract(payload,'$.sourceSessionId')=?");
       args.push(string(sourceSessionId, "来源会话", 200));
@@ -425,8 +434,24 @@ export class PendingActions {
         "该提案已处理",
         409,
       );
-      // Care and trial proposals never overwrite the chart, so no revision check applies.
-      if (action.patientId && (isCare(action.type) || isTrial(action.type))) {
+      // Trial proposals never overwrite the chart, and legacy plugin types keep
+      // their pre-migration revision semantics (care types were never pinned to
+      // a patient revision). New plugin types still use the normal guard.
+      const pluginKnown =
+        !TYPES.includes(action.type) &&
+        this.pluginHost?.knowsProposalType(action.type);
+      const pluginHandler = this.pluginHost?.proposalHandler(action.type);
+      if (pluginKnown)
+        check(
+          pluginHandler,
+          "PLUGIN_UNAVAILABLE",
+          "插件未启用或不可用，无法执行该提案",
+          409,
+        );
+      const skipRevisionCheck =
+        isTrial(action.type) ||
+        (pluginHandler?.legacy && !pluginHandler.revisionScoped);
+      if (action.patientId && skipRevisionCheck) {
         check(!this.patients.row(action.patientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案并重新核对提案。", 409);
       } else if (action.patientId) {
         check(!this.patients.row(action.patientId).archived, "PATIENT_ARCHIVED", "患者已归档，请先恢复档案并重新核对提案。", 409);
@@ -443,12 +468,8 @@ export class PendingActions {
           409,
         );
       }
-      const pluginHandler = this.pluginHost?.proposalHandler(action.type);
       let applied, habitSuggestions = [];
-      if (isCare(action.type)) {
-        check(this.care, "CARE_UNAVAILABLE", "患者管理模块未启用", 503);
-        applied = this.care.applyProposal(action);
-      } else if (isExt(action.type)) {
+      if (isExt(action.type)) {
         check(this.extensions, "EXTENSIONS_UNAVAILABLE", "扩展中心未启用", 503);
         applied = this.extensions.applyProposal(action);
         if (applied?.kind === "skill") writtenSkill = applied.id ?? applied.ids;
@@ -486,8 +507,6 @@ export class PendingActions {
         });
         if (this.services.flagSuspectMaterials)
           this.services.flagSuspectMaterials(this.patients.row(action.patientId).sessionId, action.payload);
-      } else if (action.type === "followup-create") {
-        applied = this.followups.create(action.patientId, action.payload);
       } else if (action.type === "patient-group-suggest") {
         // Per-patient optimistic apply: a profile edited after the proposal
         // is skipped with its reason, never overwritten.
@@ -527,21 +546,28 @@ export class PendingActions {
           added++;
         }
         applied = { added, already, skipped };
-      } else if (action.type.includes(".")) {
+      } else if (!TYPES.includes(action.type)) {
         // 插件提案与其它提案共享同一个 sqliteTransaction：validate/apply 抛错
         // 时状态更新尚未执行，整个事务回滚，提案保持 pending。插件在提案
-        // 创建后被停用/不可用时明确拒绝，不能落入 case-save 的默认分支。
+        // 创建后被停用/不可用时已在上面明确拒绝，不能落入 case-save 的默认分支。
         check(
           pluginHandler,
           "PLUGIN_UNAVAILABLE",
           "插件未启用或不可用，无法执行该提案",
           409,
         );
-        const input = action.payload?.input;
+        const input = pluginHandler.legacy
+          ? {
+              type: action.type,
+              patientId: action.patientId,
+              payload: action.payload,
+            }
+          : action.payload?.input;
         const validated = pluginHandler.validate(input);
         applied = pluginHandler.apply(
           validated === undefined ? input : validated,
           this.store.db,
+          { action },
         );
       } else {
         if (action.patientId) {

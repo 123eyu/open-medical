@@ -28,6 +28,7 @@ export function definePlugin(spec = {}) {
     prompt,
     skills,
     proposals = {},
+    legacyProposalTypes = {},
     agendaSources = [],
     workflows = {},
     api,
@@ -149,13 +150,7 @@ export function definePlugin(spec = {}) {
     "PLUGIN_SPEC",
     `插件 ${id} 的 proposals 必须是对象`,
   );
-  const normalizedProposals = {};
-  for (const [kind, handler] of Object.entries(proposals)) {
-    check(
-      kind.startsWith(`${id}.`) && kind.length > id.length + 1,
-      "PLUGIN_SPEC",
-      `插件 ${id} 的提案类型 ${kind} 必须以 "${id}." 开头`,
-    );
+  const normalizeProposal = (kind, handler) => {
     check(
       isObject(handler) && typeof handler.apply === "function",
       "PLUGIN_SPEC",
@@ -166,10 +161,57 @@ export function definePlugin(spec = {}) {
       "PLUGIN_SPEC",
       `插件 ${id} 的提案类型 ${kind} 的 validate 必须是函数`,
     );
-    normalizedProposals[kind] = Object.freeze({
+    check(
+      handler.revisionScoped === undefined ||
+        typeof handler.revisionScoped === "boolean",
+      "PLUGIN_SPEC",
+      `插件 ${id} 的提案类型 ${kind} 的 revisionScoped 必须是布尔值`,
+    );
+    return Object.freeze({
       validate: handler.validate,
       apply: handler.apply,
+      revisionScoped: handler.revisionScoped === true,
     });
+  };
+  const normalizedProposals = {};
+  for (const [kind, handler] of Object.entries(proposals)) {
+    check(
+      kind.startsWith(`${id}.`) && kind.length > id.length + 1,
+      "PLUGIN_SPEC",
+      `插件 ${id} 的提案类型 ${kind} 必须以 "${id}." 开头`,
+    );
+    normalizedProposals[kind] = normalizeProposal(kind, handler);
+  }
+
+  // Historical proposal types keep their database strings. A plugin may take
+  // them over either by declaring { legacyType: handler } or by listing the
+  // legacy names and providing the matching "<id>.<legacyType>" handler in
+  // proposals. The host routes both shapes through the same validate/apply.
+  check(
+    Array.isArray(legacyProposalTypes) || isObject(legacyProposalTypes),
+    "PLUGIN_SPEC",
+    `插件 ${id} 的 legacyProposalTypes 必须是对象或历史类型数组`,
+  );
+  const legacyEntries = Array.isArray(legacyProposalTypes)
+    ? legacyProposalTypes.map((kind) => [
+        kind,
+        normalizedProposals[`${id}.${kind}`] || normalizedProposals[kind],
+      ])
+    : Object.entries(legacyProposalTypes);
+  const normalizedLegacyProposals = {};
+  for (const [kind, handler] of legacyEntries) {
+    check(
+      typeof kind === "string" && kind.trim(),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyProposalTypes 含非法类型`,
+    );
+    check(
+      handler !== undefined,
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 legacyProposalTypes.${kind} 缺少对应提案处理函数`,
+    );
+    normalizedLegacyProposals[kind] =
+      normalizedProposals[kind] || normalizeProposal(kind, handler);
   }
 
   check(
@@ -378,6 +420,7 @@ export function definePlugin(spec = {}) {
     prompt,
     skills,
     proposals: Object.freeze(normalizedProposals),
+    legacyProposalTypes: Object.freeze(normalizedLegacyProposals),
     agendaSources: Object.freeze(normalizedSources),
     workflows: Object.freeze(normalizedWorkflows),
     api,

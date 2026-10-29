@@ -135,29 +135,52 @@ spec = {
   version: "1.0.0",
   title: "相似病例",
   requires: {
-    plugins: { "patient-core": "*" }, // 可选；必须已启用
+    plugins: { "patient-core": "*" }, // 可选；对象 { id: range } 或 id 数组，必须已启用
     anyOf: [["channel-wecom", "channel-wechat"]], // 可选；每组至少启用一个
   },
   enabledByDefault: true,
   migrations: "./migrations",        // 可选
-  tablePrefix: "similar_cases_",     // 有 migrations 时必填；迁移里的所有表名都必须以它开头
+  tablePrefix: "similar_cases_",     // 有 migrations 时必填；也接受前缀数组
+  legacyTables: ["case_library"],    // 可选；插件继续读写的旧表，不改名
   setup(ctx) { return services },    // 返回本插件的 service 对象，注册为 ctx.services[id]
   tools(ctx, { registry, workspace, run }) {},   // 注册 Agent 工具（调用 ToolRegistry.register）
   prompt: "./prompt.md",             // 可选
   skills: "./skills",                // 可选
-  proposals: {                       // 可选；提案类型 -> { validate(input, ctx), apply(input, ctx, tx) }
-    "similar_cases.save": { validate, apply },
+  proposals: {                       // 可选；新提案 kind 必须以 "<id>." 开头
+    "similar_cases.save": { validate(input, ctx), apply(input, ctx, tx) },
+  },
+  legacyProposalTypes: {             // 可选；接管历史 type，字符串不变
+    "followup-create": {
+      revisionScoped: true,          // 可选；true 时仍校验患者 revision
+      validate({ type, patientId, payload }, ctx) -> normalizedPayload,
+      apply(normalizedPayload, ctx, tx, { action }) {},
+    },
+    // 也接受数组：["followup-create"]，此时须在 proposals 里提供
+    // "<id>.followup-create" 处理函数。
   },
   agendaSources: [                   // 可选；今日待办来源
-    { kind: "trial", label: "试验入组", read(ctx, { now, patientId }) -> AgendaItem[] },
+    { kind: "trial", label: "试验入组", order: 100, read(ctx, { now, patientId }) -> AgendaItem[] },
   ],
+  workflows: {                       // 可选；Agent 工作流钩子
+    "similar-case-search": { artifactType: "similar_cases", detect, configure, answer },
+  },
   api(ctx, req, url, io) -> Promise<boolean>, // 可选；返回 true 表示已处理；路由前缀必须是 /api/p/<id>/
   events: { "patient.archived": (payload, ctx) => {} }, // 可选
+  legacyApiPaths: [                  // 可选；接管旧业务路由
+    { method: "GET", path: "/api/followup-plans" },
+    { method: "*", path: "/api/patients/:id/followups/:jobId" },
+  ],
+  lifecycle: {                       // 可选；由 PluginHost.startAll/stopAll/drainAll 驱动
+    start(ctx) {}, stop(ctx) {}, drain(ctx) {},
+  },
+  provides: { service: "followup", apiVersion: 1 }, // 可选；供其它插件 ctx.service() 调用
+  status(ctx) {},                    // 可选；向 bootstrap 汇报运行时状态
+  capabilities: ["followup.agenda"], // 可选；字符串数组或对象
 };
 ```
 
 `ctx` 的内容：
-`{ db, store, services /*固定区 + 已启用插件的 service*/, events: { emit, on }, now, log, config: { get(key), set(key,val) } /* 存在 plugin_config 表 */ }`
+`{ db, store, services /*固定区 + 已启用插件的 service*/, service(id), plugins /*已提供服务的插件记录*/, events: { emit, on }, now, log, config: { get(key), set(key,val) } /* 存在 plugin_config 表 */, proposals: { create }, plugin: { id, dir }, fail(reason) }`
 
 ### 4.3 服务端：`PluginHost`
 
@@ -168,14 +191,14 @@ spec = {
 - `migrate()`：表 `plugin_migrations(plugin_id TEXT, name TEXT, applied_at TEXT, PRIMARY KEY(plugin_id,name))`，按文件名顺序执行未执行过的迁移，每个文件一个事务；校验表名前缀。
 - `setup()`：依次调用 `setup(ctx)`，把返回值放进 `services[id]`。
 - `registerTools(registry, workspace, run)`：对所有已启用插件调用 `tools(...)`。
-- `promptFragments()`、`skillDirs()`、`proposalHandler(kind)`、`agendaItems(opts)`、`handleApi(req,url,io)`、`list()`（给设置页用：id、title、version、状态、原因）。
+- `promptFragments()`、`skillDirs()`、`proposalHandler(kind)`（含 `legacyProposalTypes`）、`knowsProposalType(kind)`（停用插件的历史提案仍可列表）、`agendaItems(opts)`、`handleApi(req,url,io)`、`list()`（给设置页用：id、title、version、状态、原因）。
 - 启用状态存在 `plugin_state(plugin_id TEXT PRIMARY KEY, enabled INTEGER, updated_at TEXT)`；缺省取 `enabledByDefault`。
 - 停用插件：不注册工具、不返回待办、API 返回 404、前端插槽不渲染；**数据保留**。
 
 接入点（只改这几处，各加几行）：
 - `server/agent.mjs`：在 `createServer` 里创建 host、执行 load/migrate/setup；在 `/api/` 鉴权之后加 `if (path.startsWith("/api/p/") && await host.handleApi(...)) return;`；新增 `GET /api/plugins`（列表）和 `PUT /api/plugins/:id`（启用/停用）；`/api/bootstrap` 返回体中加入 `plugins: host.list()`。
 - `server/medical/medical-workspace-domain.mjs`：`registerTools` 末尾调用 `host.registerTools(...)`；系统提示末尾拼上 `host.promptFragments()`。
-- `server/medical/pending-actions.mjs`：遇到不认识的 kind 时，交给 `host.proposalHandler(kind)`；仍在同一个 `sqliteTransaction` 里执行 apply。
+- `server/medical/pending-actions.mjs`：遇到插件 kind（含 `legacyProposalTypes`）时，交给 `host.proposalHandler(kind)` 的 validate/apply；仍在同一个 `sqliteTransaction` 里执行，插件停用则返回 409 `PLUGIN_UNAVAILABLE`，列表仍可查询。
 - 技能：把 `host.skillDirs()` 加入技能搜索路径（找到现有 SkillRegistry 的构造位置后追加）。
 
 ### 4.4 前端：插槽宿主
@@ -290,6 +313,32 @@ export function ResultCard({ artifact, fallback }) // chat.resultCards 按 artif
 - T9 `trials`、`drg`、`care-tasks`、`risk-rules`。
 - T10 `feishu-knowledge-bot`、`doctor-notifications`、`learning`。
 - T11 清理：删掉已经空了的旧页面和路由，`src/main.jsx` 改为按路由表懒加载。
+
+#### T7 完成情况（T7.1–T7.5）
+
+**已迁移的插件**
+- `channel`：通用消息网关、`channel.adapters` 契约、`message_*` 表、旧 `/api/message-channels` 路由。
+- `channel-wecom`：企业微信连接器、通讯录/客户/群、客服与智能机器人、归档、`wecom_*` 表、旧 `/api/wecom/*`（公开 callback 除外）与企微工具。
+- `channel-wechat`：个人微信桌面读取、wx-cli、导入/导出、已退役 bridge、`wechat_*` 表、旧 `/api/wechat*`、`/api/wechat-exp/*` 路由。
+- `followup`：随访计划/问卷、聊天随访、自动随访、企微机器人业务层、care 引擎、`followup_*`/`chat_*`/`care_*` 表、`followup`/`messages` 待办来源、随访工具与提示、患者页沟通/随访 tab、随访页面与设置面板、旧随访/care 路由。
+- `followup` 接管 7 个历史提案 type：`followup-create`、`care-message`、`care-campaign`、`care-settings`、`care-bind`、`care-group-message`、`care-education-broadcast`；type 字符串不变。
+
+**宿主新增能力**
+- `legacyApiPaths`：旧业务路由由插件声明并接管，支持 exact/`:param`/`*`、冲突 fail fast、鉴权后分派。
+- `lifecycle.start/stop/drain`：按依赖拓扑启动、逆序停止、失败隔离、drain 收尾。
+- `provides.service` / `ctx.service()` / `ctx.plugins`：插件间服务调用与版本约束。
+- `patient.tabs` 的 `area`/`legacyTab`/`replacesBuiltin`：沟通与随访 tab 合并，URL 不变。
+- `bootstrap.plugins[]` 的 `available`/`connected`/`capabilities`：不改变既有字段。
+- `legacyProposalTypes`：插件接管历史提案 type；`pending-actions` 委派 validate/apply 且复用同一 `sqliteTransaction`；`knowsProposalType()` 让停用插件的旧提案仍可列表，确认返回 409 `PLUGIN_UNAVAILABLE`。
+- 多前缀 `tablePrefix` 与 `legacyTables`：允许一个插件拥有多个历史表族且不改旧表名。
+
+**仍留在固定区及原因**
+- `/api/wecom/callback`：必须在 token guard 之前接收企业微信签名回调；固定区只做公开鉴权前的薄委派，避免插件绕过鉴权模型。
+- `/api/ingest/messages`、`/api/reminders`：基线契约路径，分别属于患者消息接入和固定区提醒；内部只调用插件服务。
+- `risk`/`care-tasks`/`extensions`/`demo-pack` 等固定模块需要随访服务代理：它们在 `pluginHost.setup()` 之前构造，保留惰性 Proxy 以免复制服务实例；`server.followups`/`server.care` 等兼容属性改为只读 getter，供既有测试/诊断使用。
+- `reminders`、`patient_messages`、`appointments`、`care_tasks` 等共享表：按设计仍由固定区拥有；随访插件只读写自己的表族。
+- 企微连接器与 care 的挂接回调、微信 bridge 配置：属于组合根装配，保留在 `agent.mjs` 作为薄适配，不持有第二个服务实例。
+- 设置页“插件”分组与固定区壳：属于 T4 固定插槽，不在 T7 迁移范围。
 
 ---
 

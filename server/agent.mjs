@@ -278,9 +278,7 @@ export function createServer(options = {}) {
   const embedder = options.embedder || new EmbeddingService();
   const pending = new PendingActions(store, {
     patients: () => patients,
-    followups: () => followups,
     cases: () => cases,
-    care: () => careService(),
     trials: () => trialCandidates,
     extensions: () => extensions,
     doctor: () => doctor,
@@ -672,17 +670,18 @@ export function createServer(options = {}) {
       else store.delete(sessionId);
     },
   });
-  // The followup plugin owns FollowUpManager/CareEngine/chat services. Fixed
+  // The followup plugin owns followup/care/chat services. Fixed
   // modules receive stable proxies that resolve the provided service lazily:
   // setup runs after these constructors, and reads happen after startup.
-  const followupService = () => pluginHost.pluginServices.followup || null;
+  const pluginService = (id) => pluginHost.pluginServices[id] || null;
+  const followupService = () => pluginService("followup");
   const pluginActive = (id) => {
     const record = pluginHost.list().find((plugin) => plugin.id === id);
     return Boolean(record?.enabled && record.available && record.status === "ready");
   };
   const currentWecom = () =>
     pluginActive("channel-wecom")
-      ? pluginHost.pluginServices["channel-wecom"]?.connector || null
+      ? pluginService("channel-wecom")?.connector || null
       : null;
   const requireFollowupService = () => {
     const service = followupService();
@@ -742,12 +741,12 @@ export function createServer(options = {}) {
     // The registration implementation belongs to the channel plugin; resolve
     // it lazily so fixed modules never import plugins/channel files.
     createFeishuRegistration: (input) =>
-      pluginHost.pluginServices.channel?.createFeishuRegistration(input),
+      pluginService("channel")?.createFeishuRegistration(input),
     ...options.knowledgeBotOptions,
   });
   const doctorNotifications = new DoctorNotifications(store, models.vault, {
     createFeishuRegistration: (input) =>
-      pluginHost.pluginServices.channel?.createFeishuRegistration(input),
+      pluginService("channel")?.createFeishuRegistration(input),
     ...options.doctorNotificationOptions,
   });
   const patientImporter = new PatientImporter(store, patients);
@@ -771,7 +770,7 @@ export function createServer(options = {}) {
   });
   sessionBridge.evolution = extensions;
   // channel-wechat owns the WeChat desktop reader, wx-cli client, exporter and
-  // retired bridge; the followup plugin constructs ChatFollowups from it.
+  // retired bridge; the followup plugin constructs its chat service from it.
   const wechatBridgeOptions = {
     patients,
     enabled: ["1", "on", "true"].includes(
@@ -852,7 +851,7 @@ export function createServer(options = {}) {
       options: options.messageGatewayOptions || {},
     },
     // The plugin constructs the WeCom connector; the followup plugin attaches
-    // it to CareEngine through this service.
+    // it to the care service through this callback.
     channelWecomHost: {
       patients,
       vault: models.vault,
@@ -890,9 +889,6 @@ export function createServer(options = {}) {
   });
   pluginHost.migrate();
   pluginHost.setup();
-  const wecomService = pluginHost.pluginServices["channel-wecom"] || null;
-  const wechatService = pluginHost.pluginServices["channel-wechat"] || null;
-  const wechat = wechatService?.bridge || null;
   const followup = pluginActive("followup") ? followupService() : null;
   if (followup)
     risks.surveyAlertsProvider = (patient) => followup.surveys.alerts(patient);
@@ -1707,7 +1703,7 @@ export function createServer(options = {}) {
       if (path === "/api/knowledge-bot" && req.method === "GET") return send(res, 200, knowledgeBot.settings());
       if (path === "/api/knowledge-bot" && req.method === "PUT") {
         const input = await body(req);
-        check(!input.enabled || !(pluginHost.pluginServices.channel?.rows('message_channels') || []).some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
+        check(!input.enabled || !(pluginService("channel")?.rows('message_channels') || []).some(c => c.enabled && c.platform === 'feishu' && c.appId === input.appId), 'CONNECTION_CONFLICT', '该应用正在用于医生助手，请使用独立的知识库机器人应用。', 409);
         return send(res, 200, await track(knowledgeBot.save(input)));
       }
       if (path === "/api/doctor-notifications" && req.method === "GET") return send(res, 200, doctorNotifications.settings());
@@ -2659,58 +2655,57 @@ export function createServer(options = {}) {
   server.token = secret;
   server.scheduler = scheduler;
   server.patients = patients;
-  server.followups = followups;
-  Object.defineProperties(server, {
-    surveys: {
-      enumerable: true,
-      configurable: true,
-      get: () => followupService()?.surveys || null,
-    },
-    chatFollowups: {
-      enumerable: true,
-      configurable: true,
-      get: () => followupService()?.chatFollowups || null,
-    },
-    chatAutoFollow: {
-      enumerable: true,
-      configurable: true,
-      get: () => followupService()?.chatAutoFollow || null,
-    },
-    care: {
-      enumerable: true,
-      configurable: true,
-      get: () => followupService()?.care || null,
-    },
-  });
   server.doctor = runtime.doctor;
   server.knowledgeBot = knowledgeBot;
   server.doctorNotifications = doctorNotifications;
-  server.messageGateway = pluginHost.pluginServices.channel?.gateway;
   server.literature = literature;
   server.guidelines = guidelines;
   server.knowledgeOrganizer = knowledgeOrganizer;
   server.risks = risks;
   server.drg = drg;
   server.cases = cases;
-  server.wechat = wechat;
-  Object.defineProperty(server, "wecom", {
-    enumerable: true,
-    configurable: true,
-    get: () => currentWecom(),
-  });
-  server.channelWecom = wecomService;
-  server.channelWechat = wechatService;
   server.trialCandidates = trialCandidates;
   server.schedule = schedule;
   server.extensions = extensions;
   server.pendingActions = pending;
   server.labImporter = labImporter;
+  // Tests and diagnostics still reach migrated services through these
+  // properties. Every value is a live getter over pluginHost, never a second
+  // instance or a fixed-region copy.
+  const exposePluginService = (name, read) =>
+    Object.defineProperty(server, name, {
+      enumerable: true,
+      configurable: true,
+      get: read,
+    });
+  exposePluginService("followups", () => followups);
+  exposePluginService("surveys", () => followupService()?.surveys || null);
+  exposePluginService(
+    "chatFollowups",
+    () => followupService()?.chatFollowups || null,
+  );
+  exposePluginService(
+    "chatAutoFollow",
+    () => followupService()?.chatAutoFollow || null,
+  );
+  exposePluginService("care", () => followupService()?.care || null);
+  exposePluginService(
+    "messageGateway",
+    () => pluginService("channel")?.gateway || null,
+  );
+  exposePluginService(
+    "wechat",
+    () => pluginService("channel-wechat")?.bridge || null,
+  );
+  exposePluginService("wecom", () => currentWecom());
+  exposePluginService("channelWecom", () => pluginService("channel-wecom"));
+  exposePluginService("channelWechat", () => pluginService("channel-wechat"));
   server.once("listening", () => {
     scheduler.start();
     workspaces.scheduler.start();
     workspaces.recovery.start();
     doctorNotifications.start();
-    if (pluginHost.pluginServices.channel) knowledgeBot.binding.start();
+    if (pluginService("channel")) knowledgeBot.binding.start();
     knowledgeBot.start();
     // 与迁移前 messageGateway.start() 的位置一致：监听开始后、聊天随访前。
     // 插件生命周期统一由 host 按依赖拓扑启动，单个插件失败已隔离。
@@ -2731,7 +2726,7 @@ export function createServer(options = {}) {
     workspaces.scheduler.stop();
     workspaces.recovery.stop();
     await doctorNotifications.stop();
-    if (pluginHost.pluginServices.channel) await knowledgeBot.binding.stop();
+    if (pluginService("channel")) await knowledgeBot.binding.stop();
     await knowledgeBot.stop();
     // 对应迁移前 messageGateway.stop() 的位置；先停插件再等待其收尾。
     await pluginHost.stopAll();
