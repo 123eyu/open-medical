@@ -54,3 +54,5 @@ export function FeishuKnowledgeBotSettings() {
     </>}
   </section>;
 }
+
+export default FeishuKnowledgeBotSettings;

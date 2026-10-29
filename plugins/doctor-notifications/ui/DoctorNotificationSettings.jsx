@@ -52,3 +52,5 @@ export function DoctorNotificationSettings() {
   useEffect(load, []);
   return <section className="doctor-notifications"><h2>医生随访提醒</h2><p>每天汇总今日及逾期的随访、待跟进患者数量，提醒医生回到工作台处理。消息不包含患者姓名、联系方式或病历正文。</p><p>自动提醒需保持应用运行并联网，每日最多一条；退出期间未发送的提醒在下次运行时汇总当天待办。</p>{error && <p role="alert">{error}<button onClick={load}>重新加载</button></p>}{!data && !error && <p role="status">正在读取提醒设置…</p>}{data?.channels.map(c => <Channel key={c.channel} initial={c} refresh={next => setData(value => ({ channels: value.channels.map(item => item.channel === next.channel ? next : item) }))} />)}</section>;
 }
+
+export default DoctorNotificationSettings;

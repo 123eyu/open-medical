@@ -9,7 +9,7 @@ export default defineUiPlugin({
         label: "医生提醒",
         order: 30,
         legacyTab: "notifications",
-        component: () => import("./DoctorNotificationSettings.jsx"),
+        component: () => import("./DoctorNotificationSettings.jsx").then((module) => ({ default: module.DoctorNotificationSettings })),
       },
     ],
   },

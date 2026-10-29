@@ -16,6 +16,12 @@ test("learning 插件拥有学习设置、习惯与自动化；停用后一起�
 
   assert.equal((await app.request("/api/learning/settings")).status, 200);
   assert.equal((await app.request("/api/review-stats?range=90d")).status, 200);
+  app.server.store.db.prepare("INSERT INTO workbench_prefs VALUES ('local',?)")
+    .run(JSON.stringify({ autoOrder: false }));
+  const prefs = await app.request("/api/extensions/prefs");
+  assert.equal(prefs.status, 200);
+  assert.equal(prefs.body.autoOrder, false, "启用时由 learning 插件返回真实偏好");
+  assert.ok(Array.isArray(prefs.body.quickTasks));
 
   const created = await app.request("/api/extensions", {
     method: "POST",
@@ -44,6 +50,9 @@ test("learning 插件拥有学习设置、习惯与自动化；停用后一起�
   assert.equal(disabled.status, 200);
   assert.equal((await app.request("/api/learning/settings")).status, 404);
   assert.equal((await app.request("/api/review-stats")).status, 404);
+  const fallbackPrefs = await app.request("/api/extensions/prefs");
+  assert.equal(fallbackPrefs.status, 200);
+  assert.deepEqual(fallbackPrefs.body, { autoOrder: true, starters: null, usage: {}, quickTasks: [] });
   const skills = await app.request("/api/extensions");
   assert.equal(skills.status, 200);
   assert.ok(!skills.body.extensions.some((item) => item.kind === "automation"));

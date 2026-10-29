@@ -38,6 +38,7 @@ function createLearningApi(ctx) {
     if (!service) return false;
     if (parts[0] !== "api") return false;
     const path = url.pathname;
+    if (path === "/api/extensions/prefs" && req.method === "GET") return REPLY(io.send, 200, service.automation.workbenchPrefs());
     if (path === "/api/review-stats" && req.method === "GET") return REPLY(io.send, 200, service.stats(url.searchParams.get("range") || "90d"));
     if (path === "/api/review-details" && req.method === "GET") return REPLY(io.send, 200, service.details(url.searchParams.get("section"), url.searchParams.get("field")));
     if (path === "/api/learning/regression") {
@@ -75,6 +76,7 @@ export default definePlugin({
     { method: "*", path: "/api/learning" },
     { method: "*", path: "/api/learning/*" },
     { method: "GET", path: "/api/review-stats" },
+    { method: "GET", path: "/api/extensions/prefs" },
     { method: "GET", path: "/api/review-details" },
   ],
   agendaSources: [custom],

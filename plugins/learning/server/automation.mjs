@@ -284,10 +284,14 @@ export class LearningAutomation {
     this.bump("doc_edit", family, { type, reviewSessionId, ...(note ? { note: String(note).slice(0, 300) } : {}) });
   }
   recordFailure(ext, message) { this.bump("failure", ext.id, { message: message.slice(0, 200) }); }
-  prefs() {
+  workbenchPrefs() {
     const saved = JSON.parse(this.db.prepare("SELECT data FROM workbench_prefs WHERE id='local'").get()?.data || "{}");
     const usage = Object.fromEntries(this.db.prepare("SELECT key, count FROM evolution_signals WHERE kind='quick_task'").all().map((r) => [r.key, r.count]));
-    return { autoOrder: saved.autoOrder !== false, starters: saved.starters || null, usage, quickTasks: this.extensions?.quickTasks?.() || [], learning: saved.learning || null };
+    return { autoOrder: saved.autoOrder !== false, starters: saved.starters || null, usage, quickTasks: this.extensions?.quickTasks?.() || [] };
+  }
+  prefs() {
+    const saved = JSON.parse(this.db.prepare("SELECT data FROM workbench_prefs WHERE id='local'").get()?.data || "{}");
+    return { ...this.workbenchPrefs(), learning: saved.learning || null };
   }
   setPrefs(changes) {
     const saved = JSON.parse(this.db.prepare("SELECT data FROM workbench_prefs WHERE id='local'").get()?.data || "{}");

@@ -205,7 +205,10 @@ export class Extensions {
       triggers: auto?.triggers || TRIGGERS, actions: auto?.actions || ACTIONS,
       suggestions: auto?.suggestions || [], changes: auto?.changes || [], prefs: auto?.prefs || { autoOrder: true, starters: null, usage: {}, quickTasks: this.quickTasks() } };
   }
-  recordUsage(id) { return this.automation()?.recordUsage(id) || this.overview().prefs; }
+  prefs() {
+    return this.automation()?.workbenchPrefs?.() || { autoOrder: true, starters: null, usage: {}, quickTasks: this.quickTasks() };
+  }
+  recordUsage(id) { return this.automation()?.recordUsage(id) || this.prefs(); }
   resolveItem(id, status) { check(this.automation(), "NOT_FOUND", "学习插件未启用", 404); return this.automation().resolveItem(id, status); }
   resolveSuggestion(id, status) { check(this.automation(), "NOT_FOUND", "学习插件未启用", 404); return this.automation().resolveSuggestion(id, status); }
   undoChange(id) { check(this.automation(), "NOT_FOUND", "学习插件未启用", 404); return this.automation().undoChange(id); }
