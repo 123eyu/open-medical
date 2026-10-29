@@ -33,6 +33,7 @@ import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
 import { CareTasksPanel } from "./care-tasks";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
+import { SlotItem, useSlot } from "./plugin-slots";
 
 const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
@@ -97,6 +98,11 @@ export function PatientsView({
   const [inbox, setInbox] = useState([]);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
+  const pluginTabs = useSlot("patient.tabs");
+  const pluginActions = useSlot("patient.actions");
+  const activePluginTab = pluginTabs.find(
+    (item) => tab === `p:${item.pluginId}:${item.id}`,
+  );
   const [clinicalEditRequest, setClinicalEditRequest] = useState(null);
   useEffect(() => { setClinicalEditRequest(null); }, [detail?.id]);
   // 时间轴「查看原文」跨标签跳转的目标材料：状态放在父级，因为按 tab 切换
@@ -603,6 +609,10 @@ export function PatientsView({
               <details className="patient-more"><summary>更多</summary><div>
                 <button className="text-button" onClick={archive}>{detail.archived ? "恢复患者" : "归档患者"}</button>
                 <button className="text-button danger" onClick={remove}>删除患者档案</button>
+                {pluginActions.map((action) => <button key={`${action.pluginId}:${action.id}`} className="text-button" onClick={async () => {
+                  try { setError(""); await action.run(detail, api); }
+                  catch (err) { setError(err.message); }
+                }}>{action.label}</button>)}
               </div></details>
             </div>
           </div>
@@ -618,13 +628,18 @@ export function PatientsView({
             </label>
           )}
           <nav className="tab-row patient-area-tabs" aria-label="患者工作内容">
-            <button className={isRecordTab(tab) ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
+            <button className={isRecordTab(tab) || activePluginTab ? "active" : ""} onClick={() => setTab("overview")}>病历</button>
             <button className={tab === "assistance" ? "active" : ""} onClick={() => setTab("assistance")}>诊疗辅助</button>
             <button className={["messages", "followups", "tracking", "appointments"].includes(tab) ? "active" : ""} onClick={() => setTab("messages")}>沟通与随访</button>
           </nav>
           {tab !== "assistance" && <nav className="tab-row patient-section-tabs" aria-label="患者栏目">
-            {(isRecordTab(tab) ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
+            {(isRecordTab(tab) || activePluginTab ? RECORD_TABS : [["messages", `消息记录${detail.counts.unprocessedMessages ? ` · ${detail.counts.unprocessedMessages} 待整理` : ""}`], ["appointments", "复诊预约"], ["followups", "随访计划"], ["tracking", "检查与转诊"]]).map(([id, label]) => <button key={id} aria-current={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "page" : undefined} className={(tab === id || (tab === "clinical" && id === "diagnoses")) ? "active" : ""} onClick={() => openRecordTab(id)}>{label}</button>)}
+            {pluginTabs.map((item) => {
+              const key = `p:${item.pluginId}:${item.id}`;
+              return <button key={key} aria-current={tab === key ? "page" : undefined} className={tab === key ? "active" : ""} onClick={() => openRecordTab(key)}>{item.label}</button>;
+            })}
           </nav>}
+          {activePluginTab && <SlotItem key={`${activePluginTab.pluginId}:${activePluginTab.id}`} contribution={activePluginTab} patient={detail} onChanged={refreshPatient} onNavigate={openRecordTab} />}
           {tab === "tracking" && <CareTasksPanel key={detail.id} patient={detail} files={session?.files || []} onChanged={onChanged} onNavigate={openRecordTab} onSession={value => { if (value.id === detail.sessionId) setSession(value); }} />}
           {tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}

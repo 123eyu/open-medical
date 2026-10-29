@@ -27,6 +27,12 @@ test("插件提案：确认后在同一事务内写表；apply 抛错时整笔�
   });
   t.after(() => app.close());
 
+  const enabled = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabled.status, 200);
+
   const success = await propose(app, {
     name: "张三",
     message: "你好，随访顺利",
@@ -87,6 +93,12 @@ test("插件停用后，已创建的插件提案确认被拒绝；重新启用�
     serverOptions: { pluginDirs: [HELLO] },
   });
   t.after(() => app.close());
+
+  const enabled = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabled.status, 200);
 
   const proposal = await propose(app, {
     name: "赵六",

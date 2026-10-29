@@ -6,7 +6,7 @@
 // documented command as a child process, forwarding shutdown signals:
 //
 //   node --import ./tests/e2e/fake-time.mjs server/agent.mjs --dev-web
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -14,6 +14,22 @@ import { dirname, join } from "node:path";
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const dataDir = join(root, "test-results", "e2e-data");
 const tempDir = join(dataDir, "tmp");
+
+// The E2E build must include the fixture UI glob. Vite replaces the env check
+// at build time, so a normal `npm run build` still excludes fixtures.
+const build = process.env.npm_execpath
+  ? spawnSync(process.execPath, [process.env.npm_execpath, "run", "build"], {
+      cwd: root,
+      env: { ...process.env, VITE_E2E_FIXTURES: "1" },
+      stdio: "inherit",
+    })
+  : spawnSync(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "build"], {
+      cwd: root,
+      env: { ...process.env, VITE_E2E_FIXTURES: "1" },
+      stdio: "inherit",
+    });
+if (build.error) throw build.error;
+if (build.status !== 0) process.exit(build.status || 1);
 
 rmSync(dataDir, { recursive: true, force: true });
 mkdirSync(tempDir, { recursive: true });
@@ -25,6 +41,8 @@ const env = {
   MEDICAL_DATABASE: join(dataDir, "medical.sqlite"),
   TMPDIR: tempDir,
   MEDICAL_TEST_TMP: tempDir,
+  // Only the hello fixture is enabled for E2E; the bad fixtures stay excluded.
+  MEDICAL_PLUGIN_DIRS: join(root, "tests/fixtures/plugins/hello"),
 };
 
 const child = spawn(

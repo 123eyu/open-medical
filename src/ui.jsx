@@ -1,5 +1,6 @@
 import { RememberedNotice } from './learning-loop';
 import { SimilarCases } from "./similar-cases";
+import { ResultCard } from "./plugin-slots";
 import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -199,7 +200,7 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
     <div className="acceptance case-reader" role="dialog" aria-label="查看相似病例">
       <div className="accept-bar"><button className="text-button" onClick={onClose}>‹ 返回对话</button><h3>查看相似病例</h3></div>
       <div className="case-reader-body">
-        <SimilarCases key={artifact.id} artifact={artifact}/>
+        <ResultCard artifact={artifact} fallback={<SimilarCases key={artifact.id} artifact={artifact}/>} />
         <ArtifactReview key={artifact.id + "-review"} artifact={artifact} onReview={onReview} />
 
       </div>
@@ -223,9 +224,9 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
         <div className="accept-main">
           {view === "preview" && (
             <div className="acc-doc">
-              {artifact.type === "similar_cases" ? <SimilarCases key={artifact.id} artifact={artifact} /> : artifactToLines(artifact, { preview: true }).map((l, i) => (
+              <ResultCard artifact={artifact} fallback={artifact.type === "similar_cases" ? <SimilarCases key={artifact.id} artifact={artifact} /> : artifactToLines(artifact, { preview: true }).map((l, i) => (
                 <p key={i} className={l.startsWith("【") || l.startsWith("—") ? "acc-head" : ""}>{l}</p>
-              ))}
+              ))} />
             </div>
           )}
           {view === "diff" && (

@@ -38,10 +38,14 @@ async function startWithDatabase(database, pluginDirs) {
   const base = `http://127.0.0.1:${port}`;
   return {
     server,
-    request: async (path, { method = "GET" } = {}) => {
+    request: async (path, { method = "GET", body } = {}) => {
       const response = await fetch(new URL(path, base), {
         method,
-        headers: { "x-medical-token": server.token },
+        headers: {
+          "x-medical-token": server.token,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const text = await response.text();
       return {
@@ -68,6 +72,10 @@ test("迁移幂等：同一数据库启动两次只执行一次迁移", async (t
 
   const first = await startWithDatabase(database, [HELLO]);
   try {
+    await first.request("/api/plugins/hello", {
+      method: "PUT",
+      body: { enabled: true },
+    });
     const list = await first.request("/api/plugins");
     assert.equal(list.body.plugins[0].status, "ready");
     assert.equal(
@@ -83,6 +91,10 @@ test("迁移幂等：同一数据库启动两次只执行一次迁移", async (t
 
   const second = await startWithDatabase(database, [HELLO]);
   try {
+    await second.request("/api/plugins/hello", {
+      method: "PUT",
+      body: { enabled: true },
+    });
     const list = await second.request("/api/plugins");
     assert.equal(list.body.plugins[0].status, "ready");
     assert.equal(
@@ -112,6 +124,12 @@ test("坏插件：表名前缀错误、缺依赖、setup 抛错都标记 unavail
     serverOptions: { pluginDirs: [FIXTURES] },
   });
   t.after(() => app.close());
+
+  const enabled = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabled.status, 200);
 
   const response = await app.request("/api/plugins");
   assert.equal(response.status, 200);

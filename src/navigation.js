@@ -9,15 +9,24 @@ export const VIEW_LABELS = {
   workspaces: "项目工作区", workbench: "任务工作区",
 };
 
+// Plugin tabs are the only non-whitelisted patient tabs allowed in the URL:
+// p:<pluginId>:<tabId>. Keep the grammar narrow so arbitrary view state cannot
+// leak into navigation.
+export function isPluginTab(tab) {
+  return typeof tab === "string" && /^p:[a-z][a-z0-9-]{1,39}:[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(tab);
+}
+
 export function readLocation() {
   const params = new URLSearchParams(window.location.search);
   const requested = params.get("view");
   const view = requested === "review" ? "tasks" : Object.hasOwn(VIEW_LABELS, requested) ? requested : "home";
   const tabs = view === "patients" ? ["overview", "diagnoses", "clinical", "medications", "labs", "visits", "library", "assistance", "messages", "appointments", "followups", "tracking"] : view === "workspaces" ? ["files", "review", "media", "browser", "terminal", "extensions", "history", "settings"] : view === "workbench" ? ["materials", "results", "runs", "knowledge"] : [];
+  const requestedTab = params.get("tab");
+  const tab = tabs.includes(requestedTab) || (view === "patients" && isPluginTab(requestedTab)) ? requestedTab : undefined;
   return {
     view,
     id: params.get(view === "patients" ? "patient" : view === "workspaces" ? "workspace" : "session") || "",
-    tab: tabs.includes(params.get("tab")) ? params.get("tab") : undefined,
+    tab,
   };
 }
 

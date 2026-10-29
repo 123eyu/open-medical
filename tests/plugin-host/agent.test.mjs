@@ -34,6 +34,12 @@ test("hello_echo 能被 Agent 调用，且 prompt.md 进入医疗系统提示", 
   });
   t.after(() => app.close());
 
+  const enabledResponse = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabledResponse.status, 200);
+
   const sessionId = await assistantSession(app);
   const response = await app.request("/api/agent/run", {
     method: "POST",
@@ -96,6 +102,12 @@ test("停用后工具不注册、API 404、待办消失；启用后全部恢复"
     serverOptions: { pluginDirs: [HELLO] },
   });
   t.after(() => app.close());
+
+  const enabledResponse = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabledResponse.status, 200);
 
   const created = await app.request("/api/p/hello/greet", {
     method: "POST",

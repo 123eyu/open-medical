@@ -2,8 +2,9 @@ import { BackupPanel } from "./backup-panel";
 import { LearningSettings } from "./learning-loop";
 import { ChatConnectionSettings } from "./chat-followups";
 import { useEffect, useRef, useState } from "react";
-import { api, medicalEnabled } from "./agent-runtime";
+import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
+import { SlotItem, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { FeishuKnowledgeBotSettings } from "./feishu-knowledge-bot";
@@ -25,7 +26,8 @@ const PERSONAL_SECTIONS = [
 
 function settingsGroup(section) {
   if (section === "transcription") return "connections";
-  if (section === "plugins" || CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
+  if (section === "plugins") return "plugins";
+  if (CHANNEL_SECTIONS.some(([id]) => id === section)) return "channels";
   if (PERSONAL_SECTIONS.some(([id]) => id === section)) return "personal";
   return section;
 }
@@ -80,7 +82,77 @@ function DesktopAppPanel({ desktop }) {
   </section>;
 }
 
-export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange }) {
+const PLUGIN_STATUS = { ready: "已启用", disabled: "已停用", unavailable: "不可用" };
+
+function PluginSettings({ onPluginsChanged }) {
+  const [plugins, setPlugins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const panels = useSlot("settings.panels");
+  useEffect(() => {
+    let alive = true;
+    api("/api/plugins")
+      .then(value => { if (alive) setPlugins(value.plugins || []); })
+      .catch(value => { if (alive) setError(value.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+  async function toggle(plugin) {
+    if (busy) return;
+    setBusy(plugin.id);
+    setError("");
+    try {
+      await api(`/api/plugins/${encodeURIComponent(plugin.id)}`, "PUT", { enabled: !plugin.enabled });
+      // Refresh the shared bootstrap snapshot so every slot updates immediately;
+      // the server persists the new state, so no restart is needed.
+      const next = await bootstrap(true);
+      onPluginsChanged?.(next.plugins || []);
+      const list = await api("/api/plugins");
+      setPlugins(list.plugins || []);
+    } catch (value) {
+      setError(value.message);
+    } finally {
+      setBusy("");
+    }
+  }
+  return <section aria-label="插件">
+    <h2>插件</h2>
+    <p>插件为工作台增加可选的患者页、对话卡片和设置面板。停用后数据保留，可以随时重新启用。</p>
+    {error && <p role="alert" className="error-text">{error}</p>}
+    {loading && <p role="status">正在读取插件…</p>}
+    {!loading && !plugins.length && <p className="muted">还没有安装插件。</p>}
+    {!loading && plugins.length > 0 && <ul className="plugin-settings-list">
+      {plugins.map(plugin => {
+        const ownPanels = panels.filter(item => item.pluginId === plugin.id);
+        return <li key={plugin.id} className="plugin-settings-item">
+          <div className="plugin-settings-summary">
+            <div>
+              <b>{plugin.title}</b>
+              <small>{plugin.id} · v{plugin.version} · {PLUGIN_STATUS[plugin.status] || plugin.status}</small>
+              {plugin.reason && <p className="muted">不可用原因：{plugin.reason}</p>}
+            </div>
+            <label className="settings-login-item">
+              <input
+                type="checkbox"
+                aria-label={`启用 ${plugin.title}`}
+                checked={Boolean(plugin.enabled)}
+                disabled={Boolean(busy) || plugin.status === "unavailable"}
+                onChange={() => toggle(plugin)}
+              />
+              启用
+            </label>
+          </div>
+          {plugin.status === "ready" && ownPanels.length > 0 && <div className="plugin-settings-panel">
+            {ownPanels.map(item => <SlotItem key={`${item.pluginId}:${item.id}`} contribution={item} plugin={plugin} />)}
+          </div>}
+        </li>;
+      })}
+    </ul>}
+  </section>;
+}
+
+export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, demoPreferenceBusy, onDemoEntryHiddenChange, onPluginsChanged }) {
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
   const [section, updateSection] = useState(() => {
@@ -89,7 +161,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
     const group = settingsGroup(requested);
     if (["channels", "personal"].includes(group) && !medicalEnabled(config)) return "general";
     if (requested === "desktop" && !window.omwDesktop) return "general";
-    return ["general", "desktop", "connections", "channels", "personal", "backup"].includes(group) ? requested : "general";
+    return ["general", "desktop", "connections", "channels", "personal", "backup", "plugins"].includes(group) ? requested : "general";
   });
   const group = settingsGroup(section);
   function setSection(next) {
@@ -130,10 +202,12 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {medicalEnabled(config) && <button aria-pressed={group === "personal"} onClick={() => setSection("skills")}>技能与规则</button>}
         <button aria-pressed={group === "backup"} onClick={() => setSection("backup")}>备份与恢复</button>
         <button aria-pressed={group === "connections"} onClick={() => setSection("connections")}>工具与服务</button>
+        <button aria-pressed={group === "plugins"} onClick={() => setSection("plugins")}>插件</button>
         {window.omwDesktop && <button aria-pressed={group === "desktop"} onClick={() => setSection("desktop")}>桌面应用</button>}
       </nav>
       <div className="app-settings-content">
         {section === "backup" && <BackupPanel />}
+        {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} />}
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={CHANNEL_SECTIONS} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
           {section === "channels" ? <MessageChannelSettings /> : section === "knowledge-bot" ? <FeishuKnowledgeBotSettings /> : section === "notifications" ? <DoctorNotificationSettings /> : <>

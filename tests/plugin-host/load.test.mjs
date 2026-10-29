@@ -15,6 +15,14 @@ test("插件加载：/api/plugins、bootstrap 与固定区并存；空目录不�
   });
   t.after(() => app.close());
 
+  const initial = await app.request("/api/plugins");
+  assert.equal(initial.body.plugins[0].status, "disabled", "hello 默认停用，避免影响截图基线");
+  const enabled = await app.request("/api/plugins/hello", {
+    method: "PUT",
+    body: { enabled: true },
+  });
+  assert.equal(enabled.status, 200);
+
   const list = await app.request("/api/plugins");
   assert.equal(list.status, 200);
   assert.deepEqual(

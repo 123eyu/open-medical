@@ -15,6 +15,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { api, medicalEnabled } from "./agent-runtime";
+import { Slot, useSlot } from "./plugin-slots";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import "./task-context.css";
 
@@ -190,6 +191,7 @@ const catalog = [
 export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings }) {
   const [filter, setFilter] = useState("全部"),
     [query, setQuery] = useState("");
+  const pluginTools = useSlot("tools.directory");
   const availability = id => id === "documents"
     ? config?.modelConfigured ? { action: "打开" } : { label: "需要配置模型", action: "配置模型", model: true }
     : { action: "打开" };
@@ -265,8 +267,9 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
             </a>
           </article>
         );})}
+        <Slot name="tools.directory" onNavigate={onNavigate} config={config} />
       </div>
-      {!rows.length && <p className="directory-empty">没有找到匹配工具。</p>}
+      {!rows.length && !pluginTools.length && <p className="directory-empty">没有找到匹配工具。</p>}
 
     </main>
   );

@@ -5,7 +5,7 @@ export default definePlugin({
   id: "hello",
   version: "1.0.0",
   title: "Hello 示例插件",
-  enabledByDefault: true,
+  enabledByDefault: false,
   migrations: "./migrations",
   tablePrefix: "hello_",
   prompt: "./prompt.md",

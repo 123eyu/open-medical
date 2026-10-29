@@ -23,7 +23,7 @@ import { providerConfigured } from "./core/provider-status.mjs";
 import http from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { readFile, stat } from "node:fs/promises";
-import { resolve, dirname, extname, join, sep } from "node:path";
+import { resolve, dirname, extname, join, sep, delimiter } from "node:path";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { randomBytes, timingSafeEqual } from "node:crypto";
@@ -262,7 +262,16 @@ export function createServer(options = {}) {
     services: pluginServices,
     ...(options.pluginDirs !== undefined
       ? { pluginDirs: options.pluginDirs }
-      : {}),
+      : process.env.MEDICAL_PLUGIN_DIRS
+        ? {
+            pluginDirs: [
+              resolve(ROOT, "../plugins"),
+              ...process.env.MEDICAL_PLUGIN_DIRS.split(delimiter)
+                .map((dir) => dir.trim())
+                .filter(Boolean),
+            ],
+          }
+        : {}),
   });
   pluginHost.load();
   // The doctor's own skills (extension center) are materialized here.

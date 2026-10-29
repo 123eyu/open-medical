@@ -4,6 +4,7 @@ import { api, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import "./care.css";
 import { RememberedNotice } from "./learning-loop";
 import { PatientProposalComparison } from "./patient-proposal";
+import { SlotItem, useSlot } from "./plugin-slots";
 
 const TYPES = { "patient-create": "建档提案", "patient-update": "档案更新", "followup-create": "随访提醒", "case-save": "病例入库", "care-message": "发送消息", "care-campaign": "随访计划", "care-settings": "自动化设置", "care-bind": "关联微信客户", "care-group-message": "客户群群发", "care-education-broadcast": "患教群发", "patient-group-suggest": "分组建议", "patient-grouping": "患者分组", "trial-batch": "批量 AI 初筛", "trial-enrollment": "试验入组状态", "ext-change": "工作台扩展", "ext-install": "技能安装" };
 export { PENDING_REFRESH_EVENT } from "./agent-runtime";
@@ -26,6 +27,9 @@ function TogglePre({ text }) {
 
 function Preview({ action }) {
   const p = action.payload || {};
+  const proposalRenderers = useSlot("proposal.renderers");
+  const customRenderer = proposalRenderers.find((item) => item.type === action.type);
+  if (customRenderer) return <SlotItem contribution={customRenderer} action={action} />;
   if (action.type === "patient-create") return <><p className="care-hint">新建患者：<b>{p.name}</b> · {({ male: "男", female: "女" })[p.gender] || "性别待补"}{p.birthYear ? ` · ${p.birthYear} 年生` : ""} · 过敏：{({ none_known: "无已知过敏", recorded: "已记录过敏原" })[p.allergyStatus] || "待核对"}</p>
     {p.clinicalSummary?.text && <TogglePre text={p.clinicalSummary.text} />}
     {(p.diagnoses?.length || p.medications?.length || p.labs?.length || p.visits?.length) ? <p className="care-hint">诊断 {p.diagnoses?.length || 0} 条 · 用药 {p.medications?.length || 0} 条 · 检验 {p.labs?.length || 0} 条 · 就诊 {p.visits?.length || 0} 次</p> : null}
