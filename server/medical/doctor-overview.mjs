@@ -1,10 +1,12 @@
 import { check } from "../errors.mjs";
-import { isCalendarDate } from "../../shared/calendar-date.mjs";
 
-export const AGENDA_KINDS = ["all", "risk", "visit", "followup", "tracking", "messages", "trial", "custom"];
+// The shell owns "all", "visit" and the merge/sort/page/count pipeline. Every
+// other kind comes from an enabled plugin agendaSource, so moving a scenario
+// out only requires moving its source.
+export const AGENDA_KINDS = ["all", "visit"];
+const ALL_KIND = { kind: "all", label: "全部", order: 0 };
+const VISIT_KIND = { kind: "visit", label: "复诊", order: 20 };
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
-const DAY = 86400000;
-const TRIAL_STEP = { shortlisted: "联系患者，说明研究", contacted: "登记知情同意", consented: "确认入组" };
 
 // Read model only: work remains owned by its original patient/session/domain.
 // The agenda lists what a patient needs today and high-risk findings; the
@@ -12,16 +14,42 @@ const TRIAL_STEP = { shortlisted: "联系患者，说明研究", contacted: "登
 // separate "work" lane so it never crowds out patient care. Counts are
 // computed before pagination. A row never doubles as a "complete" action.
 export class DoctorOverview {
-  constructor(store, sessions, { schedule, extensions, contactMatches, trialWork } = {}) { this.store = store; this.sessions = sessions; this.schedule = schedule; this.extensions = extensions; this.contactMatches = contactMatches; this.trialWork = trialWork; }
+  constructor(store, sessions, { schedule, contactMatches, trialWork, agendaSources, agendaItems } = {}) {
+    this.store = store;
+    this.sessions = sessions;
+    this.schedule = schedule;
+    this.contactMatches = contactMatches;
+    this.trialWork = trialWork;
+    this.agendaSources = agendaSources;
+    this.agendaItems = agendaItems;
+  }
+
+  // Return visits: tomorrow tell the patient, today prepare, past ones need an outcome.
+  _visitItems() {
+    const items = [];
+    for (const a of this.schedule?.dueAppointments() || []) {
+      const at = [a.date, a.time].filter(Boolean).join(" "), what = [a.reason, a.place].filter(Boolean).join(" · ");
+      const view = { tomorrow: ["明天复诊", "提醒患者按时来", 4], today: ["今天复诊", "提前查看档案和近期结果", 2], past: ["复诊未登记到诊情况", "确认患者是否来过，未来需重新预约", 3] }[a.when];
+      items.push({ id: `visit:${a.id}`, kind: "visit", patientId: a.patientId, title: view[0], detail: [at, what, view[1]].filter(Boolean).join("，"),
+        at: Date.parse(`${a.date}T${a.time || "08:00"}:00`), weight: view[2], action: { type: "patient", tab: "appointments", label: a.when === "past" ? "登记结果" : "查看预约" } });
+    }
+    return items;
+  }
+
   read({ kind = "all", query = "", group = "", patientId = "", excludeRiskAlerts = false, offset = 0, limit = 12, now = Date.now() } = {}) {
-    check(AGENDA_KINDS.includes(kind), "INVALID_INPUT", "待办分类无效");
+    const current = typeof now === "number" ? now : Date.parse(now) || Date.now();
+    const sourceKinds = new Map([[VISIT_KIND.kind, VISIT_KIND]]);
+    for (const source of this.agendaSources?.() || [])
+      if (!sourceKinds.has(source.kind))
+        sourceKinds.set(source.kind, { kind: source.kind, label: source.label, order: source.order });
+    const kindMeta = [ALL_KIND, ...sourceKinds.values()].sort((a, b) => a.order - b.order || a.kind.localeCompare(b.kind));
+    check(kindMeta.some((item) => item.kind === kind), "INVALID_INPUT", "待办分类无效");
     check(typeof query === "string" && query.length <= 100, "INVALID_INPUT", "搜索词过长");
     check(typeof group === "string" && group.length <= 40, "INVALID_INPUT", "分组名过长");
     check(typeof patientId === "string" && patientId.length <= 200, "INVALID_INPUT", "患者编号无效");
     check(Number.isSafeInteger(offset) && offset >= 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100,
       "INVALID_INPUT", "分页参数无效");
     const db = this.store.db;
-    const table = (name) => db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
     const people = new Map(db.prepare("SELECT id,data FROM patients").all().map((row) => {
       const p = JSON.parse(row.data);
       return [row.id, { id: row.id, name: p.name, patientNumber: p.patientNumber || "", birthYear: p.birthYear, archived: p.archived, groups: p.groups || [] }];
@@ -40,104 +68,22 @@ export class DoctorOverview {
       list.push({ ...item, at: time(item.at), patientName: patient?.name || item.fallbackName || "未关联患者", patientNumber: patient?.patientNumber || "", birthYear: patient?.birthYear || null });
     };
     const add = place(rows), addWork = place(work);
-    const overdue = (at) => { const days = Math.floor((now - time(at)) / DAY); return days >= 1 ? `已逾期 ${days} 天` : ""; };
+    const errors = [];
 
-    // ---------- high risk ----------
-    for (const row of db.prepare("SELECT id,patient_id,severity,updated_at,data FROM risk_alerts WHERE status='active'").all()) {
-      const data = JSON.parse(row.data);
-      add({ id: `risk:${row.id}`, kind: "risk", patientId: row.patient_id, title: data.title, detail: data.message,
-        at: row.updated_at, weight: row.severity === "critical" ? 0 : 4, severity: row.severity,
-        action: { type: "patient", tab: "overview", label: "核对风险" } });
-    }
-    if (table("care_alerts")) for (const row of db.prepare("SELECT id,patient_id,level,reason,created_at FROM care_alerts WHERE status='open'").all()) {
-      const urgent = row.level === "urgent";
-      add({ id: `care-alert:${row.id}`, kind: urgent ? "risk" : "messages", patientId: row.patient_id,
-        title: urgent ? "患者消息提示紧急情况" : "患者消息需要医生回复", detail: row.reason, at: row.created_at,
-        weight: urgent ? 0 : 3, severity: urgent ? "critical" : undefined,
-        action: { type: "view", view: "care", tab: "alerts", label: urgent ? "立即查看" : "查看消息" } });
-    }
+    // ---------- fixed region: return visits ----------
+    for (const item of this._visitItems()) add(item);
 
-    // ---------- follow-up and tracking ----------
-    for (const row of db.prepare("SELECT id,patient_id,status,due_at,data FROM care_tasks WHERE status IN ('awaiting_review','awaiting_communication') OR (status='waiting_result' AND due_at<=?)").all(now)) {
-      const task = JSON.parse(row.data);
-      const label = { waiting_result: "结果尚未收到，跟进时间已到", awaiting_review: "结果已收到，等待医生核对", awaiting_communication: "医生已核对，需告知患者" }[row.status];
-      add({ id: `tracking:${row.id}`, kind: "tracking", patientId: row.patient_id, title: task.title, detail: label,
-        at: row.due_at, weight: row.status === "awaiting_review" ? 3 : 5,
-        action: { type: "patient", tab: "tracking", label: "继续跟进" } });
+    // ---------- plugin sources: everything else ----------
+    const pluginItems = this.agendaItems?.({
+      now: current,
+      patientId,
+      onError: (error) => errors.push({ kind: error.kind, message: error.message }),
+    }) || [];
+    for (const raw of pluginItems) {
+      // pluginId/lane are host bookkeeping; keep the public row shape unchanged.
+      const { pluginId: _pluginId, lane, ...item } = raw;
+      if (lane === "work") addWork(item); else add(item);
     }
-    // Return visits: tomorrow tell the patient, today prepare, past ones need an outcome.
-    for (const a of this.schedule?.dueAppointments() || []) {
-      const at = [a.date, a.time].filter(Boolean).join(" "), what = [a.reason, a.place].filter(Boolean).join(" · ");
-      const view = { tomorrow: ["明天复诊", "提醒患者按时来", 4], today: ["今天复诊", "提前查看档案和近期结果", 2], past: ["复诊未登记到诊情况", "确认患者是否来过，未来需重新预约", 3] }[a.when];
-      add({ id: `visit:${a.id}`, kind: "visit", patientId: a.patientId, title: view[0], detail: [at, what, view[1]].filter(Boolean).join("，"),
-        at: Date.parse(`${a.date}T${a.time || "08:00"}:00`), weight: view[2], action: { type: "patient", tab: "appointments", label: a.when === "past" ? "登记结果" : "查看预约" } });
-    }
-    // Lab values added to the chart since the doctor last marked them read.
-    for (const { patientId, labs } of this.schedule?.allNewLabs() || []) {
-      const shown = labs.slice(0, 3).map((l) => `${l.item} ${l.value}${l.unit || ""}`).join("、");
-      const date = isCalendarDate(labs[0].date) ? labs[0].date : "";
-      const undated = labs.filter(lab => !isCalendarDate(lab.date)).length;
-      add({ id: `labs:${patientId}`, kind: "tracking", patientId, title: `待阅检验结果 ${labs.length} 项`, detail: `${shown}${labs.length > 3 ? " 等" : ""}（${date ? `最近日期 ${date}` : "日期待核对"}${date && undated ? `；另有 ${undated} 条日期待核对` : ""}），查看后点「标记已阅」`,
-        at: date, weight: 4, count: labs.length, action: { type: "patient", tab: "labs", label: "查看结果" } });
-    }
-    // Reminders are created when a follow-up falls due.
-    for (const row of db.prepare("SELECT id,patient_id,due_at,data FROM reminders WHERE status='pending'").all()) {
-      const data = JSON.parse(row.data);
-      add({ id: `reminder:${row.id}`, kind: "followup", patientId: row.patient_id, title: data.title,
-        detail: [overdue(row.due_at), "联系患者后登记随访结果"].filter(Boolean).join("，"), at: row.due_at, weight: row.due_at < now - DAY ? 1 : 5,
-        action: { type: "patient", tab: "followups", label: "登记随访" } });
-    }
-    for (const row of db.prepare("SELECT id,patient_id,status,next_due,data FROM follow_ups WHERE status='paused' OR (status='active' AND next_due<=?)").all(now)) {
-      const data = JSON.parse(row.data);
-      if (row.status === "paused") {
-        if (data.lastError) addWork({ id: `schedule:${row.id}`, kind: "failure", patientId: row.patient_id, title: `随访计划「${data.name}」已暂停`,
-          detail: data.lastError, at: row.next_due, action: { type: "patient", tab: "followups", label: "检查计划" } });
-        continue;
-      }
-      add({ id: `schedule:${row.id}`, kind: "followup", patientId: row.patient_id, title: data.name,
-        detail: [overdue(row.next_due), "随访到期，联系患者"].filter(Boolean).join("，"), at: row.next_due, weight: 5,
-        action: { type: "patient", tab: "followups", label: "查看随访" } });
-    }
-
-    // ---------- patient messages ----------
-    for (const row of db.prepare("SELECT patient_id,COUNT(*) n,MIN(time) oldest FROM patient_messages WHERE processed=0 AND patient_id IS NOT NULL GROUP BY patient_id").all()) {
-      add({ id: `messages:${row.patient_id}`, kind: "messages", patientId: row.patient_id,
-        title: `${row.n} 条聊天记录待整理`, detail: "查看原文，决定是否回复或记入档案", at: time(row.oldest), weight: 6,
-        count: row.n, action: { type: "patient", tab: "messages", label: "处理消息" } });
-    }
-    const inbox = db.prepare("SELECT COUNT(*) n FROM patient_messages WHERE patient_id IS NULL").get().n;
-    if (inbox) add({ id: "inbox", kind: "messages", title: `${inbox} 条消息不确定是哪位患者`, detail: "核对身份后归到对应患者", at: 0, weight: 3,
-      count: inbox, action: { type: "patients", label: "认领消息" } });
-    if (table("care_replies")) for (const row of db.prepare("SELECT patient_id,COUNT(*) n,MIN(created_at) oldest FROM care_replies WHERE status='draft' AND patient_id IS NOT NULL GROUP BY patient_id").all()) {
-      add({ id: `care-draft:${row.patient_id}`, kind: "messages", patientId: row.patient_id, title: row.n > 1 ? `${row.n} 条回复待发送` : "回复待发送",
-        detail: "已起草回复，核对后发给患者", at: row.oldest, weight: 4, count: row.n,
-        action: { type: "view", view: "care", tab: "drafts", label: "核对发送" } });
-    }
-
-    // ---------- trial enrollment ----------
-    if (table("trial_enrollments")) {
-      const titles = new Map(db.prepare("SELECT id,data FROM trial_protocols").all().map((r) => [r.id, JSON.parse(r.data).title]));
-      for (const row of db.prepare("SELECT trial_id,patient_id,data FROM trial_enrollments").all()) {
-        const e = JSON.parse(row.data);
-        if (!TRIAL_STEP[e.stage] || !titles.has(row.trial_id)) continue;
-        add({ id: `trial:${row.trial_id}:${row.patient_id}`, kind: "trial", patientId: row.patient_id, title: TRIAL_STEP[e.stage],
-          detail: `临床试验「${titles.get(row.trial_id).slice(0, 40)}」`, at: e.updatedAt, weight: 6,
-          action: { type: "view", view: "research", trialId: row.trial_id, label: "打开试验" } });
-      }
-    }
-
-    // ---------- the doctor's own rules (extension center) ----------
-    const ext = this.extensions?.();
-    for (const item of ext?.openItems() || []) {
-      const entry = { id: `rule:${item.id}`, itemId: item.id, patientId: item.patientId, title: item.title, detail: `${item.detail ? `${item.detail} · ` : ""}来自规则「${item.rule}」`,
-        at: item.createdAt, weight: 5, resolvable: true, fallbackName: "我的规则",
-        action: item.sessionId ? { type: "task", sessionId: item.sessionId, label: "打开汇总" } : item.replyId ? { type: "view", view: "care", tab: "drafts", label: "核对发送" } : { type: "patient", tab: "overview", label: "查看患者" } };
-      if (item.lane === "work" || !item.patientId) addWork({ ...entry, kind: "review" }); else add({ ...entry, kind: "custom" });
-    }
-    for (const s of ext?.suggestions() || []) addWork({ id: `evolve:${s.id}`, kind: "evolve", title: s.title, detail: s.evidence, at: s.createdAt, fallbackName: "工作台进化",
-      action: { type: "view", view: "settings", settingsTab: "workbench", label: "查看建议" } });
-    for (const c of (ext?.changes() || []).filter((c) => c.status === "applied" && now - time(c.createdAt) < 7 * DAY)) addWork({ id: `evolved:${c.id}`, kind: "evolve", title: `已自动调整：${c.title}`,
-      detail: c.detail, at: c.createdAt, fallbackName: "工作台进化", action: { type: "view", view: "settings", settingsTab: "workbench", label: "查看或撤销" } });
 
     // ---------- the doctor's own workflow ----------
     for (const row of db.prepare("SELECT id,patient_id,summary,created_at FROM pending_actions WHERE status='pending'").all()) {
@@ -161,15 +107,25 @@ export class DoctorOverview {
     if (matches) addWork({ id: "care-contacts", kind: "review", title: `${matches} 位微信客户待确认是哪位患者`, detail: "系统已按备注电话、编号推荐",
       at: 0, count: matches, fallbackName: "企业微信", action: { type: "view", view: "care", tab: "contacts", label: "去确认" } });
 
-    const visible = rows.filter(item => inGroup(item) && !(patientId && excludeRiskAlerts && item.id.startsWith("risk:")));
-    const counts = Object.fromEntries(AGENDA_KINDS.map((key) => [key, key === "all" ? visible.length : visible.filter((item) => item.kind === key).length]));
+    const dedupe = (items) => {
+      const seen = new Set();
+      return items.filter((item) => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+    };
+    const visible = dedupe(rows.filter(item => inGroup(item) && !(patientId && excludeRiskAlerts && item.id.startsWith("risk:"))));
+    const counts = Object.fromEntries(kindMeta.map((item) => [item.kind, item.kind === "all" ? visible.length : visible.filter((row) => row.kind === item.kind).length]));
+    const kinds = kindMeta.map((item) => ({ kind: item.kind, label: item.label, count: counts[item.kind] }));
     const needle = query.trim().toLowerCase();
     const matchesQuery = (item) => !needle || `${item.patientName} ${item.patientNumber} ${item.title} ${item.detail}`.toLowerCase().includes(needle);
     const filtered = visible.filter((item) => (kind === "all" || item.kind === kind) && matchesQuery(item))
       .sort((a, b) => a.weight - b.weight || a.at - b.at || a.id.localeCompare(b.id));
-    const workItems = work.filter((item) => inGroup(item) && matchesQuery(item)).sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
-    return { counts, criticalCount: filtered.filter(item => item.severity === "critical").length, total: filtered.length, offset, limit, hasMore: offset + limit < filtered.length,
+    const workItems = dedupe(work.filter((item) => inGroup(item) && matchesQuery(item))).sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+    return { counts, kinds, criticalCount: filtered.filter(item => item.severity === "critical").length, total: filtered.length, offset, limit, hasMore: offset + limit < filtered.length,
       items: filtered.slice(offset, offset + limit), work: { total: workItems.length, items: workItems.slice(0, 30) },
-      generatedAt: now, patientCount: [...people.values()].filter((p) => !p.archived && (!patientId || p.id === patientId)).length };
+      generatedAt: now, patientCount: [...people.values()].filter((p) => !p.archived && (!patientId || p.id === patientId)).length,
+      ...(errors.length ? { errors } : {}) };
   }
 }

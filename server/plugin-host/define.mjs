@@ -169,9 +169,15 @@ export function definePlugin(spec = {}) {
       "PLUGIN_SPEC",
       `插件 ${id} 的 agendaSource label 必须是字符串`,
     );
+    check(
+      source.order === undefined || Number.isFinite(source.order),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 agendaSource order 必须是数字`,
+    );
     return Object.freeze({
       kind: source.kind,
       label: source.label ?? source.kind,
+      order: source.order ?? 100,
       read: source.read,
     });
   });

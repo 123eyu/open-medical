@@ -699,7 +699,10 @@ export function createServer(options = {}) {
   const schedule = new PatientSchedule(store, patients);
   const doctorOverview = new DoctorOverview(store, sessionBridge, {
     schedule,
-    extensions: () => extensions,
+    // Plugin agenda sources are resolved lazily: setup runs once the fixed
+    // services exist (below), while reads only happen after startup.
+    agendaSources: () => pluginHost.agendaSources(),
+    agendaItems: (opts) => pluginHost.agendaItems(opts),
     // Read lazily: the WeCom connector is created further below.
     contactMatches: () => wecom.client ? wecom.directory.contacts({ status: "suggested", limit: 1 }).counts.suggested : 0,
     trialWork: () => trialScreening.list().map((t) => {

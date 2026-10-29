@@ -41,12 +41,13 @@ test("MEDICAL_PLUGIN_DIRS 按 path.delimiter 追加到默认 plugins/ 目录，�
   );
   assert.equal(byId.hello.status, "disabled");
   assert.equal(byId["needs-missing"].status, "unavailable");
+  assert.equal(byId["legacy-agenda"].status, "ready");
   assert.equal(byId["similar-cases"].status, "ready");
 
   const list = await app.request("/api/plugins");
   assert.equal(list.status, 200);
   assert.deepEqual(
     list.body.plugins.map((plugin) => plugin.id),
-    ["hello", "needs-missing", "similar-cases"],
+    ["hello", "legacy-agenda", "needs-missing", "similar-cases"],
   );
 });

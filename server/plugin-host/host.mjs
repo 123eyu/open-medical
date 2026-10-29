@@ -602,7 +602,34 @@ export class PluginHost {
     return null;
   }
 
-  agendaItems({ now = new Date().toISOString(), patientId } = {}) {
+  // Metadata for the agenda shell: only enabled, available plugin sources are
+  // advertised, so a kind filter can be validated against the same set the
+  // reader will actually use.
+  agendaSources() {
+    const sources = [];
+    for (const record of this.ordered) {
+      if (!record.available || !record.enabled || !record.spec) continue;
+      for (const source of record.spec.agendaSources)
+        sources.push({
+          pluginId: record.id,
+          kind: source.kind,
+          label: source.label,
+          order: source.order,
+        });
+    }
+    return sources.sort(
+      (a, b) =>
+        a.order - b.order ||
+        a.pluginId.localeCompare(b.pluginId) ||
+        a.kind.localeCompare(b.kind),
+    );
+  }
+
+  agendaItems({
+    now = new Date().toISOString(),
+    patientId,
+    onError,
+  } = {}) {
     const items = [];
     for (const record of this.ordered) {
       if (!record.available || !record.enabled || !record.spec) continue;
@@ -622,6 +649,16 @@ export class PluginHost {
                 });
         } catch (error) {
           console.error(`插件 ${record.id} 待办来源失败:`, error);
+          if (typeof onError === "function")
+            try {
+              onError({
+                kind: source.kind,
+                pluginId: record.id,
+                message: errorMessage(error),
+              });
+            } catch {
+              // A reporting callback must never break the remaining sources.
+            }
         }
       }
     }
