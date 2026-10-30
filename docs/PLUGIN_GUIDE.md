@@ -281,6 +281,8 @@ agendaSources: [{
 
 返回的每一项至少包含 `id`、`title`；`patientId`、`detail`、`at`、`weight`、`action`、`lane` 可选。宿主会补 `kind` 和 `pluginId`；`lane: "work"` 会进入医生工作流分道。单个来源抛错只记录 `onError`，不影响其它来源。
 
+来源可选声明 `available(ctx)`：返回 `false` 时，这个 kind 既不出现在分类里，也不读取条目。适合插件本身启用、但某类待办依赖运行时状态的情况，例如 `followup` 的「患者消息」只在连接了微信/企业微信时出现，「随访」始终出现。
+
 #### `workflows`（可选，object）
 
 Agent 工作流钩子。key 是工作流 id，值可包含：
@@ -432,7 +434,9 @@ provides: { service: "pain-score", apiVersion: 1 }
 activation: { requiresConnection: true }
 ```
 
-插件“已启用但尚未激活”时：不注册工具、不提供待办、不注入提示、不渲染业务插槽；设置页的连接面板仍可通过 `availableWhenDormant` 保持可达。激活条件由 `status` 决定。典型例子是 `followup`：必须先启用并连接一个渠道。
+插件“已启用但尚未激活”时：不注册工具、不提供待办、不注入提示、不渲染业务插槽；设置页的连接面板仍可通过 `availableWhenDormant` 保持可达。激活条件由 `status` 决定。
+
+只有整个插件都离不开连接时才用它。若只是部分功能需要连接，保持插件激活，在内部按 `status().connected` 分开：工具注册时判断、待办来源用 `available(ctx)`、接口返回 409、界面插槽用 `requiresConnection: true` 或 `usePluginConnected(id)`；服务端可用 `host.isConnected(id)` 读当前连接。`followup` 就是这样：随访计划和医生提醒始终可用，患者消息相关功能等连接后才出现。
 
 ### 3.2 `ctx` 全貌
 
@@ -547,6 +551,8 @@ export default defineUiPlugin({
 - `meta`：可选对象，供工具目录/卡片使用。
 
 `settings.panels` 额外支持 `availableWhenDormant`：插件因未连接渠道而 dormant 时，连接设置面板仍然可达（否则医生无法重新连接）。
+
+任何插槽都可以声明 `requiresConnection: true`：插件已激活、但 `status().connected` 不为 `true` 时不渲染（例如 `followup` 的「消息记录」tab 和「患者消息」工具卡）。
 
 `chat.resultCards` / `proposal.renderers` / `legacyViews` 是 keyed slot，值必须是 `{ 类型: 加载函数 }`，也可直接写加载函数。`label` 只支持字符串。
 
