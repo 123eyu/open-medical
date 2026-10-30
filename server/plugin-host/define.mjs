@@ -31,6 +31,7 @@ export function definePlugin(spec = {}) {
     legacyProposalTypes = {},
     agendaSources = [],
     workflows = {},
+    contexts = {},
     api,
     events = {},
     hooks = {},
@@ -283,6 +284,28 @@ export function definePlugin(spec = {}) {
     normalizedWorkflows[workflowId] = Object.freeze({ ...hooks });
   }
 
+  // Task contexts: structured context a plugin page attaches to a question
+  // (for example a follow-up record). The plugin owns the guidance text; the
+  // client only picks the kind and supplies data. Kinds are namespaced by the
+  // plugin id so they cannot shadow core kinds.
+  check(isObject(contexts), "PLUGIN_SPEC", `插件 ${id} 的 contexts 必须是对象`);
+  const normalizedContexts = {};
+  for (const [kind, hooks] of Object.entries(contexts)) {
+    check(
+      /^[a-z][a-z0-9-]{1,47}$/.test(kind) && kind.startsWith(`${id}-`),
+      "PLUGIN_SPEC",
+      `插件 ${id} 的任务上下文 ${kind} 必须以 ${id}- 开头`,
+    );
+    check(isObject(hooks), "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 必须是对象`);
+    check(typeof hooks.guidance === "function", "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 缺少 guidance`);
+    check(hooks.validate === undefined || typeof hooks.validate === "function", "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 的 validate 必须是函数`);
+    check(hooks.workflow === undefined || (typeof hooks.workflow === "string" && PLUGIN_ID.test(hooks.workflow)), "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 的 workflow 无效`);
+    check(hooks.sticky === undefined || typeof hooks.sticky === "boolean", "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 的 sticky 必须是布尔值`);
+    for (const name of Object.keys(hooks))
+      check(["guidance", "validate", "workflow", "sticky"].includes(name), "PLUGIN_SPEC", `插件 ${id} 的任务上下文 ${kind} 含未知字段 ${name}`);
+    normalizedContexts[kind] = Object.freeze({ ...hooks });
+  }
+
   check(isObject(events), "PLUGIN_SPEC", `插件 ${id} 的 events 必须是对象`);
   for (const [name, listener] of Object.entries(events))
     check(
@@ -478,6 +501,7 @@ export function definePlugin(spec = {}) {
     legacyProposalTypes: Object.freeze(normalizedLegacyProposals),
     agendaSources: Object.freeze(normalizedSources),
     workflows: Object.freeze(normalizedWorkflows),
+    contexts: Object.freeze(normalizedContexts),
     api,
     events: Object.freeze({ ...events }),
     hooks: Object.freeze({ ...hooks }),

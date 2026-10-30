@@ -71,6 +71,7 @@ import "highlight.js/styles/github.css";
 import "./workbench/workbench.css";
 import "./demo-experience.css";
 import { WorkbenchHome, MEDICAL_WORKFLOWS } from "./workbench-home";
+import { TaskContextDetails, contextSummary } from "./task-context";
 import { CommandPalette, usePaletteHotkey } from "./command-palette";
 import { RichMessage } from "./workbench/message";
 import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
@@ -527,6 +528,19 @@ function App() {
   // 患者页一键入口带到下一次发送的显式工作流（如治疗方案评估），
   // 草稿模式下医生核对后手动发送时一并提交。
   const pendingWorkflowRef = useRef("");
+  // 页面入口附带的任务上下文（知识库限定、模板要求、档案快照等）：按草稿
+  // 保存，和问题一起提交，但不拼进输入框。undefined = 未设置（服务端沿用
+  // 上一轮）；null = 医生已移除（本轮不带、也不沿用）。
+  const draftTaskContexts = useRef(new Map());
+  const pendingContextsRef = useRef(undefined);
+  const [taskContexts, setTaskContextsState] = useState(undefined);
+  const setTaskContexts = (value, key = draftContext.current.key) => {
+    draftTaskContexts.current.set(key, value);
+    if (draftContext.current.key === key) {
+      pendingContextsRef.current = value;
+      setTaskContextsState(value);
+    }
+  };
   const setDraft = (value) => {
     const next = typeof value === "function" ? value(draftContext.current.text) : value;
     draftContext.current.text = next;
@@ -538,6 +552,8 @@ function App() {
     const text = questionDrafts.current.get(key) || "";
     draftContext.current = { key, text };
     pendingWorkflowRef.current = draftWorkflows.current.get(key) || "";
+    pendingContextsRef.current = draftTaskContexts.current.get(key);
+    setTaskContextsState(pendingContextsRef.current);
     setDraftValue(text);
   };
   const clearDraft = (key) => {
@@ -547,10 +563,11 @@ function App() {
       setDraftValue("");
     }
   };
-  const restoreDraft = (key, text, workflow) => {
+  const restoreDraft = (key, text, workflow, contexts) => {
     if (questionDrafts.current.get(key)) return;
     questionDrafts.current.set(key, text);
     draftWorkflows.current.set(key, workflow);
+    draftTaskContexts.current.set(key, contexts);
     if (draftContext.current.key === key) activateDraft(key);
   };
   const draftKeyFor = (data, runId) => data.patientId ? `${data.id}:${runId || "new"}` : data.id;
@@ -694,6 +711,14 @@ function App() {
   const questionRun = session?.runs.find(r => r.id === questionRunId);
   const questionIds = conversationRunIds(session?.runs, questionRunId);
   const canFollowQuestion = questionRun?.status === "completed" && questionRun?.mode !== "local";
+  // 与服务端 resolveTaskContexts 一致：未显式设置时，普通会话沿用最近一轮、
+  // 患者会话沿用所追问那一轮的任务上下文。
+  const inheritedContexts = (taskContexts !== undefined ? [] : (session?.patientId ? (canFollowQuestion ? questionRun?.policy?.contexts : null) : session?.runs?.at(-1)?.policy?.contexts) || []).filter((c) => c.sticky);
+  const shownContexts = taskContexts?.length ? taskContexts : inheritedContexts;
+  const removeTaskContext = (kind) => {
+    const next = shownContexts.filter((c) => c.kind !== kind);
+    setTaskContexts(next.length ? next : null);
+  };
   const chooseQuestion = (runId) => {
     rememberedQuestions.current.set(session.id, runId);
     setQuestionSelection({ sessionId: session.id, runId });
@@ -981,6 +1006,7 @@ function App() {
                               );
                               if (original) {
                                 pendingWorkflowRef.current = r.policy?.workflow || "";
+                                setTaskContexts(r.policy?.contexts?.length ? r.policy.contexts : undefined);
                                 setDraft(original.content);
                                 if (r.fileIds.some(id => !session.files.some(f => f.id === id))) setError("原任务的部分材料已删除，本次重试只载入仍存在的材料，请核对依据范围。");
                                 setFileSelection((prev) => ({
@@ -1019,6 +1045,7 @@ function App() {
     const text = override.message || draft.trim();
     if (!text || (loading && !refreshedSession)) return;
     const pendingWorkflow = override.workflow ?? pendingWorkflowRef.current;
+    const pendingContexts = override.context !== undefined ? override.context : pendingContextsRef.current;
     const modelEnabled = Boolean(config?.modelConfigured);
     if (["knowledge-answer", "literature-research"].includes(pendingWorkflow) && !modelEnabled) {
       setError(pendingWorkflow === "literature-research" ? "文献研究需要模型进行阅读和综合。请先配置模型，或在文献页使用查找论文。问题已保留。" : "知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
@@ -1043,7 +1070,7 @@ function App() {
         setNotice("补充要求已加入队列，助手会在下一步接收。");
       } catch (err) {
         setError(err.message);
-        restoreDraft(steerKey, text, pendingWorkflow);
+        restoreDraft(steerKey, text, pendingWorkflow, pendingContexts);
       }
       return;
     }
@@ -1090,6 +1117,7 @@ function App() {
           skills: pickedSkills,
           delegations: [],
           ...(pendingWorkflow ? { workflow: pendingWorkflow } : {}),
+          ...(pendingContexts !== undefined ? { context: pendingContexts } : {}),
           ...(current.patientId ? { conversationParentRunId: current.id === session?.id && canFollowQuestion ? questionRunId : null } : {}),
           ...override,
           sessionRevision: current.revision,
@@ -1150,7 +1178,7 @@ function App() {
       );
     } catch (err) {
       failed = true;
-      restoreDraft(submittedDraftKey, text, pendingWorkflow);
+      restoreDraft(submittedDraftKey, text, pendingWorkflow, pendingContexts);
       // 首次发送被 revision 冲突拒绝（并发上传/重命名晚到时）：重取快照
       // 自动重发一次，用户无需手动「刷新核对后再发送」。
       if (
@@ -1161,7 +1189,7 @@ function App() {
         const fresh = await api(`/api/sessions/${id}`).catch(() => null);
         if (fresh) {
           sendingRef.current.delete(id);
-          return await send(null, { ...override, message: text, workflow: pendingWorkflow }, fresh, true, { key: submittedDraftKey });
+          return await send(null, { ...override, message: text, workflow: pendingWorkflow, context: pendingContexts }, fresh, true, { key: submittedDraftKey });
         }
       }
       if (activeRef.current === id) {
@@ -1175,7 +1203,12 @@ function App() {
     } finally {
       if (!failed && !questionDrafts.current.get(submittedDraftKey)) {
         draftWorkflows.current.delete(submittedDraftKey);
-        if (draftContext.current.key === submittedDraftKey) pendingWorkflowRef.current = "";
+        draftTaskContexts.current.delete(submittedDraftKey);
+        if (draftContext.current.key === submittedDraftKey) {
+          pendingWorkflowRef.current = "";
+          pendingContextsRef.current = undefined;
+          setTaskContextsState(undefined);
+        }
       }
       sendingRef.current.delete(id);
       setRuns((prev) => ({ ...prev, [id]: { ...prev[id], busy: false } }));
@@ -1188,7 +1221,7 @@ function App() {
             rememberedQuestions.current.set(id, runId);
             setQuestionSelection({ sessionId: id, runId });
             const nextKey = draftKeyFor(data, runId);
-            if (failed) restoreDraft(nextKey, text, pendingWorkflow);
+            if (failed) restoreDraft(nextKey, text, pendingWorkflow, pendingContexts);
             activateDraft(nextKey);
           }
           setMeters((m) => ({ ...m, ...metersFromSession(data) }));
@@ -1367,9 +1400,11 @@ function App() {
         setQuestionSelection({ sessionId: data.id, runId: null });
         activateDraft(draftKeyFor(data, null));
       }
-      if (options.draft || options.workflow) {
+      if (options.draft !== undefined || options.workflow || options.context) {
         pendingWorkflowRef.current = options.workflow || "";
         draftWorkflows.current.set(draftContext.current.key, options.workflow || "");
+        // 新入口总是替换旧的附带上下文；没有上下文的入口不沿用上一轮的。
+        setTaskContexts(options.context ? [options.context].flat() : null);
       }
       setTab(options.tab || "materials");
       setArtifactId(
@@ -1381,20 +1416,20 @@ function App() {
       );
       setInspector(options.tab === "results" || options.tab === "materials");
       if (options.artifactId) setAcceptId(options.artifactId);
-      if (options.newQuestion) {
+      if (options.newQuestion || options.context) {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
-      if (options.draft) {
+      if (options.draft !== undefined && !options.submit) {
         setNotice("");
         setDraft(options.draft);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
       if (options.submit && options.draft?.trim()) {
-        await send(null, { message: options.draft.trim(), workflow: options.workflow || "", conversationParentRunId: null }, data);
+        await send(null, { message: options.draft.trim(), workflow: options.workflow || "", conversationParentRunId: null, ...(options.context ? { context: [options.context].flat() } : {}) }, data);
       }
     }
   };
-  const prepareTask = async ({ prompt, patient, title, skills = [] }) => {
+  const prepareTask = async ({ prompt, patient, title, skills = [], context }) => {
     const pending = homePending.current;
     homePending.current = null;
     setHomeFiles([]);
@@ -1425,7 +1460,7 @@ function App() {
     setQuestionSelection({ sessionId: data.id, runId: null });
     rememberedQuestions.current.set(data.id, null);
     activateDraft(draftKeyFor(data, null));
-    await send(null, { message: prompt, skills, conversationParentRunId: null }, data);
+    await send(null, { message: prompt, skills, conversationParentRunId: null, context: context?.length ? context : null }, data);
   };
   const modelEnabled =
     Boolean(config?.modelConfigured);
@@ -1645,7 +1680,7 @@ function App() {
                 </div> : <div className="loading-state" role="status">
                   <Loader2 className="spin" />正在连接本地运行时…
                 </div>}
-              </main>) : <Suspense fallback={<RouteFallback />}> {legacyView ? <SlotItem contribution={legacyView} view={view} config={config} onNavigate={navigate} onOpenTask={openTask} onOpenPatient={openPatient} onSettings={() => navigate("settings")} /> : view === "examples" && medical ? <LazyDemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <LazyAppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt)=>{setHomeDraft({prompt});setHomeKey((k)=>k+1);navigate("home");}} onPluginsChanged={plugins => setConfig(current => ({ ...current, plugins }))} /> : view === "projects" && config ? <LazyProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <LazyToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <LazyTaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
+              </main>) : <Suspense fallback={<RouteFallback />}> {legacyView ? <SlotItem contribution={legacyView} view={view} config={config} onNavigate={navigate} onOpenTask={openTask} onOpenPatient={openPatient} onSettings={() => navigate("settings")} /> : view === "examples" && medical ? <LazyDemoExperience entryHidden={Boolean(config?.demoEntryHidden)} preferenceBusy={demoPreferenceBusy} onEntryHiddenChange={setDemoEntryHidden} flows={MEDICAL_WORKFLOWS} onView={navigate} onPatient={openPatient} onOpenTask={openTask} onChanged={refreshList}/> : view === "settings" && config ? <LazyAppSettingsView demoPreferenceBusy={demoPreferenceBusy} onDemoEntryHiddenChange={setDemoEntryHidden} config={config} onModel={()=>setModal("model")} onDoctor={()=>setModal("doctor")} onProjects={()=>navigate("projects")} onAsk={(prompt, context)=>{setHomeDraft({prompt, context});setHomeKey((k)=>k+1);navigate("home");}} onPluginsChanged={plugins => setConfig(current => ({ ...current, plugins }))} /> : view === "projects" && config ? <LazyProjectDirectory purpose={projectTool} items={wsList} onOpen={openWorkspaces} onChanged={refreshList}/> : view === "tools" && config ? <LazyToolDirectory config={config} onModelSettings={()=>setModal("model")} onNavigate={navigate} onProjects={tool=>{setProjectTool(tool);navigate("projects");}} onNewTask={startNewTask}/> : view === "tasks" ? <LazyTaskDirectory sessions={sessions} workspaces={wsList} patients={patientsList} onTask={openTask} onProject={openWorkspaces}/> : view === "workspaces" ? (
             <LazyWorkspacesView
               key={`ws-${homeKey}-${workspaceTarget?.id || ""}-${workspaceTarget?.create || ""}`}
               config={config}
@@ -1969,7 +2004,19 @@ function App() {
                           </div>
                           <div className="message-content">
                             {m.role === "user" ? (
-                              m.content
+                              <>
+                                {m.content}
+                                {runOf(m.runId)?.policy?.contexts?.length > 0 && (
+                                  <span className="message-task-contexts">
+                                    {runOf(m.runId).policy.contexts.map((context) => (
+                                      <span className="skill-chip task-context" key={context.kind} title={contextSummary(context)}>
+                                        <Paperclip size={11} />
+                                        {runOf(m.runId).policy.contextInherited ? `沿用 · ${context.label}` : context.label}
+                                      </span>
+                                    ))}
+                                  </span>
+                                )}
+                              </>
                             ) : (
                               runOf(m.runId)?.artifacts?.find(a => cardForArtifact(a)) ? <><ResultCard key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => cardForArtifact(a)).id)} artifact={runOf(m.runId).artifacts.find(a => cardForArtifact(a))} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
                             )}
@@ -2151,6 +2198,20 @@ function App() {
                       </div>
                     </>
                   )}
+                  {shownContexts.length > 0 && (
+                    <div className="skill-chips task-context-chips" aria-label="随问题附带的上下文">
+                      {shownContexts.map((context) => (
+                        <span className="skill-chip task-context" key={context.kind} title={contextSummary(context)}>
+                          <Paperclip size={11} />
+                          {taskContexts === undefined ? `沿用 · ${context.label}` : context.label}
+                          <button type="button" aria-label={`移除附带上下文 ${context.label}`} onClick={() => removeTaskContext(context.kind)}>
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                      <TaskContextDetails contexts={shownContexts} />
+                    </div>
+                  )}
                   {Boolean(pickedSkills.length) && (
                     <div className="skill-chips">
                       {pickedSkills.map((id) => {
@@ -2188,6 +2249,8 @@ function App() {
                       placeholder={
                         canSteer
                           ? "任务执行中…输入补充要求可直接追加（Enter 发送）"
+                          : shownContexts[0]?.kind === "knowledge-topic" && !draft ? `输入关于「${shownContexts[0].scope?.topic}」的问题，将只在知识库「${shownContexts[0].scope?.collection}」中查找依据`
+                          : shownContexts.length && !draft ? `输入你的要求；发送时附带：${shownContexts.map((c) => c.label).join("、")}`
                           : session?.patientId ? (canFollowQuestion ? "继续追问这段回答，如：请解释第二点…" : "问这位患者的新问题，如：总结过往用药情况…")
                           : "输入问题或任务，如「血糖有点高，27 岁男生，怎么办」；输入 @ 可固定技能…"
                       }

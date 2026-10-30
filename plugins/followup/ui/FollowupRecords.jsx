@@ -375,16 +375,27 @@ export function FollowupRecords({
                   className="text-button"
                   onClick={async () => {
                     try {
+                      // 输入框只放请求；随访记录内容作为附带上下文随问题发送。
                       await onOpenTask(record.sessionId, {
-                        draft: `请基于本患者随访记录继续整理后续工作，保留来源，结论待医生复核。\n来源：随访记录 ${record.id}，登记时间 ${record.outcome.recordedAt}。\n联系结果：${outcomeLabels[record.outcome.status]}。\n已核对条目：${record.outcome.checkedItems.join("、") || "未勾选"}。\n医生登记原文：\n${record.outcome.note}${record.outcome.noRetryReason ? `；未另行安排：${record.outcome.noRetryReason}` : ""}\n临床反馈（医生登记）：${JSON.stringify(record.outcome.clinical || {})}\n后续补充（最近 3 条，共 ${record.outcome.addenda?.length || 0} 条）：${
-                          (record.outcome.addenda || [])
-                            .slice(-3)
-                            .map(
-                              (item) =>
-                                `${item.recordedAt}：${item.note.slice(0, 1000)}${item.note.length > 1000 ? "[节选]" : ""}`,
-                            )
-                            .join("\n") || "无"
-                        }\n下次随访：${record.outcome.nextDueAt || "未单独安排"}。`,
+                        draft: "请基于这条随访记录继续整理后续工作。",
+                        context: {
+                          kind: "followup-record",
+                          label: `随访记录 · ${String(record.outcome.recordedAt || "").slice(0, 10)}`,
+                          data: {
+                            recordId: record.id,
+                            recordedAt: record.outcome.recordedAt,
+                            outcome: outcomeLabels[record.outcome.status],
+                            checkedItems: record.outcome.checkedItems,
+                            note: record.outcome.note,
+                            noRetryReason: record.outcome.noRetryReason || undefined,
+                            clinical: record.outcome.clinical || {},
+                            addenda: (record.outcome.addenda || []).slice(-3).map((item) => ({
+                              recordedAt: item.recordedAt,
+                              note: item.note.length > 1000 ? `${item.note.slice(0, 1000)}[节选]` : item.note,
+                            })),
+                            nextDueAt: record.outcome.nextDueAt || "未单独安排",
+                          },
+                        },
                       });
                     } catch (err) {
                       setError(err.message);

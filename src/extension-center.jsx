@@ -46,7 +46,7 @@ export function ExtensionCenter({ onAsk, view = "workbench" }) {
     {e.kind === "skill" && (e.appliesTo?.length > 0 || e.quickTask) && <p className="muted">{[e.appliesTo?.length && `适用：${e.appliesTo.join("、")}`, e.quickTask && `首页快捷任务「${e.quickTask.title}」`].filter(Boolean).join(" · ")}</p>}
     {e.stats && <p className="muted">已产生 {e.stats.produced} 条{e.stats.produced ? `：完成 ${e.stats.done}、忽略 ${e.stats.dismissed}、待处理 ${e.stats.open}` : ""}{e.stats.lastAt ? ` · 最近 ${fmt(e.stats.lastAt)}` : ""}{e.stats.failures ? ` · 失败 ${e.stats.failures} 次` : ""}</p>}
     <footer className="toolbar-actions">
-      {!e.imported && <button className="secondary" onClick={() => onAsk?.(`请帮我修改${e.kind === "skill" ? "技能" : "规则"}「${e.name}」（编号 ${e.id}）：`)}><MessageSquarePlus size={14} />在对话中修改</button>}
+      {!e.imported && <button className="secondary" onClick={() => onAsk?.(`请帮我修改${e.kind === "skill" ? "技能" : "规则"}「${e.name}」：`, [{ kind: "workbench-extension", label: `${e.kind === "skill" ? "技能" : "规则"}：${e.name}`, scope: { extensionKind: e.kind === "skill" ? "skill" : "automation", extensionId: e.id } }])}><MessageSquarePlus size={14} />在对话中修改</button>}
       <button className="text-button" disabled={Boolean(busy)} onClick={() => act(e.id, () => api(`/api/extensions/${e.id}/status`, "POST", { status: e.status === "active" ? "disabled" : "active" }), e.status === "active" ? `已停用「${e.name}」，随时可以重新启用。` : `已重新启用「${e.name}」。`)}>{e.status === "active" ? "停用" : "启用"}</button>
       {e.kind === "skill" && (confirmDelete === e.id
         ? <span className="toolbar-actions"><button className="text-button" disabled={Boolean(busy)} onClick={() => act(`del-${e.id}`, async () => { await api(`/api/extensions/${e.id}`, "DELETE"); setConfirmDelete(null); }, `已删除「${e.name}」及其历史版本。`)}>确认删除</button><button className="text-button" onClick={() => setConfirmDelete(null)}>再想想</button></span>
@@ -90,7 +90,7 @@ export function ExtensionCenter({ onAsk, view = "workbench" }) {
       {data.suggestions.map((s) => <article key={s.id} className="ext-suggestion">
         <div><b>{s.title}</b><p className="muted">{s.evidence}</p></div>
         <div className="toolbar-actions">
-          <button className="primary" onClick={() => onAsk?.(`${s.prompt}\n\n（这是工作台的进化建议，提交时 suggestionId 填 ${s.id}）`)}>在对话中完善</button>
+          <button className="primary" onClick={() => onAsk?.(s.prompt, [{ kind: "workbench-extension", label: `进化建议：${s.title}`, scope: { extensionKind: s.kind === "skill" ? "skill" : "automation", suggestionId: s.id } }])}>在对话中完善</button>
           <button className="text-button" disabled={Boolean(busy)} onClick={() => act(s.id, () => api(`/api/extensions/suggestions/${s.id}`, "POST", { status: "dismissed" }), "已忽略这条建议。")}>不需要</button>
         </div>
       </article>)}

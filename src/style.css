@@ -5037,3 +5037,41 @@ nav.toolbox .session b{font-weight:500;}
 .artifact-review-summary { overflow-wrap:anywhere; margin-bottom:12px; }
 .artifact-review-summary p { margin:6px 0; line-height:1.7; }
 .artifact-review-summary small { display:block; color:var(--muted); line-height:1.6; }
+
+/* ---- task context chips: page entries attach context without polluting the question ---- */
+.skill-chip.task-context {
+  background: #eef2f6;
+  border-color: #d7dfe8;
+  color: #3d5368;
+  font-weight: 500;
+  max-width: 100%;
+}
+.skill-chip.task-context > svg { flex: none; }
+.task-context-details {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--muted);
+}
+.task-context-details summary { cursor: pointer; width: fit-content; }
+.task-context-details section { margin-top: 6px; }
+.task-context-details details { margin-top: 4px; }
+.task-context-details p { margin: 4px 0; }
+.task-context-details pre {
+  max-height: 220px;
+  overflow: auto;
+  margin: 4px 0 0;
+  padding: 8px;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.message-task-contexts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.hub-composer .task-context-chips { padding: 0 0 8px; }

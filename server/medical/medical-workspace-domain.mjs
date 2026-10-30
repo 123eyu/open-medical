@@ -7,6 +7,7 @@ import { GenericDomain, defineDomain } from "../core/domain-adapter.mjs";
 import { TOOL_DEFINITIONS, runTool, medicalToolAllowed } from "../medical-core.mjs";
 import { check } from "../errors.mjs";
 import { verifyKnowledgeAnswer, finalizeKnowledgeAnswer } from "./knowledge-answer.mjs";
+import { renderTaskContexts } from "./task-context.mjs";
 
 // Medical capability layered on the generic workspace kernel — on demand,
 // never by default for ordinary projects:
@@ -146,6 +147,7 @@ export function createMedicalWorkspaceDomain({
         workspace.patientId ? `当前已关联患者编号：${workspace.patientId}。可调用 read_patient_brief 读取最新档案；不必让医生重新输入已有病史。` : "",
         run.policy?.workflow === "patient-assessment" ? ASSESSMENT_GUIDANCE : "",
         workflow?.guidance?.(run) || "",
+        renderTaskContexts(run.policy?.contexts, { inherited: run.policy?.contextInherited, pluginHost }),
         run.policy?.presentation === "diagnostic" ? "辅助诊断结果请调用 present_diagnostic_review 整理支持依据、不同点和待补资料，不能把可能诊断当确诊。若只是评估治疗方案，继续用治疗方案评估工具。" : "",
         run.policy?.presentation === "answer" ? "本轮默认是普通问答：直接回答用户问题。只有用户明确要求整理材料、生成文档或修改档案时，才生成对应成果；不要为了展示界面额外创建草稿、目标清单或复核任务。" : "",
         run.policy?.workflow === "patient-intake" ? "" : doctor?.digest(),
@@ -154,7 +156,8 @@ export function createMedicalWorkspaceDomain({
           ? `用户通过 @ 明确固定了技能：${JSON.stringify(run.pinnedSkills)}。先 read_skill 阅读这些技能并按其执行，无需再自行选择模板。`
           : "",
         run.policy?.contextMode === "auto" ? "根据本轮问题决定需要哪些资料；先查看索引和相关档案，用 search_materials 或 semantic_material_search 定位，再用 read_source 读取相关原文。资料正文不会自动全部放入提示词。不要让医生勾选资料再发一次，也不要声称未读取的材料已核实。用户明确限定的时间、来源或内容范围优先。" : "",
-        run.policy ? `策略：${JSON.stringify(run.policy)}` : "",
+        // 任务上下文已在上方单独渲染（含资料边界说明），这里不重复。
+        run.policy ? `策略：${JSON.stringify({ ...run.policy, contexts: undefined, contextInherited: undefined })}` : "",
         sources.length
           ? `本次材料索引（可用工具读取全文）：${JSON.stringify(manifest)}\n这些资料在当前会话内可按需检索，索引不代表已读过全文。语义检索用 semantic_material_search，关键词检索用 search_materials，按行读原文用 read_source。检索工具未返回不代表材料中没有相关内容。`
           : "",

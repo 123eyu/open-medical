@@ -45,6 +45,14 @@ export default definePlugin({
   tablePrefix: ["follow_", "followup_", "chat_", "care_"],
   legacyApiPaths: FOLLOWUP_LEGACY_API_PATHS,
   prompt: "./prompt.md",
+  // 「基于记录继续任务」附带的随访记录；医生输入框里只有简短请求。
+  contexts: {
+    "followup-record": {
+      sticky: true,
+      guidance: () =>
+        "请基于资料中的本患者随访记录继续整理后续工作，保留来源（随访记录编号与登记时间），结论待医生复核。note、addenda 为医生登记原文，clinical 为医生登记的临床反馈；不自动发送患者消息。",
+    },
+  },
   agendaSources: followupAgendaSources,
   patientSummary(ctx, patientIds, options) {
     return ctx.plugins.followup?.service?.patientSummary(patientIds, options) || {};

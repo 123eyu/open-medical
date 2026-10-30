@@ -42,10 +42,20 @@ export function LiteratureView({ onOpenTask }) {
     try {
       if (mode === "research" || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(searchQuery)) {
         const session = await api("/api/sessions", "POST", { title: `${mode === "research" ? "文献研究" : "文献检索"} · ${searchQuery.slice(0, 40)}` });
-        const scope = [yearFrom && `起始年：${yearFrom}`, yearTo && `结束年：${yearTo}`].filter(Boolean).join('；');
+        // 医生的检索词原样作为提问；方式、来源和年份作为附带上下文。
         await onOpenTask(session.id, {
           submit: true,
-          draft: `${mode === "research" ? '请围绕这个问题查阅文献，比较研究证据并给出综合结论：' : '请查找以下主题的论文：'}\n${searchQuery}\n\n优先来源：${options.source || source}${scope ? `；${scope}` : ''}。`,
+          draft: searchQuery,
+          context: {
+            kind: "literature-search",
+            label: `${mode === "research" ? "文献研究" : "查找论文"} · ${options.source || source}${yearFrom || yearTo ? ` · ${yearFrom || "不限"}–${yearTo || "不限"}` : ""}`,
+            scope: {
+              mode: mode === "research" ? "research" : "search",
+              source: options.source || source,
+              ...(yearFrom ? { yearFrom } : {}),
+              ...(yearTo ? { yearTo } : {}),
+            },
+          },
           ...(mode === "research" ? { workflow: "literature-research" } : {}),
         });
         return;

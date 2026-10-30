@@ -1050,6 +1050,29 @@ export class PluginHost {
     return null;
   }
 
+  // Task context kinds declared by plugins. Like matchWorkflow, a disabled
+  // plugin's kind is still recognised so the request fails with
+  // PLUGIN_UNAVAILABLE instead of "unknown kind"; hooks are only callable while
+  // the plugin is enabled.
+  taskContext(kind) {
+    for (const record of this.ordered) {
+      const hooks = record.spec?.contexts?.[kind];
+      if (!hooks) continue;
+      const enabled = Boolean(record.enabled && record.available);
+      const ctx = enabled ? this.contextFor(record) : null;
+      return Object.freeze({
+        kind,
+        pluginId: record.id,
+        enabled,
+        workflow: hooks.workflow,
+        sticky: hooks.sticky === true,
+        validate: enabled && hooks.validate ? (context) => hooks.validate(ctx, context) : undefined,
+        guidance: enabled ? (context) => hooks.guidance(ctx, context) : undefined,
+      });
+    }
+    return null;
+  }
+
   // Detection is intentionally available for disabled plugins so a request can
   // fail with PLUGIN_UNAVAILABLE instead of silently running the wrong
   // workflow. Callers must use workflow(id) before invoking any hook.

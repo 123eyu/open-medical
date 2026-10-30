@@ -1,4 +1,6 @@
 import "./focused-workspace.css";
+import { TASK_TEMPLATES, taskTemplateContext } from "../shared/task-templates.mjs";
+import { contextSummary } from "./task-context";
 import { BackupStatus } from "./backup-panel";
 import { patientOptionLabel } from "./patient-labels";
 import { EXAMPLES as CUSTOMIZE_EXAMPLES, requestSettingsTab } from "./extension-center";
@@ -76,6 +78,8 @@ const materialSize = (bytes) =>
     : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`;
 const isImageName = (name) => /\.(png|jpe?g|webp)$/i.test(name || "");
 
+// 带 template 的任务：输入框只放简短请求，详细执行要求（调用哪些工具、
+// 输出结构、边界）作为任务上下文随问题发送，见 shared/task-templates.mjs。
 export const MEDICAL_WORKFLOWS = [
   {
     id: "intake-full",
@@ -84,8 +88,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "时间线、检验摘录与用药信息一次整理",
     output: "时间线 · 检验摘录 · 用药信息",
-    prompt:
-      "请对本次材料完成收治整理全流程，依次调用工具并保留原文出处：1) extract_clinical_timeline 生成时间线；2) extract_observations 摘录检验数值；3) 整理当前用药清单与过敏史，调用 medication_safety_check 做确定性核查；4) 在本次回复中说明实际缺失或冲突的信息，供用户直接补充或更正。所有产物均为参考草稿，材料缺失的信息标注「待补充」，不要推断诊断。",
+    template: "intake-full",
+    prompt: TASK_TEMPLATES["intake-full"].request,
   },
   {
     id: "timeline",
@@ -130,8 +134,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "口述或粘贴的零散信息，整理成结构化病历草稿",
     output: "门诊病历草稿 · 主诉/现病史/查体/计划",
-    prompt:
-      "请根据我口述或粘贴的就诊信息，生成一份结构化门诊病历草稿（主诉、现病史、既往史、查体、辅助检查、初步诊断意向、处理计划）。所有内容标注为待医生核对；材料中没有的信息明确写「待补充」，不要编造查体阳性发现或诊断。",
+    template: "record-draft",
+    prompt: TASK_TEMPLATES["record-draft"].request,
   },
   {
     id: "med-safety",
@@ -140,8 +144,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "整理已记录用药、过敏史和需要进一步核对的事项",
     output: "用药安全提示清单 · 内置规则（非穷尽）",
-    prompt:
-      "请从材料中提取当前用药清单和过敏史，调用 medication_safety_check 工具做确定性核查（过敏匹配、相互作用、重复用药），把工具结果整理成安全提示清单。内置规则集非穷尽，结果为提示性草稿，需药师或医生复核。",
+    template: "med-safety",
+    prompt: TASK_TEMPLATES["med-safety"].request,
   },
   {
     id: "patient-edu",
@@ -150,8 +154,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "把诊疗方案或说明书转成患者能懂的语言",
     output: "患教材料草稿 · 通俗解释",
-    prompt:
-      "请把材料中的诊疗方案/用药说明改写为患者能看懂的患教材料：避免专业术语、用类比解释、仅复述来源已有的用药时间与就医提示，缺失项列为待医生补充，不自行生成剂量、时间表或诊療计划。结尾注明「本材料为医生生成的参考，具体遵医嘱」。",
+    template: "patient-edu",
+    prompt: TASK_TEMPLATES["patient-edu"].request,
   },
   {
     id: "lab-read",
@@ -160,8 +164,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "对照报告内参考范围，标记异常项并生成解读草稿",
     output: "异常项清单 · 解读草稿",
-    prompt:
-      "请提取检验报告中的项目、结果、单位和报告内打印的参考范围，标记超出参考范围的项目，并逐项生成通俗解读草稿。只使用报告内信息，不引入外部判断；结论标注为待医生结合临床复核。",
+    template: "lab-read",
+    prompt: TASK_TEMPLATES["lab-read"].request,
   },
   {
     id: "discharge-summary",
@@ -170,8 +174,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "按出院小结结构整理住院经过、出院诊断与随访医嘱",
     output: "出院小结草稿 · 待医生签署",
-    prompt:
-      "请根据本次住院材料生成出院小结草稿，结构为：入院日期/出院日期（缺失标待补充）、入院诊断、出院诊断、住院经过摘要（调用 extract_clinical_timeline 提取关键节点）、出院时情况、出院带药（含用法，调用用药清单整理并做 medication_safety_check 核查）、出院注意事项与随访计划（复诊时间、复查项目）。全部为待医生核对签署的草稿，缺失信息标「待补充」。",
+    template: "discharge-summary",
+    prompt: TASK_TEMPLATES["discharge-summary"].request,
   },
   {
     id: "handoff",
@@ -180,8 +184,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "接班医生视角的患者要点与夜间注意清单",
     output: "交班要点 · 夜间观察清单",
-    prompt:
-      "请把材料整理为值班交班记录草稿：患者一览（床号/姓名/诊断，缺失标待补充）、目前问题清单（按优先级）、近 24 小时关键事件（调用 extract_clinical_timeline 与 extract_observations）、当前用药与需关注的相互作用（调用 medication_safety_check）、夜间需要重点观察的项目与预警信号、危急值与处理预案。面向接班医生，简洁条目化。",
+    template: "handoff",
+    prompt: TASK_TEMPLATES["handoff"].request,
   },
   {
     id: "decision-flow",
@@ -190,8 +194,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "从指南库提炼决策路径，生成可追溯出处的流程图",
     output: "mermaid 决策流程图 · 节点出处对照",
-    prompt:
-      "请针对指定病种生成诊疗决策流程图：先用 knowledge_search 检索诊断标准、分级与治疗决策条件并用 knowledge_read 核对原文，然后按 clinical-decision-flow 技能输出 mermaid 流程图与节点出处对照表。指南库未覆盖的分支标注「需补充来源」，不得凭记忆编造路径。",
+    template: "decision-flow",
+    prompt: TASK_TEMPLATES["decision-flow"].request,
   },
   {
     id: "adr-screen",
@@ -200,8 +204,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "clinical",
     desc: "用药与表现匹配可疑药物反应，附 Naranjo 因果评估",
     output: "可疑反应清单 · 因果评估建议",
-    prompt:
-      "请从材料整理当前用药清单和可疑临床表现，调用 assess_adverse_reaction 做不良反应匹配筛查；对每条疑似关联，建议医生用 medical_scale_calculate（scaleId=naranjo）完成 Naranjo 因果评估。结果为提示性筛查，不构成因果判定，需结合用药时间线核实。",
+    template: "adr-screen",
+    prompt: TASK_TEMPLATES["adr-screen"].request,
   },
   {
     id: "case-report",
@@ -210,8 +214,8 @@ export const MEDICAL_WORKFLOWS = [
     category: "research",
     desc: "按 CARE 框架从病例材料生成个案报告草稿",
     output: "个案报告草稿 · 结构化段落",
-    prompt:
-      "请基于病例材料（或病例库中引用的病例）按 CARE 框架生成个案报告草稿：标题建议、摘要（背景/病例要点/结论）、引言、病例资料（主诉/现病史/查体/辅助检查/诊疗经过，调用 extract_clinical_timeline 与 extract_observations 并保留出处）、讨论要点（提示可结合文献检索补充证据）、结论。全部为草稿，患者信息需脱敏，发表前需按目标期刊要求核对。",
+    template: "case-report",
+    prompt: TASK_TEMPLATES["case-report"].request,
   },
   {
     id: "evidence",
@@ -315,7 +319,9 @@ export function WorkbenchHome({
   const [skillMention, setSkillMention] = useState(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [pickedSkills, setPickedSkills] = useState(draftState.pickedSkills ?? []);
-  useEffect(() => { onDraftChange?.({prompt, patientId, projectId, flowId, pickedSkills}); }, [prompt, patientId, projectId, flowId, pickedSkills]);
+  // 设置页等入口带来的任务上下文（如要修改的技能编号），以标签展示，随任务提交。
+  const [homeContexts, setHomeContexts] = useState(draftState.context ?? []);
+  useEffect(() => { onDraftChange?.({prompt, patientId, projectId, flowId, pickedSkills, context: homeContexts}); }, [prompt, patientId, projectId, flowId, pickedSkills, homeContexts]);
   useEffect(() => { if (!followupActive && flowId === "followup") setFlowId(""); }, [followupActive, flowId]);
   const inputRef = useRef(null);
   // The doctor's own templates (extension center) and learned ordering.
@@ -432,6 +438,7 @@ export function WorkbenchHome({
         patient: selectedPatient,
         title: selectedFlow?.title || prompt.trim().slice(0, 32),
         skills: pickedSkills,
+        context: [...homeContexts, selectedFlow?.template && taskTemplateContext(selectedFlow.template)].filter(Boolean),
       });
       setPickedSkills([]);
       setSkillMention(null);
@@ -547,6 +554,19 @@ export function WorkbenchHome({
                 </button>
               )}
             </div>
+            {homeContexts.length > 0 && !isFollowup && (
+              <div className="skill-chips task-context-chips" aria-label="随任务附带的上下文">
+                {homeContexts.map((context) => (
+                  <span className="skill-chip task-context" key={context.kind} title={contextSummary(context)}>
+                    <Paperclip size={11} />
+                    {context.label}
+                    <button type="button" aria-label={`移除附带上下文 ${context.label}`} onClick={() => setHomeContexts((prev) => prev.filter((c) => c.kind !== context.kind))}>
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             {taskType === "medical" && uploading && !isFollowup && (
               <p className="attach-progress" role="status">
                 <Loader2 size={13} className="spin" />

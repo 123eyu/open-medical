@@ -16,6 +16,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { AppError, check, string } from "./errors.mjs";
 import { medicalPolicy } from "../shared/medical.mjs";
+import { resolveTaskContexts, normalizeTaskContexts, taskContextIntentText, taskContextWorkflow, taskContextSource } from "./medical/task-context.mjs";
 
 // Classify immediately; the date remains a separate, reviewable suggestion.
 const materialSuggestions = (name, text) => {
@@ -802,9 +803,20 @@ export class SessionBridge {
     const message = string(body.message, "任务", 200000);
     const requestedMode = body.mode || "local";
     const mode = resolveMode(requestedMode);
-    const policy = medicalPolicy(message);
+    // 页面入口附带的任务上下文（检索限定、模板要求、档案快照等）不进入
+    // 医生可见的消息；分类器仍看到入口的任务要求，路由与旧版拼接文本一致。
+    const contextOptions = { pluginHost: this.pluginHost };
+    const { contexts, inherited } = resolveTaskContexts(body, w, contextOptions);
+    const intentText = taskContextIntentText(message, contexts, contextOptions);
+    const workflowRequest = body.workflow || taskContextWorkflow(contexts, contextOptions);
+    check(!["knowledge-answer", "literature-research"].includes(workflowRequest) || mode !== "local", "MODEL_REQUIRED", workflowRequest === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
+    const policy = medicalPolicy(intentText);
+    if (contexts.length) {
+      policy.contexts = contexts;
+      if (inherited) policy.contextInherited = true;
+    }
     if (body.contextMode === "auto") policy.contextMode = "auto";
-    if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
+    if (["patient-intake", "knowledge-answer", "literature-research"].includes(workflowRequest)) policy.workflow = workflowRequest;
     if (body.requestId !== undefined)
       check(
         !this.service.store.hasRequest(id, body.requestId),
@@ -851,6 +863,7 @@ export class SessionBridge {
           sources: [
             ...this.buildSources(w, message, this.selectMaterials(w, body.fileIds, body.contextMode)),
             ...(policy.intent === "medication_safety" && w.patientId && this.patientRecord ? [this.localPatientSource(w.patientId)] : []),
+            ...[taskContextSource(contexts, { ...contextOptions, inherited })].filter(Boolean),
           ],
           fileIds: this.selectMaterials(w, body.fileIds, body.contextMode),
           requestId: body.requestId || randomUUID(),
@@ -869,13 +882,13 @@ export class SessionBridge {
       412,
     );
     // 患者页一键入口可显式指定评估工作流，不再依赖草稿文本命中正则。
-    const assessment = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && (body.workflow === "patient-assessment" || assessmentQuestion(message)));
-    const detectedWorkflow = w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) ? this.pluginHost?.matchWorkflow?.(message, policy) : null;
+    const assessment = Boolean(w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) && (body.workflow === "patient-assessment" || assessmentQuestion(intentText)));
+    const detectedWorkflow = w.patientId && !["patient-intake", "literature-research"].includes(policy.workflow) ? this.pluginHost?.matchWorkflow?.(intentText, policy) : null;
     check(!detectedWorkflow || detectedWorkflow.enabled, "PLUGIN_UNAVAILABLE", `任务所属插件未启用：${detectedWorkflow?.pluginId || ""}`, 409);
     const similarCases = Boolean(detectedWorkflow);
     if (assessment) policy.workflow = "patient-assessment";
-    if (detectedWorkflow) detectedWorkflow.workflow.applyPolicy(policy, message);
-    policy.presentation = policy.workflow === "literature-research" ? "literature" : taskPresentation(message);
+    if (detectedWorkflow) detectedWorkflow.workflow.applyPolicy(policy, intentText);
+    policy.presentation = policy.workflow === "literature-research" ? "literature" : taskPresentation(intentText);
     const focused = assessment || similarCases || ["diagnostic", "literature", "calculator"].includes(policy.presentation);
     const fileIds = this.selectMaterials(w, body.fileIds, body.contextMode);
     const sources = this.buildSources(w, message, fileIds);
@@ -884,7 +897,7 @@ export class SessionBridge {
       revision: body.sessionRevision ?? body.revision ?? w.revision,
       message,
       externalConsent: true,
-      completion: body.completion ?? (focused ? {kind:"answer"} : requestsMedicalDeliverable(message) ? {kind:"execution"} : undefined),
+      completion: body.completion ?? (focused ? {kind:"answer"} : requestsMedicalDeliverable(intentText) ? {kind:"execution"} : undefined),
       requestId: body.requestId,
       thinking: body.thinking,
       skills: body.skills,
@@ -1428,7 +1441,10 @@ export class SessionBridge {
         const message = string(body.message, "任务", 200000);
         const mode = resolveMode(body.mode);
         check(!["knowledge-answer", "literature-research"].includes(body.workflow) || mode !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
-        const policy = medicalPolicy(message);
+        // 后台消费方只接受显式上下文，不沿用上一轮。
+        const contexts = body.context === undefined ? [] : normalizeTaskContexts(body.context, { pluginHost: bridge.pluginHost });
+        const policy = medicalPolicy(taskContextIntentText(message, contexts, { pluginHost: bridge.pluginHost }));
+        if (contexts.length) policy.contexts = contexts;
         if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
         const fileIds = bridge.selectMaterials(w, body.fileIds || []);
         const sources = bridge.buildSources(w, message, fileIds);

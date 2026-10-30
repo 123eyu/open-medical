@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, BookOpen, Loader2 } from "lucide-react";
 import { api } from "./agent-runtime";
+import { DEMO_CONTEXT } from "./task-context";
+import { taskTemplateContext } from "../shared/task-templates.mjs";
 import { usePluginActive } from "./plugin-slots";
 import {
   DEMO_SCENARIOS,
@@ -38,12 +40,13 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
     const question = scenario.question || flow?.prompt;
     if ((ask || (!scenario.view && !scenario.tab && !scenario.task)) && question) {
       if (scenario.patient !== undefined && (!patient || patient.archived)) throw new Error("这位示例患者已归档，请先在患者列表恢复，或删除示例后重新准备。");
-      await onOpenTask(scenario.patient !== undefined ? patient.sessionId : data.sessionId, { draft: `这是虚构示例体验。${question}`, tab: "materials", newQuestion: true });
+      // 「虚构示例」说明作为附带上下文，不拼进医生的问题。
+      await onOpenTask(scenario.patient !== undefined ? patient.sessionId : data.sessionId, { draft: question, tab: "materials", newQuestion: true, context: [DEMO_CONTEXT, ...(scenario.question ? [] : [flow?.template && taskTemplateContext(flow.template)].filter(Boolean))] });
     } else if (scenario.view) onView(scenario.view);
     else if (scenario.tab) {
       if (!patient || patient.archived) throw new Error("示例患者已归档，请先在患者列表恢复，或删除示例后重新准备。");
       onPatient({ id: patient.id, tab: scenario.tab });
-    } else await onOpenTask(data.sessionId, { draft: question, tab: "materials" });
+    } else await onOpenTask(data.sessionId, { draft: question, tab: "materials", context: [DEMO_CONTEXT, ...(scenario.question ? [] : [flow?.template && taskTemplateContext(flow.template)].filter(Boolean))] });
     const next = [...new Set([...visited, scenario.id])];
     setVisited(next);
     try { localStorage.setItem("omw-demo-visited", JSON.stringify(next)); } catch { /* optional progress */ }

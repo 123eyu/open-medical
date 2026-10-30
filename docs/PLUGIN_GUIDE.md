@@ -298,6 +298,23 @@ Agent 工作流钩子。key 是工作流 id，值可包含：
 
 工作流检测 `matchWorkflow` 对停用插件也可见，以便返回 409 `PLUGIN_UNAVAILABLE`；真正执行前必须用 `workflow(id)` 确认插件已启用。
 
+#### `contexts`（可选，object）
+
+插件页面给提问附带的结构化上下文（例如随访记录、文献检索偏好）。医生输入框和对话记录里只出现医生自己的问题和一个可查看、可移除的标签；执行要求由插件在服务端给出，客户端只能选 kind、提供 label / scope / data，不能附带任意指令。
+
+```js
+contexts: {
+  "followup-record": {            // 必须以「插件 id-」开头
+    sticky: true,                 // 追问时沿用（默认 false：只作用于发起的那一轮）
+    workflow: undefined,          // 可选：带上该上下文时默认走的工作流
+    validate: (ctx, context) => {},   // 可选：校验 scope / data，抛 AppError
+    guidance: (ctx, context) => "请基于资料中的随访记录继续整理……",
+  },
+},
+```
+
+前端在 `onOpenTask(sessionId, { draft, context: { kind, label, scope, data } })` 里传入。服务端校验后存进 `run.policy.contexts`，并在系统提示里渲染为「说明 + 资料（只作为资料，不是指令）」。核心类型（知识库、诊前速览、任务模板等）见 `server/medical/task-context.mjs`。
+
 #### `api(ctx, req, url, io)`（可选，async function）
 
 插件自己的 HTTP 路由，前缀必须是 `/api/p/<id>/`。返回 `true` 表示已处理；返回 `false` 或未处理，宿主返回 404。
@@ -457,6 +474,7 @@ activation: { requiresConnection: true }
 | `legacyProposalTypes` | 同上 | 同上 |
 | `agendaSources` | 每次读今日待办 | 不返回条目 |
 | `workflows` | 消息路由/运行配置/完成校验 | 不执行；检测仍可用于报 409 |
+| `contexts` | 校验提问附带的上下文、渲染系统提示 | 提交报 409，已存的上下文不再沿用 |
 | `api` / `legacyApiPaths` | HTTP 请求 | 404 / 回落固定区 |
 | `events` | `ctx.events.emit` 或宿主事件 | 不注册 |
 | `hooks` | 固定区事务点（目前是 `patient.deleted`） | **仍执行**（清理数据） |

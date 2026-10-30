@@ -1,3 +1,4 @@
+import { check } from "../../server/errors.mjs";
 import { definePlugin } from "../../server/plugin-host/define.mjs";
 import { LiteratureService, literatureTools } from "./server/literature.mjs";
 import {
@@ -90,6 +91,16 @@ export default definePlugin({
         definition: plugin.definition,
         execute: plugin.execute,
       });
+  },
+  // 文献页提交的检索偏好（来源、年份）；医生的问题原样作为用户消息。
+  contexts: {
+    "literature-search": {
+      validate: (_ctx, context) => {
+        check(["search", "research"].includes(context.scope.mode), "INVALID_INPUT", "文献上下文的 mode 无效");
+      },
+      guidance: (_ctx, { scope }) =>
+        `${scope.mode === "research" ? "请围绕医生的问题查阅文献，比较研究证据并给出综合结论。" : "请查找医生所述主题的论文。"}${scope.source ? `优先来源：${JSON.stringify(scope.source)}。` : ""}${scope.yearFrom || scope.yearTo ? `发表年份：${scope.yearFrom || "不限"}–${scope.yearTo || "不限"}。` : ""}`,
+    },
   },
   workflows: {
     "literature-research": {
