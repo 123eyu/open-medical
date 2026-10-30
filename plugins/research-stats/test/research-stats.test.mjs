@@ -65,16 +65,12 @@ test("research-stats：旧统计接口迁移前后响应一致", async (t) => {
 test("research-stats：停用后接口 404、插件工具不注册，固定区 cohort_profile 保留", async (t) => {
   const app = await startTestServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
-  const before = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const before = app.server.sessionBridge.toolNames();
   assert.ok(before.includes("stats_test"));
   assert.ok(before.includes("sample_size"));
   assert.ok(before.includes("deidentify_csv"));
   assert.ok(
-    app.server.runtime.toolDefinitions.some(
-      (tool) => tool.function.name === "cohort_profile",
-    ),
+    app.server.sessionBridge.toolNames().includes("cohort_profile"),
     "cohort_profile 是固定区全局助手能力，不能被插件带走",
   );
 
@@ -89,15 +85,11 @@ test("research-stats：停用后接口 404、插件工具不注册，固定区 c
     body: { sessionId: "missing", sourceId: "missing" },
   });
   assert.equal(route.status, 404);
-  const after = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const after = app.server.sessionBridge.toolNames();
   assert.ok(!after.includes("stats_test"));
   assert.ok(!after.includes("sample_size"));
   assert.ok(!after.includes("deidentify_csv"));
   assert.ok(
-    app.server.runtime.toolDefinitions.some(
-      (tool) => tool.function.name === "cohort_profile",
-    ),
+    app.server.sessionBridge.toolNames().includes("cohort_profile"),
   );
 });

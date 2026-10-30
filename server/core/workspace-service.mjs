@@ -450,6 +450,8 @@ export class WorkspaceService {
     }).snapshot();
     return publicWorkspace(
       this.store.create({
+        // Only app-managed session workspaces may keep a caller-chosen id.
+        ...(body.kind === "session" && body.id ? { id: body.id } : {}),
         title: string(body.title || "新工作区", "工作区名称", 100),
         root: files.root,
         permissions,

@@ -154,13 +154,10 @@ test("从已停用数据库启动：随访工具不注册、没有后台轮询�
   assert.ok(!service.chatFollowups.timer);
   assert.ok(!service.care.timer);
 
-  const toolNames = second.server.pluginHost
-    .legacyToolPlugins()
-    .map((plugin) => plugin.definition.function.name);
+  const toolNames = second.server.sessionBridge.toolNames();
   assert.ok(!toolNames.includes("followup_create_propose"));
   assert.ok(!toolNames.includes("followups_overview"));
   assert.ok(!toolNames.includes("care_overview"));
-  assert.equal(second.server.runtime.toolPlugins.has("followup_create_propose"), false);
   assert.equal((await second.request("/api/followup-plans")).status, 404);
   assert.equal((await second.request("/api/agent/health")).status, 200);
 });

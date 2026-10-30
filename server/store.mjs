@@ -1,5 +1,4 @@
 import { initializeReviewColumns } from "./medical/review-schema.mjs";
-import { sqliteTransaction } from "./sqlite-transaction.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
   mkdirSync,
@@ -10,8 +9,8 @@ import {
   unlinkSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
-import { AppError, check, identifier } from "./errors.mjs";
+import { randomUUID } from "node:crypto";
+import { AppError, check } from "./errors.mjs";
 
 // Single local user; parameterized queries + SQLite transactions prevent lost updates.
 export class Store {
@@ -139,24 +138,6 @@ export class Store {
           "数据库版本不兼容；未修改既有会话，请使用匹配的运行时",
           503,
         );
-      // Interrupted turns remain visible after restart, never falsely complete.
-      for (const session of this.list()) {
-        if (session.runs.some((r) => r.status === "running"))
-          this.mutate(session.id, (s) => {
-            for (const r of s.runs.filter((r) => r.status === "running")) {
-              r.status = "interrupted";
-              r.error = "服务重新启动，执行已中断。";
-              r.endedAt = new Date().toISOString();
-              for (const child of r.children || []) {
-                if (["running", "queued"].includes(child.status)) {
-                  child.status = "interrupted";
-                  child.error = "服务重启，子代理执行已中断";
-                  child.endedAt = r.endedAt;
-                }
-              }
-            }
-          });
-      }
     } catch (error) {
       try {
         this.db?.close();
@@ -181,115 +162,8 @@ export class Store {
       this.releaseLock();
     }
   }
-  list() {
-    return this.db
-      .prepare("SELECT data FROM sessions")
-      .all()
-      .map((row) => JSON.parse(row.data))
-      .sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-  get(id) {
-    const row = this.db.prepare("SELECT data FROM sessions WHERE id=?").get(id);
-    if (!row) throw new AppError("NOT_FOUND", "会话不存在", 404);
-    return JSON.parse(row.data);
-  }
-  create({
-    id = randomUUID(),
-    title = "新的医疗工作",
-    files = [],
-    copiedFrom,
-    patientId = null,
-  } = {}) {
-    const session = {
-      id,
-      title,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      revision: 0,
-      messages: [],
-      files,
-      ...(copiedFrom ? { copiedFrom } : {}),
-      ...(patientId ? { patientId } : {}),
-      artifacts: [],
-      runs: [],
-    };
-    try {
-      this.db
-        .prepare("INSERT INTO sessions VALUES (?,?)")
-        .run(id, JSON.stringify(session));
-    } catch (e) {
-      if (this.db.prepare("SELECT id FROM sessions WHERE id=?").get(id))
-        throw new AppError("CONFLICT", "会话已存在", 409);
-      throw e;
-    }
-    this.audit(id, "session.created");
-    return session;
-  }
-  mutate(id, update) {
-    return sqliteTransaction(this.db, () => {
-      const data = this.get(id);
-      update(data);
-      data.revision++;
-      data.updatedAt = Date.now();
-      this.db
-        .prepare("UPDATE sessions SET data=? WHERE id=?")
-        .run(JSON.stringify(data), id);
-      return data;
-    });
-  }
-  delete(id) {
-    this.get(id);
-    this.db.prepare("DELETE FROM sessions WHERE id=?").run(id);
-    this.db.prepare("DELETE FROM audit WHERE session_id=?").run(id);
-    this.db.prepare("DELETE FROM event_log WHERE session_id=?").run(id);
-    this.db.prepare("DELETE FROM context_archives WHERE session_id=?").run(id);
-    if (
-      this.db
-        .prepare("SELECT name FROM sqlite_master WHERE name='scheduled_jobs'")
-        .get()
-    )
-      this.db.prepare("DELETE FROM scheduled_jobs WHERE session_id=?").run(id);
-  }
-  // Compressed-out conversation history and oversized tool results are
-  // archived verbatim so the model can page them back through
-  // read_context_archive; archives die with their session.
-  archive(sessionId, runId, data) {
-    const serialized = JSON.stringify(data);
-    const archiveId = randomUUID();
-    const hash = createHash("sha256").update(serialized).digest("hex");
-    this.db
-      .prepare(
-        "INSERT INTO context_archives(id,session_id,run_id,hash,created_at,data) VALUES (?,?,?,?,?,?)",
-      )
-      .run(archiveId, sessionId, runId, hash, new Date().toISOString(), serialized);
-    return { id: archiveId, hash, chars: serialized.length };
-  }
-  readArchive(sessionId, archiveId, offset = 0, limit = 8000) {
-    identifier(archiveId);
-    check(
-      Number.isSafeInteger(offset) &&
-        offset >= 0 &&
-        Number.isInteger(limit) &&
-        limit > 0 &&
-        limit <= 16000,
-      "INVALID_INPUT",
-      "归档读取范围无效",
-    );
-    const row = this.db
-      .prepare(
-        "SELECT data FROM context_archives WHERE id=? AND session_id=?",
-      )
-      .get(archiveId, sessionId);
-    check(row, "NOT_FOUND", "归档不存在或不属于当前会话", 404);
-    const chunk = row.data.slice(offset, offset + limit);
-    return {
-      archiveId,
-      total: row.data.length,
-      offset,
-      hasMore: offset + limit < row.data.length,
-      chunk,
-    };
-  }
+  // The sessions table only holds sessions from older versions until
+  // SessionBridge.migrateLegacySessions() moves them into session workspaces.
   audit(sessionId, action, detail = {}) {
     this.db
       .prepare(

@@ -41,9 +41,7 @@ test("drg：旧测算接口迁移前后响应一致", async (t) => {
 test("drg：停用后接口 404，分组工具不注册", async (t) => {
   const app = await startTestServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
-  const before = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const before = app.server.sessionBridge.toolNames();
   assert.ok(before.includes("drg_group"));
   assert.ok(before.includes("drg_batch_analyze"));
 
@@ -57,9 +55,7 @@ test("drg：停用后接口 404，分组工具不注册", async (t) => {
     const response = await app.request(path, calls[path]);
     assert.equal(response.status, 404, path);
   }
-  const after = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const after = app.server.sessionBridge.toolNames();
   assert.ok(!after.includes("drg_group"));
   assert.ok(!after.includes("drg_batch_analyze"));
 });

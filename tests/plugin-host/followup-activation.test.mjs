@@ -38,7 +38,7 @@ test("未连接患者渠道：随访计划与提醒照常可用，患者消息�
     { description: "followup lifecycle started without a channel" },
   );
 
-  const tools = app.server.runtime.toolDefinitions.map((item) => item.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(tools.includes("followup_create_propose"));
   assert.ok(tools.includes("followups_overview"));
   assert.equal(tools.includes("care_overview"), false);
@@ -94,7 +94,7 @@ test("active：工具、待办来源、提示和后台循环随连接恢复", as
     () => app.server.pluginHost.pluginServices.followup.started === true,
     { description: "followup lifecycle started" },
   );
-  const tools = app.server.runtime.toolDefinitions.map((item) => item.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(tools.includes("followup_create_propose"));
   assert.ok(tools.includes("care_overview"));
 

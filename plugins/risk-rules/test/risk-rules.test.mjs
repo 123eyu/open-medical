@@ -114,9 +114,7 @@ test("risk-rules：停用后风险接口和待办来源消失，用药安全仍�
   assert.equal(after.body.counts.risk, undefined);
   assert.ok(!after.body.items.some((item) => item.kind === "risk"));
 
-  const tools = app.server.runtime.toolDefinitions.map(
-    (tool) => tool.function.name,
-  );
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(tools.includes("review_medication_safety"));
   assert.ok(
     (await app.request(`/api/patients/${patient.id}/brief`)).body.counts

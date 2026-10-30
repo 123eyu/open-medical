@@ -68,9 +68,12 @@ export class WorkspaceStore {
         });
     }
   }
-  create({ title = "新工作区", root, permissions, kind, patientId }) {
+  // An explicit id is only for session ids that already exist elsewhere
+  // (patients, schedules, chat peers) when old sessions are migrated, and for
+  // API callers that choose a session id. Duplicates fail at INSERT.
+  create({ id = randomUUID(), title = "新工作区", root, permissions, kind, patientId }) {
     const workspace = {
-      id: randomUUID(),
+      id,
       title,
       root,
       permissions,

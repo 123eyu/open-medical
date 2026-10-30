@@ -2,7 +2,7 @@
 
 0.4 补充：已新增独立通用内核、工作区、文件审批、历史分支、子任务与计划 API；详细能力与限制以 [GENERIC_RUNTIME.md](docs/GENERIC_RUNTIME.md) 为准。下面的表格与医疗接口说明保留历史参考，不能将其中的未实现项或实现项直接当作最新全量验收。
 
-本项目运行的是自研 `MedicalRuntime`。Pi、Hermes、DeepSeek Harness 是设计参考，不是被完整嵌入的产品。没有“切换到 Pi/Hermes 内核”的伪开关，也没有全量 SDK、CLI、扩展或协议兼容承诺。
+本项目运行的是自研统一内核（`server/core` 的 WorkspaceService + `server/medical/medical-workspace-domain.mjs` 医疗叠层；2026-10-30 起旧 `MedicalRuntime` 已移除，所有会话只走这一套引擎）。Pi、Hermes、DeepSeek Harness 是设计参考，不是被完整嵌入的产品。没有“切换到 Pi/Hermes 内核”的伪开关，也没有全量 SDK、CLI、扩展或协议兼容承诺。
 
 | 参考      | 已采用                                                               | 未实现 / 未验证                                   |
 | --------- | -------------------------------------------------------------------- | ------------------------------------------------- |
@@ -81,4 +81,4 @@ OpenAI 的 [Codex CLI](https://github.com/openai/codex) 是 Apache-2.0 开源项
 
 ## 医疗编排扩展
 
-新增 `delegate_medical_task`、`sandbox_python` 模型工具和 `/api/sessions/:id/schedules` 持久计划接口。任务请求支持 `delegations: ["timeline", "observations", "medication"]`；本地请求可传 `sandboxCode` 执行隔离计算。具体字段、取消语义、资料绑定与平台限制见 [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)。
+`/api/sessions/:id/schedules` 持久计划接口保留；本地请求可传 `sandboxCode` 执行隔离计算。旧引擎的 `delegate_medical_task`、`sandbox_python` 模型工具和 `delegations` 字段已随旧引擎移除（计划任务只接受空的 `delegations`）。具体字段、取消语义、资料绑定与平台限制见 [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)。

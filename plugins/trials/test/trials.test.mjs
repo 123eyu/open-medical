@@ -65,9 +65,7 @@ test("trials：工具、提案类型和工作流由插件注册", async (t) => {
   t.after(() => app.close());
   const [patient] = await app.patients();
   const trial = (await app.request("/api/trials")).body.trials[0];
-  const tools = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   for (const name of [
     "trial_list",
     "trial_candidates",
@@ -120,9 +118,7 @@ test("trials：停用后接口 404、工具和工作流不注册、待办来源�
   assert.equal(disabled.status, 200);
 
   assert.equal((await app.request("/api/trials")).status, 404);
-  const after = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const after = app.server.sessionBridge.toolNames();
   assert.ok(!after.some((name) => name.startsWith("trial_")));
   assert.equal(app.server.pluginHost.workflow("trial-eligibility"), null);
   assert.equal(app.server.pluginHost.proposalHandler("trial-enrollment"), null);

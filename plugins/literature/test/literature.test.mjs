@@ -96,9 +96,7 @@ test("literature：停用后接口 404、工具不注册，数据仍在", async 
   const app = await start();
   t.after(() => app.close());
   assert.ok(
-    app.server.pluginHost
-      .legacyToolPlugins()
-      .some((tool) => tool.definition.function.name === "literature_search"),
+    app.server.sessionBridge.toolNames().includes("literature_search"),
   );
   const disabled = await app.request("/api/plugins/literature", {
     method: "PUT",
@@ -110,9 +108,7 @@ test("literature：停用后接口 404、工具不注册，数据仍在", async 
     "/api/literature/search?query=hypertension&source=pubmed&limit=2",
   );
   assert.equal(route.status, 404);
-  const tools = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(!tools.includes("literature_search"));
   assert.ok(!tools.includes("literature_fetch"));
   const list = await app.request("/api/plugins");

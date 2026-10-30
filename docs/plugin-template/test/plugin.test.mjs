@@ -27,9 +27,7 @@ test("__PLUGIN_ID__：模板插件可加载、迁移并注册工具", async (t) 
       .get().n,
     1,
   );
-  const tools = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(tools.includes("__PLUGIN_TOOL___notes_list"));
 
   const ping = await app.request("/api/p/__PLUGIN_ID__/ping");

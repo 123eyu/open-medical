@@ -1110,16 +1110,14 @@ test("pain-score：加载、迁移、注册工具、停用后 404", async (t) =>
     ).get().n,
     1,
   );
-  assert.ok(app.server.pluginHost.legacyToolPlugins()
-    .some((tool) => tool.definition.function.name === "pain_score_list"));
+  assert.ok(app.server.sessionBridge.toolNames().includes("pain_score_list"));
 
   const disabled = await app.request("/api/plugins/pain-score", {
     method: "PUT", body: { enabled: false },
   });
   assert.equal(disabled.status, 200);
   assert.equal((await app.request("/api/p/pain-score/records")).status, 404);
-  assert.ok(!app.server.pluginHost.legacyToolPlugins()
-    .some((tool) => tool.definition.function.name === "pain_score_list"));
+  assert.ok(!app.server.sessionBridge.toolNames().includes("pain_score_list"));
 });
 ```
 

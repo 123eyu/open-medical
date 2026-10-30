@@ -40,7 +40,7 @@ flowchart TD
 - `server/core/workspace-store.mjs`：`agent_workspaces` / `agent_events`，与患者域分开；持久化消息、执行、修改提案、计划。重启标记中断，不自动重放可能产生副作用的动作。
 - `server/core/workspace-files.mjs`：相对路径解析、拒绝目录越界和符号链接、受保护配置/数据过滤、文本读取、检索、版本哈希和修改提案。
 - `server/core/workspace-scheduler.mjs`：单次或固定分钟间隔任务，绑定目录授权及模型身份；发生变化时暂停。执行期间不重叠，错过多个周期只补一次。
-- `server/domains/medical.mjs`：医疗系统规则、策略、材料来源和业务工具入口；医疗复核、患者与随访继续由医疗适配器管理。
+- `server/medical/medical-workspace-domain.mjs`：医疗叠层（系统规则、策略、材料来源和医疗工具注册）；医疗会话是 `kind:"session"` 工作区，旧版 `sessions` 表里的会话在启动时由 `SessionBridge.migrateLegacySessions()` 一次性迁移过来。
 
 ## 实际支持的操作
 

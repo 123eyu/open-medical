@@ -39,9 +39,7 @@ test("clinical-ref：旧速查接口迁移前后响应一致", async (t) => {
 test("clinical-ref：停用后接口 404、量表/ADR 工具不注册，检验与 ICD-10 等固定能力保留", async (t) => {
   const app = await startTestServer({ provider: createScriptedProvider([]) });
   t.after(() => app.close());
-  const before = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const before = app.server.sessionBridge.toolNames();
   assert.ok(before.includes("medical_scale_list"));
   assert.ok(before.includes("medical_scale_calculate"));
   assert.ok(before.includes("assess_adverse_reaction"));
@@ -58,9 +56,7 @@ test("clinical-ref：停用后接口 404、量表/ADR 工具不注册，检验�
     assert.equal(response.status, 404, path);
   }
 
-  const after = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const after = app.server.sessionBridge.toolNames();
   assert.ok(!after.includes("medical_scale_list"));
   assert.ok(!after.includes("medical_scale_calculate"));
   assert.ok(!after.includes("assess_adverse_reaction"));

@@ -19,12 +19,8 @@ export class PatientRegistry {
     // detail counts merge active plugin contributions without naming tables.
     this.hooks = hooks;
     this.summaryProvider = summaries;
-    // 统一内核：新患者病例会话由 SessionBridge 创建（kind:"session" 工作区）。
-    this.createSession =
-      createSession ||
-      (({ title, patientId }) => ({
-        id: store.create({ title, patientId }).id,
-      }));
+    // 统一内核：患者病例会话由 SessionBridge 创建（kind:"session" 工作区）。
+    this.createSession = createSession;
     this.removeSession = removeSession;
     this.onIdentityChanged = onIdentityChanged;
     this.onCreated = onCreated;
@@ -403,16 +399,7 @@ export class PatientRegistry {
         .run(id);
       this.store.db.prepare("DELETE FROM patients WHERE id=?").run(id);
     });
-    if (this.removeSession) {
-      this.removeSession(sessionId);
-      return;
-    }
-    try {
-      this.store.get(sessionId);
-      this.store.delete(sessionId);
-    } catch {
-      /* workspace already removed */
-    }
+    this.removeSession?.(sessionId);
   }
   matchPatient(hint) {
     if (!hint) return null;

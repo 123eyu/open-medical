@@ -4,9 +4,10 @@ import { collectWorkspaceDelivery } from "./core/workspace-delivery.mjs";
 import { assessmentQuestion } from "./medical/assessment-tools.mjs";
 import { assessmentPatientSource } from "./medical/assessment-source.mjs";
 // Session Bridge：把「统一内核工作区（kind:"session"）」投影成首页医疗
-// 会话的 API 形状，并按会话类别双轨分派——新建会话走 WorkspaceService
-// （通用内核 + 医疗叠层），既有 sessions 表会话继续走 MedicalRuntime。
-// 患者页、随访、计划任务、消息摘要通过 dispatcher 对两类引擎透明。
+// 会话的 API 形状。所有会话只走一套引擎：WorkspaceService（通用内核 +
+// 医疗叠层）。旧版 sessions 表里的会话在启动时一次性迁移成会话工作区
+// （migrateLegacySessions），之后不再有第二条执行路径。患者页、随访、
+// 计划任务、消息摘要通过 dispatcher 使用同一引擎。
 import { imageTextWithFallback, visionTranscriber } from "./core/image-text.mjs";
 import { assessOcrQuality } from "../shared/ocr-quality.mjs";
 import { autoClassifyMaterial, suggestDocumentDate, isCalendarDate, MATERIAL_CATEGORIES } from "../shared/material-classify.mjs";
@@ -14,7 +15,7 @@ import { sqliteTransaction } from "./sqlite-transaction.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { AppError, check, string } from "./errors.mjs";
+import { AppError, check, identifier, string } from "./errors.mjs";
 import { medicalPolicy } from "../shared/medical.mjs";
 import { resolveTaskContexts, normalizeTaskContexts, taskContextIntentText, taskContextWorkflow, taskContextSource } from "./medical/task-context.mjs";
 
@@ -25,8 +26,9 @@ const materialSuggestions = (name, text) => {
   return { category, categorySource, categorySuggestion, ...(date ? { dateSuggestion: date } : {}) };
 };
 import { runTool, localWork } from "./medical-core.mjs";
-import { consultationNotice, publicSession } from "./runtime.mjs";
+import { consultationNotice } from "./medical/consultation-notice.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
+import { ToolRegistry } from "./core/tool-registry.mjs";
 import {
   assertRunTransition,
   deriveRunStatus,
@@ -59,12 +61,11 @@ const resolveMode = (mode) => {
 };
 
 export class SessionBridge {
-  // store：旧医疗会话存储；runtime：旧医疗引擎；service：统一内核；
+  // store：医疗存储（审计日志；sessions 表只在迁移时读取）；service：统一内核；
   // sessionsRoot：会话工作区自动目录的父目录（数据库目录下）。
-  constructor(store, runtime, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, learning = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
+  constructor(store, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, learning = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
     Object.assign(this, {
       store,
-      runtime,
       service,
       sessionsRoot,
       patientRecord,
@@ -103,10 +104,15 @@ export class SessionBridge {
   }
 
   // ---------- 创建 / 删除 / 改名 ----------
-  createSession({ title, patientId, copiedFrom, global = false, channelSource = null } = {}) {
+  createSession({ id, title, patientId, copiedFrom, global = false, channelSource = null } = {}) {
+    if (id !== undefined) {
+      identifier(id);
+      check(!this.isSessionWorkspace(id), "CONFLICT", "会话已存在", 409);
+    }
     const root = join(this.sessionsRoot, randomUUID());
     mkdirSync(root, { recursive: true, mode: 0o700 });
     const w = this.service.create({
+      ...(id !== undefined ? { id } : {}),
       kind: "session",
       root,
       title: string(title || "新会话", "会话名称", 100),
@@ -157,6 +163,84 @@ export class SessionBridge {
         )
         .catch(() => {});
     return this.get(w.id);
+  }
+  // 旧版 sessions 表会话 → 会话工作区（保留同一 id，患者、随访、计划
+  // 任务、聊天渠道里的引用都不用改）。启动时执行，逐条事务：材料、消息、
+  // 执行记录和成果原样搬过去，旧行在同一事务里删除；失败的那条保持原样，
+  // 下次启动再试。执行中被中断的记录标为 interrupted，不会自动续跑。
+  migrateLegacySessions() {
+    const db = this.store.db;
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sessions'").get())
+      return { migrated: 0, failed: [] };
+    const rows = db.prepare("SELECT id, data FROM sessions").all();
+    let migrated = 0;
+    const failed = [];
+    for (const row of rows) {
+      try {
+        sqliteTransaction(db, () => {
+          const legacy = JSON.parse(row.data);
+          if (!this.isSessionWorkspace(row.id)) {
+            this.createSession({
+              id: row.id,
+              title: String(legacy.title || "新会话").slice(0, 100),
+              ...(legacy.patientId ? { patientId: legacy.patientId } : {}),
+              ...(legacy.copiedFrom ? { copiedFrom: legacy.copiedFrom } : {}),
+            });
+            const artifacts = new Map((legacy.artifacts || []).map((a) => [a.id, a]));
+            const used = new Set();
+            const runs = (legacy.runs || []).map((run) => {
+              const own = (run.artifacts || [])
+                .map((ref) => (typeof ref === "string" ? artifacts.get(ref) : ref))
+                .filter(Boolean);
+              for (const a of own) used.add(a.id);
+              // 迁移时还在执行的记录（旧服务中途退出）如实标为中断。
+              const cut = ["running", "waiting", "queued"].includes(run.status);
+              const endedAt = run.endedAt || (cut ? new Date().toISOString() : null);
+              return {
+                ...run,
+                ...(cut ? { status: "interrupted", error: run.error || "服务重新启动，执行已中断。", endedAt } : {}),
+                children: (run.children || []).map((child) =>
+                  ["running", "queued"].includes(child.status)
+                    ? { ...child, status: "interrupted", error: "服务重启，子代理执行已中断", endedAt }
+                    : child),
+                artifacts: own,
+                legacyMigrated: true,
+              };
+            });
+            const orphans = (legacy.artifacts || []).filter((a) => !used.has(a.id));
+            if (orphans.length && runs.length) runs.at(-1).artifacts.push(...orphans);
+            else if (orphans.length)
+              runs.push({ id: randomUUID(), status: "completed", mode: "local", startedAt: new Date(legacy.createdAt || Date.now()).toISOString(), endedAt: new Date(legacy.updatedAt || Date.now()).toISOString(), events: [], fileIds: [], artifacts: orphans, children: [], legacyMigrated: true });
+            this.service.store.update(row.id, (w) => {
+              w.materials = legacy.files || [];
+              w.messages = legacy.messages || [];
+              w.runs = runs;
+              if (legacy.createdAt) w.createdAt = legacy.createdAt;
+              if (legacy.updatedAt) w.updatedAt = legacy.updatedAt;
+              w.legacyMigratedAt = Date.now();
+            }, undefined, { touch: false });
+          }
+          db.prepare("DELETE FROM sessions WHERE id=?").run(row.id);
+          this.store.audit(row.id, "session.migrated", { to: "session-workspace" });
+        });
+        migrated++;
+      } catch (error) {
+        failed.push(row.id);
+        console.error(`旧会话 ${row.id} 迁移失败，将在下次启动重试:`, error);
+      }
+    }
+    return { migrated, failed };
+  }
+  // 医疗会话当前提供的工具名（医疗核心工具 + 已启用插件工具）。每次实时
+  // 计算，插件启停、患者渠道连接变化立即反映，不在启动时固定。
+  toolNames() {
+    const registry = new ToolRegistry();
+    this.service.domain?.registerTools?.({
+      registry,
+      workspace: { id: "tool-catalog", kind: "session", runs: [], materials: [] },
+      runId: null,
+    });
+    return [...registry.tools.keys()];
   }
   detectImage() {
     try {
@@ -672,8 +756,7 @@ export class SessionBridge {
     };
   }
   get(id) {
-    if (this.isSessionWorkspace(id)) return this.project(this.workspace(id));
-    return publicSession(this.store.get(id));
+    return this.project(this.requireSessionWorkspace(id));
   }
   summary(w) {
     const projected = this.project(w);
@@ -703,27 +786,11 @@ export class SessionBridge {
     };
   }
   list() {
-    const sessionWorkspaces = this.service.store
+    return this.service.store
       .list()
       .filter(sessionKind)
-      .map((w) => this.summary(w));
-    const legacy = this.store.list().map((s) => ({
-      id: s.id,
-      title: s.title,
-      patientId: s.patientId,
-      updatedAt: s.updatedAt,
-      revision: s.revision,
-      messageCount: s.messages.length,
-      userMessageCount: s.messages.filter((message) => message.role === "user").length,
-      resultCount: s.artifacts.length,
-      reviewCount: 0,
-      running: this.runtime.active.has(s.id),
-      lastRunStatus: s.runs.at(-1)?.status || null,
-      lastRunError: s.runs.at(-1)?.error || null,
-    }));
-    return [...sessionWorkspaces, ...legacy].sort(
-      (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
-    );
+      .map((w) => this.summary(w))
+      .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   }
 
   // ---------- 发送：构建 sources 并分派 ----------
@@ -780,12 +847,10 @@ export class SessionBridge {
     ].join('\n');
     return { id: `patient-record:${patientId}`, name: '当前患者已登记档案', text, hash: hashText(text) };
   }
-  // 返回 {kind:"workspace", handle} | {kind:"legacy", handle}；本地规则
-  // 模式返回 {kind:"local", plan}，由 executeSend 同步执行。
+  // 返回 {kind:"workspace", handle}；本地规则模式返回 {kind:"local", plan}，
+  // 由 executeSend 同步执行。
   prepareSend(id, body) {
     check(!["knowledge-answer", "literature-research"].includes(body.workflow) || resolveMode(body.mode || "local") !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
-    if (!this.isSessionWorkspace(id))
-      return { kind: "legacy", handle: this.runtime.prepare(id, body) };
     const w = this.requireSessionWorkspace(id);
     check(
       !this.service.active.has(id),
@@ -870,7 +935,7 @@ export class SessionBridge {
         },
       };
     check(
-      providerConfigured(this.runtime.provider),
+      providerConfigured(this.service.provider),
       "MODEL_NOT_CONFIGURED",
       "服务端尚未配置模型密钥",
       503,
@@ -919,10 +984,6 @@ export class SessionBridge {
     return { kind: "workspace", handle };
   }
   async executeSend(prepared, notify = () => {}) {
-    if (prepared.kind === "legacy") {
-      const run = await this.runtime.execute(prepared.handle, notify);
-      return { status: run.status, runId: run.id, error: run.error };
-    }
     if (prepared.kind === "local")
       return this.executeLocal(prepared.plan, notify);
     const workspaceId = prepared.handle.id;
@@ -979,12 +1040,10 @@ export class SessionBridge {
     };
   }
   cancel(id) {
-    if (this.isSessionWorkspace(id)) {
-      const handle = this.service.active.get(id);
-      this.service.cancel(id);
-      return Boolean(handle);
-    }
-    return this.runtime.cancel(id);
+    this.requireSessionWorkspace(id);
+    const handle = this.service.active.get(id);
+    this.service.cancel(id);
+    return Boolean(handle);
   }
   // 事件页读取：agent_events → 旧 event_log 行形状。
   workspaceEvents(id, { after = 0, limit = 1000 } = {}) {
@@ -1396,18 +1455,6 @@ export class SessionBridge {
 
   // ---------- 材料检索（会话工作区侧） ----------
   searchMaterials(id, query) {
-    if (!this.isSessionWorkspace(id)) {
-      const session = this.store.get(id);
-      return runTool("search_materials", { query }, {
-        sources: session.files.map((f) => ({
-          id: f.id,
-          name: f.name,
-          text: f.text,
-          hash: f.hash,
-          extraction: f.extraction,
-        })),
-      });
-    }
     const w = this.requireSessionWorkspace(id);
     return runTool("search_materials", { query }, {
       sources: (w.materials || []).map((f) => ({
@@ -1420,23 +1467,20 @@ export class SessionBridge {
     });
   }
 
-  // ---------- 消费方（患者/随访/调度/摘要）双轨分派 ----------
+  // ---------- 消费方（患者/随访/调度/摘要）统一入口 ----------
   get dispatcher() {
     const bridge = this;
     return {
       get provider() {
-        return bridge.runtime.provider;
+        return bridge.service.provider;
       },
       get maxActive() {
         return bridge.service.maxActive;
       },
       active: {
-        has: (id) =>
-          bridge.service.active.has(id) || bridge.runtime.active.has(id),
+        has: (id) => bridge.service.active.has(id),
       },
       prepare(sessionId, body) {
-        if (!bridge.isSessionWorkspace(sessionId))
-          return bridge.runtime.prepare(sessionId, body);
         const w = bridge.requireSessionWorkspace(sessionId);
         const message = string(body.message, "任务", 200000);
         const mode = resolveMode(body.mode);
@@ -1481,20 +1525,13 @@ export class SessionBridge {
       },
       async execute(handle, notify = () => {}) {
         if (handle.local) return bridge.executeLocal(handle.local, notify);
-        // 旧引擎 handle 无 id 字段（只有 sessionId）。
-        const handleWorkspaceId = handle.id ?? null;
-        if (
-          handleWorkspaceId !== null &&
-          bridge.isSessionWorkspace(handleWorkspaceId)
-        ) {
-          const execution = await bridge.service.execute(handle);
-          return {
-            status: execution.status,
-            runId: execution.runId,
-            error: execution.error,
-          };
-        }
-        return bridge.runtime.execute(handle);
+        bridge.requireSessionWorkspace(handle.id);
+        const execution = await bridge.service.execute(handle);
+        return {
+          status: execution.status,
+          runId: execution.runId,
+          error: execution.error,
+        };
       },
       cancel(sessionId) {
         return bridge.cancel(sessionId);

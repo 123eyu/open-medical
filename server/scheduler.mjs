@@ -1,7 +1,6 @@
 import { providerConfigured } from "./core/provider-status.mjs";
 import { randomUUID } from "node:crypto";
 import { AppError, check, identifier, string } from "./errors.mjs";
-import { MEDICAL_AGENTS } from "./subagents.mjs";
 
 // Durable local queue, independent of a browser connection. No outgoing messages.
 // Missed intervals coalesce; interrupted occurrences never silently replay.
@@ -17,10 +16,10 @@ export class MedicalScheduler {
     } = {},
   ) {
     Object.assign(this, { store, runtime, now, pollMs, autoStart });
-    // 会话统一内核后，计划可能挂在 kind:"session" 的工作区上；
-    // resolveSession 返回 {revision, files}，缺省读旧 sessions 表。
-    this.resolveSession =
-      resolveSession || ((sessionId) => this.store.get(sessionId));
+    // 计划挂在 kind:"session" 的会话工作区上；resolveSession 返回
+    // {revision, files}，由服务装配时提供。
+    check(typeof resolveSession === "function", "INVALID_INPUT", "计划任务需要会话解析器");
+    this.resolveSession = resolveSession;
     this.inFlight = new Set();
     this.stopped = false;
     store.db.exec(
@@ -140,14 +139,12 @@ export class MedicalScheduler {
       check(file, "SOURCE_NOT_FOUND", "计划只能读取当前会话材料", 404);
       return { id, hash: file.hash };
     });
-    const delegations = input.delegations || [];
+    // 子代理委派属于已移除的旧引擎；统一引擎在运行中自行调度工具。
     check(
-      Array.isArray(delegations) &&
-        delegations.length <= 3 &&
-        new Set(delegations).size === delegations.length &&
-        delegations.every((p) => Object.hasOwn(MEDICAL_AGENTS, p)),
+      input.delegations === undefined ||
+        (Array.isArray(input.delegations) && input.delegations.length === 0),
       "AGENT_PROFILE",
-      "子代理配置无效",
+      "计划任务不再单独指定子代理",
     );
     const job = {
       id: randomUUID(),
@@ -157,7 +154,6 @@ export class MedicalScheduler {
       mode,
       fileIds: [...input.fileIds],
       sourceHashes,
-      delegations,
       nextRunAt,
       intervalMinutes,
       status: "active",
@@ -300,7 +296,6 @@ export class MedicalScheduler {
         mode: job.mode,
         fileIds: job.fileIds,
         externalConsent: job.externalConsent,
-        delegations: job.delegations,
         requestId,
         isolatedContext: true,
       });

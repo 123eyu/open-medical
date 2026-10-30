@@ -18,13 +18,11 @@ import { WorkspaceService } from "./core/workspace-service.mjs";
 import { workspaceApi } from "./core/workspace-api.mjs";
 import { Store } from "./store.mjs";
 import { createProvider } from "./provider.mjs";
-import { MedicalRuntime, publicSession } from "./runtime.mjs";
+import { MedicalSandbox } from "./sandbox.mjs";
 import { AppError, check, string, identifier } from "./errors.mjs";
-import { runTool } from "./medical-core.mjs";
 import { artifactLines } from "../shared/medical.mjs";
 import { SkillRegistry } from "./skills.mjs";
 import { MedicalScheduler } from "./scheduler.mjs";
-import { MEDICAL_AGENTS } from "./subagents.mjs";
 import {
   PatientRegistry,
   composeDigest,
@@ -494,17 +492,8 @@ export function createServer(options = {}) {
         notice:(status==="empty_graph"?"此库当前没有可用图谱。":status==="no_matches"?"此库已有图谱，但本次查询未匹配实体；不能据此声称尚未提取图谱。请缩短查询或改用别名。":"已返回匹配实体及一跳相邻关系；匹配实体数与返回节点数不同是因为包含关系端点。")+"知识地图用于检索导航，引用时须 knowledge_read 阅读原文。"};
     },
   });
-  const runtime = new MedicalRuntime(store, provider, {
-    maxContextChars: envNumber("MEDICAL_CONTEXT_BUDGET", 80000),
-    maxRounds: envNumber("MEDICAL_MAX_ROUNDS", Infinity),
-    maxToolCalls: envNumber("MEDICAL_MAX_TOOL_CALLS", 8),
-    ...options.runtimeOptions,
-    skills,
-    toolPlugins: options.toolPlugins || [
-      ...knowledgeToolPlugins,
-    ],
-    doctor,
-  });
+  // 代码沙箱（手动「运行代码」任务与能力快照共用）。
+  const sandbox = new MedicalSandbox();
   const workspaces = new WorkspaceService(store.db, provider, {
     jev,
     modelProfiles: knowledgeProfiles,
@@ -541,21 +530,21 @@ export function createServer(options = {}) {
       doctor,
     }),
     onNotification: options.onNotification,
-    sandbox: runtime.sandbox,
+    sandbox,
     chooseDirectory: options.chooseDirectory,
     extensions: {
       browserFactory: options.browserFactory,
       ...options.extensions,
     },
   });
-  // 首页会话统一到工作区内核：新建会话 = kind:"session" 的工作区；
-  // 既有 sessions 表会话继续走 MedicalRuntime。桥对两条路径透明。
+  // 所有医疗会话都是统一内核里 kind:"session" 的工作区；旧版 sessions
+  // 表里的会话在下方一次性迁移过来，只保留这一套引擎。
   const sessionsRoot =
     databasePath === ":memory:"
       ? mkdtempSync(join(tmpdir(), "omw-sessions-"))
       : join(dirname(databasePath), "session-workspaces");
   mkdirSync(sessionsRoot, { recursive: true, mode: 0o700 });
-  const sessionBridge = new SessionBridge(store, runtime, workspaces, {
+  const sessionBridge = new SessionBridge(store, workspaces, {
     sessionsRoot,
     patientRecord: id => patients.row(id),
     skills,
@@ -584,6 +573,7 @@ export function createServer(options = {}) {
     ocrModel: ocrModelResolver,
     ocrStrategy: ocrStrategyResolver,
   });
+  sessionBridge.migrateLegacySessions();
   const intakeJobs = new IntakeJobs(sessionBridge, pending);
   const agentRuntime = sessionBridge.dispatcher;
 
@@ -596,25 +586,18 @@ export function createServer(options = {}) {
   const scheduler = new MedicalScheduler(store, agentRuntime, {
     ...options.schedulerOptions,
     resolveSession: (sessionId) => {
-      if (sessionBridge.isSessionWorkspace(sessionId)) {
-        const w = sessionBridge.workspace(sessionId);
-        return {
-          revision: w.revision,
-          files: (w.materials || []).map((f) => ({ id: f.id, hash: f.hash })),
-        };
-      }
-      return store.get(sessionId);
+      const w = sessionBridge.requireSessionWorkspace(sessionId);
+      return {
+        revision: w.revision,
+        files: (w.materials || []).map((f) => ({ id: f.id, hash: f.hash })),
+      };
     },
   });
   const patients = new PatientRegistry(store, agentRuntime, {
     onIdentityChanged: (patient, previousName) => {
-      if (sessionBridge.isSessionWorkspace(patient.sessionId)) {
-        const session = sessionBridge.get(patient.sessionId);
-        if (session.title === `${previousName} · 病例`) sessionBridge.renameSession(patient.sessionId, `${patient.name} · 病例`);
-      } else {
-        const session = store.get(patient.sessionId);
-        if (session.title === `${previousName} · 病例`) store.mutate(patient.sessionId, (value) => { value.title = `${patient.name} · 病例`; });
-      }
+      if (!sessionBridge.isSessionWorkspace(patient.sessionId)) return;
+      const session = sessionBridge.get(patient.sessionId);
+      if (session.title === `${previousName} · 病例`) sessionBridge.renameSession(patient.sessionId, `${patient.name} · 病例`);
     },
     // schedule 在下方才创建；建档发生在服务就绪后，闭包引用是安全的。
     onCreated: (patient) => schedule.baselinePatient(patient),
@@ -631,7 +614,6 @@ export function createServer(options = {}) {
     removeSession: (sessionId) => {
       if (sessionBridge.isSessionWorkspace(sessionId))
         sessionBridge.removeSession(sessionId);
-      else store.delete(sessionId);
     },
   });
   // The followup plugin owns followup/care/chat services. Fixed
@@ -713,9 +695,6 @@ export function createServer(options = {}) {
   const backups = new Backups(databasePath);
   const swapProvider = (next) => {
     provider = next;
-    runtime.provider = provider;
-    runtime.agent.provider = provider;
-    runtime.subagents.provider = provider;
     workspaces.provider = provider;
     workspaces.agent.provider = provider;
   };
@@ -787,9 +766,7 @@ export function createServer(options = {}) {
     careTasksHost: {
       resolvePatientFile: (patientId, fileId) => {
         const { sessionId } = patients.row(patientId);
-        const session = sessionBridge.isSessionWorkspace(sessionId)
-          ? sessionBridge.get(sessionId)
-          : store.get(sessionId);
+        const session = sessionBridge.get(sessionId);
         const file = session.files.find((item) => item.id === fileId);
         check(
           file,
@@ -807,26 +784,22 @@ export function createServer(options = {}) {
       service: options.literature || null,
       options: options.literatureOptions || {},
       identifier,
-      addMaterial: (sessionId, input) =>
-        sessionBridge.isSessionWorkspace(sessionId)
-          ? sessionBridge.addMaterial(sessionId, input)
-          : runtime.addFile(sessionId, input),
+      addMaterial: (sessionId, input) => sessionBridge.addMaterial(sessionId, input),
     },
     researchHost: {
       sourcesOf: (sessionId) => {
         const id = sessionId ? identifier(sessionId) : null;
         if (!id) return [];
-        if (sessionBridge.isSessionWorkspace(id))
-          return (sessionBridge.materialsOf(id) || []).map(
-            ({ id: fid, name, text, hash, extraction }) => ({
-              id: fid,
-              name,
-              text,
-              hash,
-              extraction,
-            }),
-          );
-        return store.get(id).files;
+        sessionBridge.requireSessionWorkspace(id);
+        return (sessionBridge.materialsOf(id) || []).map(
+          ({ id: fid, name, text, hash, extraction }) => ({
+            id: fid,
+            name,
+            text,
+            hash,
+            extraction,
+          }),
+        );
       },
     },
     knowledgeOrganizer,
@@ -929,15 +902,9 @@ export function createServer(options = {}) {
     schedule,
     host: pluginHost,
   });
-  // The followup plugin owns its tools; the legacy MedicalRuntime gets the
-  // same definitions through the host instead of importing plugin files.
-  runtime.registerPlugins([
-    ...pendingActionTools(pending, doctor),
-    ...pluginHost.legacyToolPlugins(),
-    ...scheduleTools(() => schedule),
-    ...labDisplayTools(() => patients),
-    ...extensionTools(() => extensions, pending),
-  ]);
+  // 启动时按医疗会话的真实工具面注册一遍插件工具：注册失败或重名的
+  // 插件立刻标为失败，而不是等到第一次对话才发现。
+  sessionBridge.toolNames();
   const ingestSecret =
     options.ingestSecret || process.env.MEDICAL_INGEST_SECRET || "";
   const digestMessages = async (pid, bodyData) => {
@@ -951,7 +918,7 @@ export function createServer(options = {}) {
     // unprocessed and can be digested again.
     const trimmed = selectDigestMessages(messages);
     check(
-      providerConfigured(runtime.provider),
+      providerConfigured(provider),
       "MODEL_NOT_CONFIGURED",
       "服务端尚未配置模型密钥",
       503,
@@ -1160,8 +1127,8 @@ export function createServer(options = {}) {
           },
           model: provider.model,
           modelConfigured: providerConfigured(provider),
-          contextBudget: runtime.maxContextChars,
-          maxRounds: runtime.maxRounds,
+          contextBudget: sessionBridge.contextBudget,
+          maxRounds: sessionBridge.maxRounds,
           thinking: provider.thinking,
           directoryPicker: typeof options.chooseDirectory === "function",
           provider: provider.provider || "deepseek",
@@ -1193,14 +1160,9 @@ export function createServer(options = {}) {
               description: "仅在受控沙箱中运行代码",
             },
           ],
-          tools: runtime.toolDefinitions.map((t) => t.function.name),
+          tools: sessionBridge.toolNames(),
           skills: skills.list(),
-          sandbox: runtime.sandbox.status(),
-          subagents: Object.entries(MEDICAL_AGENTS).map(([id, agent]) => ({
-            id,
-            name: agent.name,
-            instruction: agent.instruction,
-          })),
+          sandbox: sandbox.status(),
           scheduler: {
             persistent: true,
             requiresRunningServer: true,
@@ -1208,7 +1170,7 @@ export function createServer(options = {}) {
           },
           ingestConfigured: Boolean(ingestSecret),
           patientsEnabled: true,
-          doctorMemory: runtime.doctor.counts(),
+          doctorMemory: doctor.counts(),
           literature: { enabled: pluginActive("literature"), sources: ["pubmed", "europepmc"] },
           knowledge: {
             enabled: true,
@@ -1366,21 +1328,9 @@ export function createServer(options = {}) {
         // Per-patient trial screening runs are background work shown on the trial page.
         return send(res, 200, { sessions: sessionBridge.list().filter((session) => url.searchParams.get("all") === "1" || !session.background) });
       if (path === "/api/sessions" && req.method === "POST") {
-        const b = await body(req);
-        // 显式 id 仅用于既有测试/迁移场景（旧引擎）；首页新建会话统一
-        // 落在内核 kind:"session" 工作区上。
-        if (b.id)
-          return send(
-            res,
-            201,
-            publicSession(
-              store.create({
-                id: identifier(b.id),
-                title: b.title ? string(b.title, "标题", 100) : undefined,
-              }),
-            ),
-          );
-        return send(res, 201, sessionBridge.createSession(b));
+        // 可选的显式 id 由调用方指定会话编号；会话一律是内核
+        // kind:"session" 工作区。
+        return send(res, 201, sessionBridge.createSession(await body(req)));
       }
       // 全局助手会话（单例）：幂等查找或创建，前端入口每次点击复用。
       if (path === "/api/assistant/session" && req.method === "POST")
@@ -1581,147 +1531,7 @@ export function createServer(options = {}) {
           }
           return send(res, 404, { error: "会话资源不存在", code: "NOT_FOUND" });
         }
-        const session = store.get(id);
-        if (parts[3] === "schedules") {
-          if (parts.length === 4 && req.method === "GET")
-            return send(res, 200, { jobs: scheduler.list(id) });
-          if (parts.length === 4 && req.method === "POST")
-            return send(res, 201, scheduler.create(id, await body(req)));
-          if (parts.length === 5) {
-            const job = scheduler.get(parts[4]);
-            check(job.sessionId === id, "NOT_FOUND", "计划不属于当前会话", 404);
-            if (req.method === "PATCH")
-              return send(res, 200, scheduler.update(job.id, await body(req)));
-            if (req.method === "DELETE") {
-              scheduler.delete(job.id, (await body(req)).revision);
-              return send(res, 200, { ok: true });
-            }
-          }
-        }
-        if (parts.length === 3) {
-          if (req.method === "GET")
-            return send(res, 200, publicSession(session));
-          if (req.method === "PATCH") {
-            const b = await body(req);
-            return send(
-              res,
-              200,
-              publicSession(
-                store.mutate(id, (s) => {
-                  s.title = string(b.title, "标题", 100);
-                }),
-              ),
-            );
-          }
-          if (req.method === "DELETE") {
-            check(
-              !runtime.active.has(id),
-              "RUN_ACTIVE",
-              "请先停止执行再删除会话",
-              409,
-            );
-            check(
-              !session.patientId,
-              "PATIENT_SESSION",
-              "此会话是患者病例工作区，请在患者管理中删除患者档案",
-              409,
-            );
-            for (const file of session.files)
-              materials.remove(file.id).catch(() => {});
-            store.delete(id);
-            return send(res, 200, { ok: true });
-          }
-        }
-        if (
-          parts.length === 4 &&
-          ["copy-materials", "fork"].includes(parts[3]) &&
-          req.method === "POST"
-        ) {
-          const forkBody = await body(req);
-          if (parts[3] === "fork") {
-            forkBody.sessionRevision ??= session.revision;
-            forkBody.fileIds ??= session.files.map((file) => file.id);
-          }
-          return send(res, 201, runtime.copyMaterials(id, forkBody));
-        }
-        if (parts[3] === "files") {
-          if (parts.length === 4 && req.method === "POST") {
-            const file = runtime.addFile(id, await body(req));
-            // Index for semantic retrieval in the background; keyword search
-            // works immediately either way.
-            materials.ingest(file).catch(() => {});
-            return send(res, 201, file);
-          }
-          if (parts.length === 5 && req.method === "DELETE") {
-            check(
-              !runtime.active.has(id),
-              "RUN_ACTIVE",
-              "执行期间不能删除材料",
-              409,
-            );
-            check(
-              session.files.some((f) => f.id === parts[4]),
-              "NOT_FOUND",
-              "材料不存在",
-              404,
-            );
-            check(
-              !session.runs.some((r) => r.fileIds?.includes(parts[4])),
-              "SOURCE_IN_USE",
-              "此材料已被执行记录引用。可取消勾选以排除后续任务；如需清除全部资料，请删除会话。",
-              409,
-            );
-            materials.remove(parts[4]).catch(() => {});
-            store.mutate(id, (s) => {
-              s.files = s.files.filter((f) => f.id !== parts[4]);
-            });
-            store.audit(id, "file.deleted", { fileId: parts[4] });
-            return send(res, 200, { ok: true });
-          }
-        }
-        if (parts[3] === "search" && req.method === "GET")
-          return send(
-            res,
-            200,
-            await runTool(
-              "search_materials",
-              { query: string(url.searchParams.get("q"), "检索词", 200) },
-              { sources: session.files },
-            ),
-          );
-        if (parts[3] === "audit" && req.method === "GET")
-          return send(res, 200, { events: store.auditLog(id) });
-        if (parts[3] === "events" && req.method === "GET")
-          return send(res, 200, {
-            events: store.eventLog(id, {
-              after: Number(url.searchParams.get("after") || 0),
-              limit: Number(url.searchParams.get("limit") || 1000),
-            }),
-          });
-        if (parts[3] === "export" && req.method === "GET") {
-          if (url.searchParams.get("format") === "json")
-            return send(res, 200, publicSession(session));
-          res.writeHead(200, {
-            "Content-Type": "text/markdown; charset=utf-8",
-            "Cache-Control": "no-store",
-          });
-          res.end(exportMarkdown(session));
-          return;
-        }
-        if (parts[3] === "artifacts" && parts[4]) {
-          if (parts[5] === "review" && req.method === "POST")
-            return send(
-              res,
-              200,
-              runtime.review(id, identifier(parts[4]), await body(req)),
-            );
-          if (parts.length === 5 && req.method === "PATCH")
-            return send(
-              res,
-              200,
-              runtime.editArtifact(id, identifier(parts[4]), await body(req)),
-            );
-        }
+        throw new AppError("NOT_FOUND", "会话不存在", 404);
       }
       if (path === "/api/doctor/overview" && req.method === "GET")
         return send(res, 200, doctorOverview.read({
@@ -1802,7 +1612,7 @@ export function createServer(options = {}) {
         return send(res, 200, await track(jev.test(await body(req))));
       if (path === "/api/model-profiles") {
         if (req.method === "GET") return send(res, 200, { profiles: knowledgeProfiles.list() });
-        check(runtime.active.size === 0 && workspaces.active.size === 0 && workspaces.media.active.size === 0,
+        check(workspaces.active.size === 0 && workspaces.media.active.size === 0,
           "MODEL_BUSY", "请等待运行结束后修改团队模型", 409);
         const input = await body(req);
         if (req.method === "PUT") return send(res, 200, { profiles: knowledgeProfiles.save(input.id, input) });
@@ -1813,7 +1623,7 @@ export function createServer(options = {}) {
         const input = await body(req);
         const candidate = modelChoices.resolve(input.id);
         if (path.endsWith('/test')) return send(res, 200, await track(probeModel(candidate, res)));
-        check(runtime.active.size === 0 && workspaces.active.size === 0, 'MODEL_BUSY', '有任务正在运行，请等待结束后切换模型', 409);
+        check(workspaces.active.size === 0, 'MODEL_BUSY', '有任务正在运行，请等待结束后切换模型', 409);
         check(candidate.provider === 'local' || input.consent === true, 'MODEL_CONSENT', '请确认允许模型处理任务资料');
         swapProvider(models.save(candidate));
         return send(res, 200, models.public());
@@ -1823,7 +1633,7 @@ export function createServer(options = {}) {
         if (req.method === "PUT") {
           const input = await body(req);
           check(
-            runtime.active.size === 0 && workspaces.active.size === 0,
+            workspaces.active.size === 0,
             "MODEL_BUSY",
             "有任务正在运行，请等待结束后切换模型",
             409,
@@ -2170,14 +1980,14 @@ export function createServer(options = {}) {
       }
       if (parts[0] === "api" && parts[1] === "doctor") {
         if (parts[2] === "profile" && parts.length === 3) {
-          if (req.method === "GET") return send(res, 200, runtime.doctor.get());
+          if (req.method === "GET") return send(res, 200, doctor.get());
           if (req.method === "PATCH")
-            return send(res, 200, runtime.doctor.update(await body(req)));
+            return send(res, 200, doctor.update(await body(req)));
         }
         if (parts[2] === "memories") {
           if (parts.length === 3 && req.method === "GET")
             return send(res, 200, {
-              memories: runtime.doctor.memories({
+              memories: doctor.memories({
                 status: url.searchParams.get("status") || undefined,
                 kind: url.searchParams.get("kind") || undefined,
               }),
@@ -2187,7 +1997,7 @@ export function createServer(options = {}) {
             return send(
               res,
               201,
-              runtime.doctor.addMemory({ ...b, kind: "explicit" }),
+              doctor.addMemory({ ...b, kind: "explicit" }),
             );
           }
           const mutateMemory = (id, operation, input, execute) =>
@@ -2195,33 +2005,33 @@ export function createServer(options = {}) {
           if (parts.length === 4 && req.method === "DELETE") {
             const id = Number(parts[3]);
             const input = await body(req);
-            return send(res, 200, mutateMemory(id, "memory-delete", input, () => runtime.doctor.deleteMemory(id)));
+            return send(res, 200, mutateMemory(id, "memory-delete", input, () => doctor.deleteMemory(id)));
           }
           if (parts.length === 5) {
             const id = Number(parts[3]);
             if (req.method === "POST" && parts[4] === "confirm") {
               const input = await body(req);
-              return send(res, 200, mutateMemory(id, "memory-confirm", input, () => runtime.doctor.confirmMemory(id)));
+              return send(res, 200, mutateMemory(id, "memory-confirm", input, () => doctor.confirmMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "dismiss") {
               const input = await body(req);
-              return send(res, 200, mutateMemory(id, "memory-dismiss", input, () => runtime.doctor.dismissMemory(id)));
+              return send(res, 200, mutateMemory(id, "memory-dismiss", input, () => doctor.dismissMemory(id)));
             }
             if (req.method === "POST" && parts[4] === "pin") {
               const input = await body(req);
-              return send(res, 200, mutateMemory(id, "memory-pin", input, () => runtime.doctor.pinMemory(id, input.pinned === true)));
+              return send(res, 200, mutateMemory(id, "memory-pin", input, () => doctor.pinMemory(id, input.pinned === true)));
             }
           }
         }
         if (parts[2] === "consolidate" && req.method === "POST") {
           if (parts.length === 3)
-            return send(res, 200, runtime.doctor.consolidate());
+            return send(res, 200, doctor.consolidate());
           if (parts[3] === "model") {
             const b = await body(req);
             return send(
               res,
               200,
-              await runtime.doctor.modelConsolidate(runtime.provider, {
+              await doctor.modelConsolidate(provider, {
                 consent: b.externalConsent === true,
                 model: b.model,
               }),
@@ -2232,7 +2042,7 @@ export function createServer(options = {}) {
       const match = path.match(/^\/api\/chat\/([A-Za-z0-9_-]+)(\/cancel)?$/);
       if (match && req.method === "POST") {
         const id = identifier(match[1]);
-        if (!sessionBridge.isSessionWorkspace(id)) store.get(id);
+        sessionBridge.requireSessionWorkspace(id);
         if (match[2])
           return send(res, 200, { cancelled: sessionBridge.cancel(id) });
         const prepared = sessionBridge.prepareSend(id, await body(req));
@@ -2355,14 +2165,7 @@ export function createServer(options = {}) {
                 write({ jsonrpc: "2.0", id: rpc.id, result });
               if (rpc.method === "session.create")
                 return reply({
-                  session_id: p.id
-                    ? store.create({
-                        id: identifier(p.id),
-                        title: p.title
-                          ? string(p.title, "标题", 100)
-                          : undefined,
-                      }).id
-                    : sessionBridge.createSession(p).id,
+                  session_id: sessionBridge.createSession(p).id,
                 });
               if (rpc.method === "session.get")
                 return reply(sessionBridge.get(identifier(p.session_id)));
@@ -2410,7 +2213,6 @@ export function createServer(options = {}) {
   server.pending = pending;
   server.pluginHost = pluginHost;
   server.store = store;
-  server.runtime = runtime;
   // 供测试与诊断日志直接调用；HTTP 入口为
   // GET /api/workspaces/:id/capability-snapshot。
   server.capabilitySnapshot = capabilitySnapshot;
@@ -2420,7 +2222,7 @@ export function createServer(options = {}) {
   server.token = secret;
   server.scheduler = scheduler;
   server.patients = patients;
-  server.doctor = runtime.doctor;
+  server.doctor = doctor;
   Object.defineProperty(server, "knowledgeBot", {
     enumerable: true,
     configurable: true,
@@ -2503,7 +2305,6 @@ export function createServer(options = {}) {
     await pluginHost.drainAll();
     if (databasePath === ":memory:" && !options.userSkillsDir) rmSync(userSkillsDir, { recursive: true, force: true });
     for (const id of workspaces.active.keys()) workspaces.interrupt(id);
-    for (const id of runtime.active.keys()) runtime.cancel(id);
     for (const id of workspaces.active.keys())
       if (sessionBridge.isSessionWorkspace(id)) workspaces.cancel(id);
     await intakeJobs.stop();

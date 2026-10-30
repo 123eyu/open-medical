@@ -1120,7 +1120,6 @@ function App() {
             ? { thinking: "enabled" }
             : {}),
           skills: pickedSkills,
-          delegations: [],
           ...(pendingWorkflow ? { workflow: pendingWorkflow } : {}),
           ...(pendingContexts !== undefined ? { context: pendingContexts } : {}),
           ...(current.patientId ? { conversationParentRunId: current.id === session?.id && canFollowQuestion ? questionRunId : null } : {}),
@@ -2903,7 +2902,6 @@ function App() {
               send(null, {
                 message: "对选中医疗资料进行沙箱计算，结果待复核。",
                 mode: "local",
-                delegations: [],
                 sandboxCode: code,
               });
             }}

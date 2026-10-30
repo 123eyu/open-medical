@@ -109,7 +109,6 @@ export function TaskCenter({ session, fileIds, config, onSandbox, onChanged }) {
                     mode: "model",
                     externalConsent: consent,
                     fileIds,
-                    delegations: [],
                   }),
                 });
                 setConsent(false);

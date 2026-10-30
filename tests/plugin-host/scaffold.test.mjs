@@ -80,9 +80,7 @@ test("plugin:new：从模板生成插件，宿主可加载、迁移、注册工�
       .get(id).n,
     1,
   );
-  const tools = app.server.pluginHost
-    .legacyToolPlugins()
-    .map((tool) => tool.definition.function.name);
+  const tools = app.server.sessionBridge.toolNames();
   assert.ok(tools.includes(`${id.replaceAll("-", "_")}_notes_list`));
   const ping = await app.request(`/api/p/${id}/ping`);
   assert.equal(ping.status, 200);

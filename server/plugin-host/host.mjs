@@ -929,49 +929,6 @@ export class PluginHost {
     }
   }
 
-  // Collect enabled plugins' tools in the legacy MedicalRuntime shape. The
-  // fixed shell registers them directly (the workspace path already goes
-  // through registerTools), so plugin tools exist on both engines without the
-  // shell importing plugin files.
-  legacyToolPlugins() {
-    const plugins = [];
-    const names = new Set();
-    for (const record of this.ordered) {
-      if (!this._isActive(record) || !record.spec?.tools) continue;
-      const registry = {
-        register: (plugin) => {
-          check(
-            plugin?.definition?.function?.name &&
-              typeof plugin.execute === "function",
-            "PLUGIN_CONFIG",
-            `插件 ${record.id} 注册了无效工具`,
-          );
-          const name = plugin.definition.function.name;
-          check(
-            !names.has(name),
-            "PLUGIN_CONFIG",
-            `插件工具名称重复：${name}`,
-          );
-          names.add(name);
-          plugins.push({
-            ...plugin,
-            capability: plugin.capability || { backend: "local" },
-          });
-        },
-      };
-      try {
-        record.spec.tools(this.contextFor(record), {
-          registry,
-          workspace: null,
-          run: null,
-        });
-      } catch (error) {
-        this._fail(record, `工具注册失败：${errorMessage(error)}`);
-      }
-    }
-    return plugins;
-  }
-
   promptFragments() {
     return this.ordered
       .filter(
