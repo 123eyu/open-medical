@@ -28,6 +28,7 @@ const EXPECTED_KINDS = [
   ["all", "全部"],
   ["risk", "高危风险"],
   ["visit", "复诊"],
+  ["plan-review", "方案复评"],
   ["followup", "随访"],
   ["tracking", "检查检验"],
   ["messages", "患者消息"],
@@ -79,13 +80,14 @@ test("停用 learning 后只失去自定义规则与进化来源；重新启用�
   assert.equal(reduced.status, 200);
   assert.deepEqual(
     reduced.body.kinds.map(({ kind }) => kind),
-    ["all", "risk", "visit", "followup", "tracking", "messages", "trial"],
+    ["all", "risk", "visit", "plan-review", "followup", "tracking", "messages", "trial"],
     "停用后固定区复诊与已迁移的 risk-rules/followup/care-tasks/trials 插件来源保留，learning 只剩 custom",
   );
   assert.deepEqual(reduced.body.counts, {
     all: 5,
     risk: 0,
     visit: 1,
+    "plan-review": 0,
     followup: 1,
     tracking: 0,
     messages: 3,

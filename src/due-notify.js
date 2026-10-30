@@ -9,6 +9,7 @@ const POLL_MS = 60000;
 const KIND_LABELS = {
   risk: "高危风险",
   visit: "复诊",
+  "plan-review": "方案复评",
   followup: "随访到期",
   tracking: "检查检验",
   messages: "患者消息",

@@ -65,7 +65,7 @@ test("设置：六个 settingsTab 深链接都渲染对应页签", async (t) => 
   };
   const cases = [
     ["knowledge-bot", /<h2>飞书知识库机器人<\/h2>/, "飞书知识库机器人"],
-    ["notifications", /<h2>医生随访提醒<\/h2>/, "医生提醒"],
+    ["notifications", /<h2>医生待办提醒<\/h2>/, "医生提醒"],
     ["followup", /<h2>患者随访<\/h2>/, "患者随访"],
     ["workbench", null, "自动化规则"],
     ["learning", /<h2>学习与记忆<\/h2>/, "学习与记忆"],

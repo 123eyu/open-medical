@@ -132,6 +132,10 @@ export async function captureSnapshot(request, patients) {
   // metadata (labels/order) added after the legacy schema, not patient data.
   if (snapshot.doctorOverview?.body && "kinds" in snapshot.doctorOverview.body)
     delete snapshot.doctorOverview.body.kinds;
+  // Treatment-plan review dates joined the agenda as a fixed kind after the
+  // main baseline. An empty count is the same data the old schema implied.
+  const counts = snapshot.doctorOverview?.body?.counts;
+  if (counts && counts["plan-review"] === 0) delete counts["plan-review"];
 
   snapshot.patientsDetail = {};
   for (const patient of patients) {

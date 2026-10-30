@@ -573,6 +573,7 @@
         "all": 5,
         "risk": 0,
         "visit": 1,
+        "plan-review": 0,
         "followup": 1,
         "tracking": 0,
         "messages": 3,
@@ -594,6 +595,11 @@
           "kind": "visit",
           "label": "复诊",
           "count": 1
+        },
+        {
+          "kind": "plan-review",
+          "label": "方案复评",
+          "count": 0
         },
         {
           "kind": "followup",

@@ -3,6 +3,7 @@
     "all": 5,
     "risk": 0,
     "visit": 1,
+    "plan-review": 0,
     "followup": 1,
     "tracking": 0,
     "messages": 3,

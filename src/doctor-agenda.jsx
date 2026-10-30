@@ -12,6 +12,7 @@ const defaultKinds = [
   { kind: "all", label: "全部" },
   { kind: "risk", label: "高危风险" },
   { kind: "visit", label: "复诊" },
+  { kind: "plan-review", label: "方案复评" },
   { kind: "followup", label: "随访" },
   { kind: "tracking", label: "检查检验" },
   { kind: "messages", label: "患者消息" },

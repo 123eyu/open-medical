@@ -23,11 +23,26 @@ function feishuWebhook(value) {
   return url.href;
 }
 
-// Outbound doctor digests only. No patient identities, clinical text or chat
-// messages enter the notification payload. Credentials share the app's vault.
+// Outbound doctor digests only. What leaves the machine is the doctor's own
+// choice per channel (DETAIL): counts only (default, and what every existing
+// connection keeps), surname-masked names with the agenda item title, or full
+// names with the item detail. Chat messages and record text never enter the
+// payload. Credentials share the app's vault.
+export const DETAIL = Object.freeze(["count", "masked", "full"]);
+const DETAIL_NOTE = {
+  count: "提醒只包含待办数量，请在工作台查看患者详情。",
+  masked: "提醒列出姓氏和待办事项，不含全名、联系方式和病历内容。",
+  full: "提醒列出患者全名、待办事项和简要说明，会经过微信或飞书服务器。",
+};
+const LIST_LIMIT = 30, TEXT_LIMIT = 1800;
+const maskName = (name) => {
+  const chars = [...String(name || "")];
+  return chars.length ? `${chars[0]}${"*".repeat(Math.max(1, Math.min(chars.length - 1, 2)))}` : "患者";
+};
+const clip = (value, max) => { const chars = [...String(value || "")]; return chars.length > max ? `${chars.slice(0, max).join("")}…` : chars.join(""); };
 export class DoctorNotifications {
-  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true, createFeishuRegistration = null, patients = () => null, followups = () => null, careTasks = () => null } = {}) {
-    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart, createFeishuRegistration, patients, followups, careTasks });
+  constructor(store, vault, { fetchImpl = fetch, now = () => Date.now(), pollMs = 60000, autoStart = true, createFeishuRegistration = null, patients = () => null, followups = () => null, careTasks = () => null, agenda = null } = {}) {
+    Object.assign(this, { store, vault, fetchImpl, now, pollMs, autoStart, createFeishuRegistration, patients, followups, careTasks, agenda });
     this.db = store.db; this.active = new Map(); this.controllers = new Set(); this.qr = null; this.stopped = false;
     this.initializeBinding();
     for (const row of this.db.prepare("SELECT channel,connection_id,day,data FROM doctor_notification_deliveries").all()) {
@@ -68,7 +83,8 @@ export class DoctorNotifications {
   config(channel) {
     check(CHANNELS.includes(channel), "INVALID_INPUT", "提醒渠道无效");
     const row = this.db.prepare("SELECT data FROM doctor_notification_settings WHERE channel=?").get(channel);
-    return row ? JSON.parse(row.data) : { channel, enabled: false, time: "09:00", timezone: "Asia/Shanghai", revision: 0, connectionId: "" };
+    const config = row ? JSON.parse(row.data) : { channel, enabled: false, time: "09:00", timezone: "Asia/Shanghai", revision: 0, connectionId: "" };
+    return { ...config, detail: DETAIL.includes(config.detail) ? config.detail : "count" };
   }
   write(config) { this.db.prepare("INSERT OR REPLACE INTO doctor_notification_settings VALUES (?,?)").run(config.channel, JSON.stringify(config)); }
   receipt(config, day = local(this.now(), config.timezone).day) {
@@ -77,11 +93,23 @@ export class DoctorNotifications {
   }
   publicConfig(channel) {
     const config = this.config(channel), secret = this.vault.get(KEY(channel));
-    return { ...config, feishuBinding: channel === "feishu" ? this.bindingOrNull()?.publicStatus() ?? { status: "unavailable" } : undefined, appId: secret.appId, hasConnection: channel === "wechat" ? Boolean(secret.botToken && secret.userId) : Boolean(secret.webhook || (secret.appId && secret.appSecret && secret.userId)), hasSigningSecret: Boolean(secret.signingSecret), busy: this.active.has(channel), delivery: this.receipt(config), preview: this.preview(config.timezone) };
+    return { ...config, feishuBinding: channel === "feishu" ? this.bindingOrNull()?.publicStatus() ?? { status: "unavailable" } : undefined, appId: secret.appId, hasConnection: channel === "wechat" ? Boolean(secret.botToken && secret.userId) : Boolean(secret.webhook || (secret.appId && secret.appSecret && secret.userId)), hasSigningSecret: Boolean(secret.signingSecret), busy: this.active.has(channel), delivery: this.receipt(config), preview: this.preview(config.timezone, config.detail) };
   }
   settings() { return { channels: CHANNELS.map(channel => this.publicConfig(channel)) }; }
-  preview(timezone) {
+  // The digest mirrors the doctor's 今日待办 (patient lane) when the host
+  // supplies it, so the push and the workbench never disagree. Without an
+  // agenda (bare unit construction) the legacy follow-up/tracking count stays.
+  preview(timezone, detail = "count") {
     const today = local(this.now(), timezone).day;
+    if (typeof this.agenda === "function") {
+      let result = null;
+      // Read the agenda as of the end of the doctor's local day, so a 09:00
+      // digest already lists follow-ups and tasks that fall due later today.
+      const { clock } = local(this.now(), timezone), [h, m] = clock.split(":").map(Number);
+      const endOfDay = this.now() + ((24 * 60 - (h * 60 + m)) * 60000) - 1;
+      try { result = this.agenda({ kind: "all", limit: 100, now: endOfDay }); } catch { /* agenda unavailable leaves the digest empty */ }
+      if (result) return this.agendaDigest(result, today, detail);
+    }
     const due = at => Number.isFinite(at) && local(at, timezone).day <= today;
     let people = new Set();
     try {
@@ -107,7 +135,39 @@ export class DoctorNotifications {
       }
     } catch { /* care-tasks plugin inactive */ }
     const count = new Set([...followup, ...tracking]).size;
-    return { day: today, patients: count, followup: followup.size, tracking: tracking.size, text: `Open Medical · 医生随访提醒\n${today}：${count} 位患者有今日或逾期的随访、待跟进事项。\n待随访 ${followup.size} 位，待跟进 ${tracking.size} 位。\n请打开 Open Medical 的「随访」与「今日待办」查看并处理。` };
+    return { day: today, patients: count, items: count, followup: followup.size, tracking: tracking.size, detail: "count", text: `Open Medical · 医生随访提醒\n${today}：${count} 位患者有今日或逾期的随访、待跟进事项。\n待随访 ${followup.size} 位，待跟进 ${tracking.size} 位。\n请打开 Open Medical 的「随访」与「今日待办」查看并处理。` };
+  }
+  agendaDigest(result, today, detail) {
+    const items = Array.isArray(result.items) ? result.items : [];
+    const total = Number.isSafeInteger(result.total) ? result.total : items.length;
+    const order = (result.kinds || []).filter((k) => k.kind !== "all");
+    const labels = Object.fromEntries(order.map((k) => [k.kind, k.label]));
+    const patients = new Set(items.filter((item) => item.patientId).map((item) => item.patientId));
+    const byKind = order.map((k) => ({ ...k, rows: items.filter((item) => item.kind === k.kind) })).filter((k) => k.rows.length);
+    for (const item of items) if (!labels[item.kind] && !byKind.some((k) => k.kind === item.kind)) byKind.push({ kind: item.kind, label: item.kind, rows: items.filter((row) => row.kind === item.kind) });
+    const count = (kind) => items.filter((item) => item.kind === kind).length;
+    const lines = [`Open Medical · 今日待办提醒（${today}）`];
+    if (!total) lines.push("今天没有需要处理的患者待办。");
+    else {
+      lines.push(`共 ${total} 项待办，涉及 ${patients.size} 位患者。`, byKind.map((k) => `${k.label} ${k.rows.length}`).join(" · "));
+      if (detail !== "count") {
+        let listed = 0;
+        for (const group of byKind) {
+          if (listed >= LIST_LIMIT) break;
+          lines.push("", `【${group.label}】`);
+          for (const item of group.rows) {
+            if (listed >= LIST_LIMIT) break;
+            const name = item.patientId ? (detail === "full" ? item.patientName : maskName(item.patientName)) : item.patientName;
+            lines.push(`${++listed}. ${clip(name, 20)} · ${clip(item.title, 40)}${detail === "full" && item.detail ? `（${clip(item.detail, 60)}）` : ""}`);
+          }
+        }
+        if (total > listed) lines.push("", `另有 ${total - listed} 项未列出。`);
+      }
+    }
+    lines.push("", "请打开 Open Medical「今日待办」处理；本消息只是提醒，不会联系患者。");
+    let text = lines.join("\n");
+    if ([...text].length > TEXT_LIMIT) text = `${clip(text, TEXT_LIMIT - 40)}\n（内容过长已截断，请在工作台查看全部）`;
+    return { day: today, patients: patients.size, items: total, followup: count("followup"), tracking: count("tracking"), detail, text };
   }
   save(channel, input) {
     const previous = this.config(channel);
@@ -125,7 +185,8 @@ export class DoctorNotifications {
       else if (input.signingSecret?.trim()) secret.signingSecret = input.signingSecret.trim();
     }
     check(!input.enabled || (channel === "wechat" ? secret.botToken && secret.userId : secret.webhook || (secret.appId && secret.appSecret && secret.userId)), "NOT_CONFIGURED", channel === "wechat" ? "请先扫码连接医生的微信" : "请先扫码连接飞书");
-    const next = { ...previous, enabled: input.enabled, time: input.time, timezone: input.timezone, revision: previous.revision + 1, connectionId: changed || !previous.connectionId ? randomUUID() : previous.connectionId };
+    check(input.detail === undefined || DETAIL.includes(input.detail), "INVALID_INPUT", "提醒内容选项无效");
+    const next = { ...previous, enabled: input.enabled, time: input.time, timezone: input.timezone, detail: input.detail ?? previous.detail, revision: previous.revision + 1, connectionId: changed || !previous.connectionId ? randomUUID() : previous.connectionId };
     sqliteTransaction(this.db, () => { this.vault.set(KEY(channel), secret); this.write(next); });
     return this.publicConfig(channel);
   }
@@ -206,17 +267,17 @@ export class DoctorNotifications {
   }
   async test(channel) {
     this.config(channel);
-    return this.exclusive(channel, async () => { await this.deliver(channel, "Open Medical · 医生随访提醒\n这是一条连接测试消息。提醒只包含待办数量，请在工作台查看患者详情。", `omw-test-${randomUUID()}`); return { message: "平台已接受测试消息，请在微信或飞书中确认收到。" }; });
+    return this.exclusive(channel, async () => { await this.deliver(channel, `Open Medical · 今日待办提醒\n这是一条连接测试消息。${DETAIL_NOTE[this.config(channel).detail]}`, `omw-test-${randomUUID()}`); return { message: "平台已接受测试消息，请在微信或飞书中确认收到。" }; });
   }
   writeDelivery(value) { this.db.prepare("INSERT OR REPLACE INTO doctor_notification_deliveries VALUES (?,?,?,?)").run(value.channel, value.connectionId, value.day, JSON.stringify(value)); }
   async send(channel, { retryId } = {}) {
     return this.exclusive(channel, async () => {
       const config = this.config(channel); check(config.enabled, "DISABLED", "请先启用并保存每日提醒");
-      const summary = this.preview(config.timezone), previous = this.receipt(config, summary.day);
+      const summary = this.preview(config.timezone, config.detail), previous = this.receipt(config, summary.day);
       if (previous && !retryId) return { delivery: previous, message: previous.status === "sent" ? "今日提醒已发送，不重复发送。" : "今日发送未完成，请核对收件箱后重试。" };
       if (retryId) check(previous?.id === retryId && ["failed", "unknown"].includes(previous.status), "CONFLICT", "发送状态已变化，请刷新后重试", 409);
-      if (!summary.patients) return { message: "今天没有待随访或待跟进事项，无需发送。" };
-      const delivery = { id: randomUUID(), channel, connectionId: config.connectionId, day: summary.day, at: this.now(), status: "sending", patients: summary.patients, attempt: (previous?.attempt || 0) + 1 };
+      if (!summary.items) return { message: "今天没有需要处理的患者待办，无需发送。" };
+      const delivery = { id: randomUUID(), channel, connectionId: config.connectionId, day: summary.day, at: this.now(), status: "sending", patients: summary.patients, items: summary.items, detail: summary.detail, attempt: (previous?.attempt || 0) + 1 };
       this.writeDelivery(delivery);
       try { await this.deliver(channel, summary.text, `omw-${delivery.id}`); delivery.status = "sent"; delivery.message = "平台已接受今日提醒"; }
       catch (error) { delivery.status = error.code === "DELIVERY_UNKNOWN" ? "unknown" : "failed"; delivery.message = error instanceof AppError ? error.message : "发送失败，请检查连接"; }

@@ -11,6 +11,11 @@ const VISIT_KIND = { kind: "visit", label: "复诊", order: 20 };
 // the historical tracking kind so the agenda UI is unchanged after care
 // tracking moved to a plugin.
 const LABS_KIND = { kind: "tracking", label: "检查检验", order: 40 };
+// Treatment-plan review dates belong to the fixed patient chart: an active
+// plan whose review date has arrived stays on the agenda until the doctor
+// records a new assessment or moves the date.
+const PLAN_REVIEW_KIND = { kind: "plan-review", label: "方案复评", order: 25 };
+const localDay = (ms) => { const d = new Date(ms); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 
 // Read model only: work remains owned by its original patient/session/domain.
@@ -67,10 +72,31 @@ export class DoctorOverview {
     return items;
   }
 
+  _planReviewItems(plans, current) {
+    const today = this.schedule?.today?.() || localDay(current);
+    const items = [];
+    for (const { patientId, plan } of plans) {
+      if (plan?.status !== "active" || !isCalendarDate(plan.reviewDate) || plan.reviewDate > today) continue;
+      const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${plan.reviewDate}T00:00:00Z`)) / 86400000);
+      items.push({
+        id: `plan-review:${patientId}:${plan.reviewDate}`,
+        kind: "plan-review",
+        patientId,
+        title: days > 0 ? `治疗方案复评已逾期 ${days} 天` : "今天治疗方案复评",
+        detail: `「${plan.title || "治疗方案"}」复评日期 ${plan.reviewDate}，核对疗效与耐受情况后记录评估，并安排下次复评日期`,
+        at: Date.parse(`${plan.reviewDate}T08:00:00`),
+        weight: days > 0 ? 3 : 4,
+        action: { type: "patient", tab: "medications", label: "记录评估" },
+      });
+    }
+    return items;
+  }
+
   read({ kind = "all", query = "", group = "", patientId = "", excludeRiskAlerts = false, offset = 0, limit = 12, now = Date.now() } = {}) {
     const current = typeof now === "number" ? now : Date.parse(now) || Date.now();
     const sourceKinds = new Map([
       [VISIT_KIND.kind, VISIT_KIND],
+      [PLAN_REVIEW_KIND.kind, PLAN_REVIEW_KIND],
       [LABS_KIND.kind, LABS_KIND],
     ]);
     for (const source of this.agendaSources?.() || [])
@@ -84,8 +110,10 @@ export class DoctorOverview {
     check(Number.isSafeInteger(offset) && offset >= 0 && Number.isSafeInteger(limit) && limit >= 1 && limit <= 100,
       "INVALID_INPUT", "分页参数无效");
     const db = this.store.db;
+    const plans = [];
     const people = new Map(db.prepare("SELECT id,data FROM patients").all().map((row) => {
       const p = JSON.parse(row.data);
+      if (p.treatmentPlan) plans.push({ patientId: row.id, plan: p.treatmentPlan });
       return [row.id, { id: row.id, name: p.name, patientNumber: p.patientNumber || "", birthYear: p.birthYear, archived: p.archived, groups: p.groups || [] }];
     }));
     check(!patientId || people.has(patientId), "NOT_FOUND", "患者不存在", 404);
@@ -107,6 +135,7 @@ export class DoctorOverview {
     // ---------- fixed region: return visits and new lab results ----------
     for (const item of this._visitItems()) add(item);
     for (const item of this._labItems()) add(item);
+    for (const item of this._planReviewItems(plans, current)) add(item);
 
     // ---------- plugin sources: everything else ----------
     const pluginItems = this.agendaItems?.({

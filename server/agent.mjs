@@ -870,6 +870,7 @@ export function createServer(options = {}) {
     // through their plugin services, never from the fixed shell.
     notificationHost: {
       vault: models.vault,
+      agenda: (opts) => doctorOverview.read(opts),
       options: options.doctorNotificationOptions || {},
     },
     careTasks: () => (pluginActive("care-tasks") ? pluginService("care-tasks") : null),

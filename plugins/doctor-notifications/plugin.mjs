@@ -77,6 +77,9 @@ export default definePlugin({
           ? ctx.services.followups
           : null,
       careTasks: () => ctx.services.careTasks?.(),
+      // 今日待办（含复诊、方案复评、检验、随访等全部患者事项）是推送内容的
+      // 唯一来源，推送与工作台看到的待办保持一致。
+      ...(typeof host.agenda === "function" ? { agenda: host.agenda } : {}),
       ...(host.options || {}),
     });
   },

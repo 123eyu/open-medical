@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { api } from "../../../src/agent-runtime";
 import { FeishuBinding } from "../../../src/feishu-binding";
 const names = { wechat: "微信", feishu: "飞书" };
+const details = [
+  ["count", "只发数量（不含患者信息）"],
+  ["masked", "列出姓氏和待办事项（如：张* · 随访到期）"],
+  ["full", "列出患者全名、事项和说明"],
+];
 function Channel({ initial, refresh }) {
   const [form, setForm] = useState({ ...initial });
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [error, setError] = useState(""), [qr, setQr] = useState(null);
@@ -38,7 +43,9 @@ function Channel({ initial, refresh }) {
     {channel === 'feishu' && initial.appId && <a href={`https://applink.feishu.cn/client/bot/open?appId=${encodeURIComponent(initial.appId)}`} target="_blank" rel="noreferrer">打开飞书提醒会话 ↗</a>}
     <form onSubmit={event => { event.preventDefault(); action(async () => { accept(await api(`/api/doctor-notifications/${channel}`, "PUT", { ...form, expectedRevision: form.revision })); setNotice("提醒设置已保存。"); }); }}><fieldset disabled={disabled}>
       <div className="notification-schedule"><label>每日提醒时间<input type="time" required value={form.time} onChange={e => update("time", e.target.value)} /></label><label>提醒时区<select value={form.timezone} onChange={e => update("timezone", e.target.value)}>{[...new Set([form.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'Asia/Shanghai'])].map(zone => <option key={zone} value={zone}>{zone === 'Asia/Shanghai' ? '北京时间' : zone === Intl.DateTimeFormat().resolvedOptions().timeZone ? '本机时间' : '已保存的时区'}</option>)}</select></label></div>
-      <label className="notification-check"><input type="checkbox" checked={form.enabled} onChange={e => update("enabled", e.target.checked)} />启用每日随访与待跟进提醒</label><button type="submit" className="primary">保存提醒设置</button>
+      <label>提醒内容<select value={form.detail || "count"} onChange={e => update("detail", e.target.value)}>{details.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      {form.detail === "full" && <p className="notification-warning" role="note">患者全名和待办说明会经过{names[channel]}的服务器，请确认符合所在机构的数据管理要求。</p>}
+      <label className="notification-check"><input type="checkbox" checked={form.enabled} onChange={e => update("enabled", e.target.checked)} />启用每日待办提醒</label><button type="submit" className="primary">保存提醒设置</button>
     </fieldset></form>
     <div className="toolbar-actions"><button className="secondary" disabled={disabled || !initial.hasConnection} onClick={() => action(async () => setNotice((await api(`/api/doctor-notifications/${channel}/test`, "POST", {})).message))}>发送测试提醒</button><button className="secondary" disabled={disabled || !initial.enabled} onClick={() => action(async () => { const result = await api(`/api/doctor-notifications/${channel}/send`, "POST", {}); await reload(); setNotice(result.message); })}>发送今日提醒</button>{initial.hasConnection && <button className="text-button" disabled={disabled} onClick={() => action(async () => { accept(await api(`/api/doctor-notifications/${channel}/disconnect`, "POST", { expectedRevision: form.revision })); setNotice("连接已断开，每日提醒已停用。"); })}>断开连接</button>}</div>
     <details><summary>查看提醒内容预览</summary><pre className="notification-preview">{initial.preview.text}</pre></details>
@@ -50,7 +57,7 @@ export function DoctorNotificationSettings() {
   const [data, setData] = useState(null), [error, setError] = useState("");
   const load = () => { setError(""); api("/api/doctor-notifications").then(setData).catch(e => setError(e.message)); };
   useEffect(load, []);
-  return <section className="doctor-notifications"><h2>医生随访提醒</h2><p>每天汇总今日及逾期的随访、待跟进患者数量，提醒医生回到工作台处理。消息不包含患者姓名、联系方式或病历正文。</p><p>自动提醒需保持应用运行并联网，每日最多一条；退出期间未发送的提醒在下次运行时汇总当天待办。</p>{error && <p role="alert">{error}<button onClick={load}>重新加载</button></p>}{!data && !error && <p role="status">正在读取提醒设置…</p>}{data?.channels.map(c => <Channel key={c.channel} initial={c} refresh={next => setData(value => ({ channels: value.channels.map(item => item.channel === next.channel ? next : item) }))} />)}</section>;
+  return <section className="doctor-notifications"><h2>医生待办提醒</h2><p>每天在设定时间，把「今日待办」里的复诊、方案复评、随访、检查检验等事项推送给医生本人。只提醒医生，不会联系患者。消息里是否出现患者姓名由下方「提醒内容」决定，默认只发数量；联系方式和病历正文不会发送。</p><p>自动提醒需保持应用运行并联网，每日最多一条；退出期间未发送的提醒在下次运行时汇总当天待办。</p>{error && <p role="alert">{error}<button onClick={load}>重新加载</button></p>}{!data && !error && <p role="status">正在读取提醒设置…</p>}{data?.channels.map(c => <Channel key={c.channel} initial={c} refresh={next => setData(value => ({ channels: value.channels.map(item => item.channel === next.channel ? next : item) }))} />)}</section>;
 }
 
 export default DoctorNotificationSettings;

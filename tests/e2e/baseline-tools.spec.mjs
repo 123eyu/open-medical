@@ -324,7 +324,7 @@ test("设置 消息渠道 医生提醒", async ({ page }) => {
     page.getByRole("heading", { name: "设置", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "医生随访提醒", exact: true }),
+    page.getByRole("heading", { name: "医生待办提醒", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: /微信提醒/ }),

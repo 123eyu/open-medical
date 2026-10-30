@@ -23,3 +23,5 @@
 .doctor-notifications button:disabled { opacity: .5; cursor: default; }
 .doctor-notifications input[type=checkbox] { accent-color: var(--accent-deep, #28674f); }
 .doctor-notifications summary { font-size: 14px; cursor: pointer; }
+.notification-warning { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--caution-line, #ecd7ae); border-radius: 8px; background: var(--caution-soft, #fdf6e9); color: var(--caution, #8a5a12); font-size: 14px; }
+.notification-channel select { width: 100%; min-width: 0; }
