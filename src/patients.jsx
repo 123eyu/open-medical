@@ -32,7 +32,7 @@ import { PatientIntakeModal } from "./patient-intake";
 import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
-import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useActiveSlot, usePluginActive, useSlot } from "./plugin-slots";
+import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useActiveSlot, usePluginActive, usePluginConnected, useSlot } from "./plugin-slots";
 
 // Rough triage order for the list: today's visit, abnormal results, overdue
 // follow-ups, unread messages. Only used when the doctor picks that sort.
@@ -107,6 +107,8 @@ export function PatientsView({
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("overview");
   const followupActive = usePluginActive("followup");
+  // Unassigned patient messages exist only with a connected WeChat/WeCom channel.
+  const messaging = usePluginConnected("followup");
   const riskActive = usePluginActive("risk-rules");
   // Direct patient URLs can render before the lazy UI registration finishes;
   // bootstrap already carries the plugin verdict, so use it for the first
@@ -232,7 +234,7 @@ export function PatientsView({
       const todoRequest = followupActive
         ? optional(api("/api/reminders"), { reminders: [] })
         : Promise.resolve({ reminders: [] });
-      const inboxRequest = followupActive
+      const inboxRequest = messaging
         ? optional(api("/api/inbox"), { messages: [] })
         : Promise.resolve({ messages: [] });
       const [list, todo, box, pending] = await Promise.all([
@@ -271,8 +273,11 @@ export function PatientsView({
     try {
       // The fixed record must open even when optional plugin routes are gone.
       const core = await loadPatientCore(api, id, { riskEnabled: riskReady });
+      const messagesReady =
+        messaging ||
+        Boolean(config?.plugins?.some((plugin) => plugin.id === "followup" && plugin.active === true && plugin.connected === true));
       const targetTab =
-        (nextTab === "messages" || nextTab === "followups") && !followupReady
+        (nextTab === "followups" && !followupReady) || (nextTab === "messages" && !messagesReady)
           ? firstCommunicationTab
           : nextTab;
       const work = await api(`/api/sessions/${core.patient.sessionId}`);
@@ -346,10 +351,11 @@ export function PatientsView({
   }, [detail?.id, optionalVersion, followupActive]);
   // Bootstrap enables plugin UI after the first render. Reload the list-level
   // optional data when that status flips, without refetching on every render.
-  const lastFollowupEnabled = useRef(followupActive);
+  const lastFollowupEnabled = useRef(`${followupActive}:${messaging}`);
   useEffect(() => {
-    if (lastFollowupEnabled.current === followupActive) return;
-    lastFollowupEnabled.current = followupActive;
+    const key = `${followupActive}:${messaging}`;
+    if (lastFollowupEnabled.current === key) return;
+    lastFollowupEnabled.current = key;
     let live = true;
     if (!followupActive) {
       setReminders([]);
@@ -358,14 +364,14 @@ export function PatientsView({
     }
     Promise.all([
       api("/api/reminders").then((todo) => todo?.reminders || []).catch(() => []),
-      api("/api/inbox").then((box) => box?.messages || []).catch(() => []),
+      messaging ? api("/api/inbox").then((box) => box?.messages || []).catch(() => []) : Promise.resolve([]),
     ]).then(([nextReminders, nextInbox]) => {
       if (!live) return;
       setReminders(nextReminders);
       setInbox(nextInbox);
     });
     return () => { live = false; };
-  }, [followupActive]);
+  }, [followupActive, messaging]);
   useEffect(() => {
     if (!followupActive && sortBy === "followup") setSortBy("updated");
   }, [followupActive, sortBy]);
@@ -459,7 +465,7 @@ export function PatientsView({
           ...(brief.abnormalLabs || []).slice(0, 2).map((lab) => ({ key: `lab-${lab.item}`, tone: lab.flag === "low" ? "is-info" : "is-danger", text: `${lab.item} ${lab.value}${lab.unit ? ` ${lab.unit}` : ""} ${FLAG_ARROW[lab.flag]}` })),
           ...((brief.abnormalLabCount || 0) > 2 ? [{ key: "lab-more", tone: "is-danger", text: `另 ${brief.abnormalLabCount - 2} 项异常` }] : []),
           ...(followupActive && p.counts.dueFollowups > 0 ? [{ key: "due", tone: "is-caution", text: `${p.counts.dueFollowups} 项随访到期` }] : []),
-          ...(followupActive && p.counts.unprocessedMessages > 0 ? [{ key: "msg", tone: "is-caution", text: `${p.counts.unprocessedMessages} 条新消息` }] : []),
+          ...(messaging && p.counts.unprocessedMessages > 0 ? [{ key: "msg", tone: "is-caution", text: `${p.counts.unprocessedMessages} 条新消息` }] : []),
           ...(followupActive && p.counts.pendingReminders > 0 ? [{ key: "rem", tone: "", text: `${p.counts.pendingReminders} 条提醒` }] : []),
         ];
         return (
@@ -591,7 +597,7 @@ export function PatientsView({
       {!detail && (
         <>
           {followupActive && reminders.length > 0 && <button className="patient-list-activity" onClick={() => onView("agenda")}><Bell size={15}/>随访事项已汇总到今日待办<span>查看待办 →</span></button>}
-          {followupActive && inbox.length > 0 && (
+          {messaging && inbox.length > 0 && (
             <details className="todo-panel patient-inbox"><summary><Inbox size={15} /> 消息归属 · {inbox.length} 条</summary>
               {inbox.map((m) => (
                 <div className="todo-row" key={m.id}>

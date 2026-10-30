@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const PATIENT_NAME = "示例·张沪生";
 const CONNECTED = process.env.MEDICAL_E2E_CONNECTED === "1";
-const GUIDE = "连接微信或企业微信后，即可使用随访与患者消息";
-const SETTINGS_HINT = "连接微信或企业微信后启用随访与患者消息";
+const GUIDE = "连接微信或企业微信后，可以在这里查看患者消息";
+const SETTINGS_HINT = "随访计划和到期提醒可直接使用；连接微信或企业微信后才能给患者发消息";
 
 test.describe.configure({ mode: "serial" });
 
@@ -34,7 +34,7 @@ async function patientUrl(request, headers) {
   return `/?view=patients&patient=${encodeURIComponent(patient.id)}`;
 }
 
-test("未连接渠道：随访入口不可见，设置页保留连接引导", async ({
+test("未连接患者渠道：随访计划和提醒可用，患者消息入口不可见", async ({
   page,
   request,
 }) => {
@@ -53,29 +53,27 @@ test("未连接渠道：随访入口不可见，设置页保留连接引导", as
   await expect(tabs.getByRole("button", { name: /消息记录/ })).toHaveCount(0);
   await expect(
     tabs.getByRole("button", { name: "随访计划", exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await expect(
     tabs.getByRole("button", { name: "复诊预约", exact: true }),
   ).toBeVisible();
-  await expect(
-    tabs.getByRole("button", { name: "检查与转诊", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("随访事项已汇总到今日待办")).toHaveCount(0);
 
-  // Direct routes show the connection empty state, never the business UI.
+  // The follow-up page is the doctor's reminders and templates only: no
+  // auto follow-up or chat follow-up tabs, no connection empty state.
   await page.goto("/?view=followups", { waitUntil: "domcontentloaded" });
-  await expect(page.getByText(GUIDE)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "去设置连接" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /新建随访计划/ }),
-  ).toHaveCount(0);
+  const sections = page.getByRole("navigation", { name: "随访工作内容" });
+  await expect(sections.getByRole("button", { name: "随访待办", exact: true })).toBeVisible();
+  await expect(sections.getByRole("button", { name: "计划与模板", exact: true })).toBeVisible();
+  await expect(sections.getByRole("button", { name: "自动随访", exact: true })).toHaveCount(0);
+  await expect(sections.getByRole("button", { name: "聊天随访", exact: true })).toHaveCount(0);
+  await expect(page.getByText(GUIDE)).toHaveCount(0);
 
+  // Patient messages still show the connection empty state.
   await page.goto("/?view=care", { waitUntil: "domcontentloaded" });
   await expect(page.getByText(GUIDE)).toBeVisible();
+  await expect(page.getByRole("button", { name: "去设置连接" })).toBeVisible();
 
-  // Connection panels stay available, with an explicit activation hint.
+  // Connection panels stay available, with a hint that connecting is optional.
   await page.goto("/?view=settings&settingsTab=followup", {
     waitUntil: "domcontentloaded",
   });

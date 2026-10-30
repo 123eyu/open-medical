@@ -1,5 +1,7 @@
 // Followup-owned agenda sources. The collection code is lifted verbatim from
 // the transitional legacy-agenda plugin; only the owning plugin changed.
+import { messagingConnected } from "./connection.mjs";
+
 const DAY = 86400000;
 const time = (value) => typeof value === "number" ? value : Date.parse(value) || 0;
 const moment = (now) => typeof now === "number" ? now : Date.parse(now) || Date.now();
@@ -41,6 +43,8 @@ const messages = {
   kind: "messages",
   label: "患者消息",
   order: 50,
+  // Patient messages only exist once a WeChat/WeCom channel is connected.
+  available: (ctx) => messagingConnected(ctx),
   read(ctx) {
     const db = ctx.db;
     const items = [];

@@ -238,7 +238,7 @@ test("main 升级到当前分支：数据、接口快照和表结构保持一致
   }
 });
 
-test("未连接渠道时旧随访数据仍在库中，但接口按 T7.6 隐藏", async (t) => {
+test("未连接患者渠道时旧随访数据和随访接口照常可用，只隐藏患者消息", async (t) => {
   const root = withTempDir(t);
   const database = copyFixture(root, "dormant.sqlite");
   const legacy = new DatabaseSync(database, { readOnly: true });
@@ -247,14 +247,15 @@ test("未连接渠道时旧随访数据仍在库中，但接口按 T7.6 隐藏",
   const app = await startWithDatabase(database);
   t.after(() => app.close());
 
-  // Default plugin directories: no test channel, so followup is dormant.
+  // Default plugin directories: no patient channel. Follow-up plans and
+  // reminders stay usable; only patient messaging is hidden.
   const bootstrap = await app.request("/api/bootstrap");
   assert.equal(bootstrap.status, 200);
   const followup = bootstrap.body.plugins.find((item) => item.id === "followup");
   assert.ok(followup, "followup 插件应存在");
   assert.equal(followup.enabled, true);
   assert.equal(followup.connected, false);
-  assert.equal(followup.active, false);
+  assert.equal(followup.active, true);
 
   const counts = tableCounts(app.server.store.db);
   for (const name of [
@@ -269,33 +270,27 @@ test("未连接渠道时旧随访数据仍在库中，但接口按 T7.6 隐藏",
 
   const overview = await app.request("/api/doctor/overview?limit=100");
   assert.equal(overview.status, 200);
-  assert.equal(overview.body.counts.followup, undefined);
+  assert.ok(overview.body.counts.followup > 0, "旧随访提醒进入今日待办");
   assert.equal(overview.body.counts.messages, undefined);
-  // Care-tasks has its own plugin and stays available without a channel;
-  // only followup-owned kinds (followup/messages) disappear.
   assert.deepEqual(
     [...new Set(overview.body.items.map((item) => item.kind))].sort(),
-    ["tracking", "visit"],
+    ["followup", "tracking", "visit"],
   );
 
-  for (const path of ["/api/followups/overview", "/api/care/overview"]) {
-    const response = await app.request(path);
-    assert.equal(response.status, 409, path);
-    assert.equal(response.body.code, "FOLLOWUP_INACTIVE", path);
-  }
+  assert.equal((await app.request("/api/followups/overview")).status, 200);
+  const care = await app.request("/api/care/overview");
+  assert.equal(care.status, 409);
+  assert.equal(care.body.code, "PATIENT_CHANNEL_NOT_CONNECTED");
   const patients = await app.request("/api/patients");
   assert.equal(patients.status, 200);
   for (const patient of patients.body.patients) {
     const followups = await app.request(
       `/api/patients/${encodeURIComponent(patient.id)}/followups`,
     );
-    assert.equal(followups.status, 409, "未连接渠道时不应暴露患者随访计划");
-    assert.equal(followups.body.code, "FOLLOWUP_INACTIVE");
+    assert.equal(followups.status, 200, "未连接患者渠道也能查看随访计划");
   }
 
-  // T7.6 keeps the shared reminder bus (`/api/reminders`) readable while the
-  // followup plugin is dormant; the rows are intentionally still returned so
-  // fixed-area reminders are not lost. Plugin-owned routes are the hidden part.
+  // The shared reminder bus keeps every legacy reminder row.
   const reminders = await app.request("/api/reminders?status=pending&limit=100");
   assert.equal(reminders.status, 200);
   assert.ok(reminders.body.reminders.length > 0);

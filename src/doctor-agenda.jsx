@@ -3,7 +3,7 @@ import { ArrowUpRight, CheckCheck, Search, RotateCw, UserPlus } from "lucide-rea
 import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
 import { requestSettingsTab } from "./extension-center";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginActive, usePluginConnected } from "./plugin-slots";
 import "./doctor-agenda.css";
 
 // The server returns the enabled agenda kinds (including "all") in display
@@ -31,6 +31,9 @@ const date = (value) => {
 
 export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   const followupActive = usePluginActive("followup");
+  // Follow-up reminders need only the plugin; patient messages need a channel.
+  const messaging = usePluginConnected("followup");
+  const hiddenKinds = [...(followupActive ? [] : ["followup"]), ...(messaging ? [] : ["messages"])];
   const [data, setData] = useState(null);
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
@@ -42,15 +45,13 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   const [opening, setOpening] = useState(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!followupActive && ["followup", "messages"].includes(kind)) setKind("all");
-  }, [followupActive, kind]);
+    if (hiddenKinds.includes(kind)) setKind("all");
+  }, [followupActive, messaging, kind]);
   const [hasUpdates, setHasUpdates] = useState(false);
   const displayed = useRef(null);
   const loadedScope = useRef("");
   const allKinds = data?.kinds?.length ? data.kinds : defaultKinds;
-  const kindOptions = followupActive
-    ? allKinds
-    : allKinds.filter((item) => !["followup", "messages"].includes(item.kind));
+  const kindOptions = allKinds.filter((item) => !hiddenKinds.includes(item.kind));
   const kindLabels = Object.fromEntries(kindOptions.map((item) => [item.kind, item.label]));
   useEffect(() => {
     // 分组筛选项来自患者列表的在用分组（全局助手确认的分组会出现在这里）。

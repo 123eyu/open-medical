@@ -6,7 +6,7 @@ import "./message-channels.css";
 import { useEffect, useRef, useState } from "react";
 import { api, bootstrap, medicalEnabled } from "./agent-runtime";
 import { dueNotifyEnabled, setDueNotifyEnabled } from "./due-notify";
-import { SlotItem, findSettingsPanel, usePluginActive, useActiveSlot, useSlot } from "./plugin-slots";
+import { SlotItem, findSettingsPanel, usePluginActive, usePluginConnected, useActiveSlot, useSlot } from "./plugin-slots";
 import { WorkspaceExtensionsPanel } from "./workspace-extensions";
 import { ExtensionCenter, takeSettingsTab } from "./extension-center";
 import { KnowledgeTranscriptionSettings } from "./knowledge-transcription-settings";
@@ -250,6 +250,7 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
   useEffect(() => { if (new URLSearchParams(window.location.search).get('doctor') === '1') onDoctor(); }, []);
   const pluginPanels = useActiveSlot("settings.panels");
   const followupActive = usePluginActive("followup");
+  const messaging = usePluginConnected("followup");
   const legacyPanels = pluginPanels.filter((panel) => panel.legacyTab);
   const param = new URLSearchParams(window.location.search).get("settingsTab");
   const [requestedSection, updateSection] = useState(
@@ -315,7 +316,8 @@ export function AppSettingsView({ config, onModel, onDoctor, onProjects, onAsk, 
         {group === "plugins" && <PluginSettings onPluginsChanged={onPluginsChanged} onOpenSection={setSection} />}
         {group === "channels" && <>
           <SettingsSubnav label="消息渠道用途" items={channelSections} section={section === "plugins" ? "followup" : section} onSelect={setSection} />
-          {!followupActive && <p className="settings-channel-hint"><span className="om-chip is-caution">随访未启用</span><span>连接微信或企业微信后启用随访与患者消息</span></p>}
+          {!followupActive && <p className="settings-channel-hint"><span className="om-chip is-caution">随访未启用</span><span>随访插件已停用，可在「插件」中重新启用</span></p>}
+          {followupActive && !messaging && legacyPanel?.legacyTab === "followup" && <p className="settings-channel-hint"><span className="om-chip is-info">患者消息未连接</span><span>随访计划和到期提醒可直接使用；连接微信或企业微信后才能给患者发消息、发问卷</span></p>}
           {legacyPanel ? <SlotItem key={`${legacyPanel.pluginId}:${legacyPanel.id}`} contribution={legacyPanel} /> : null}
         </>}
         {group === "personal" && <>

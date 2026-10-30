@@ -18,7 +18,9 @@ const definition = (name, description, properties, required = []) => ({
 
 // Followup-owned agent tools. Names and parameter schemas are unchanged from
 // the fixed shell; proposal types also stay unchanged until T7.5.
-export function followupToolPlugins(ctx) {
+// Patient-messaging tools (care_*, wecom_*) are only offered while a patient
+// channel is connected; the doctor's own reminder tools are always present.
+export function followupToolPlugins(ctx, { messaging = true } = {}) {
   const service = () => ctx.plugins.followup.service;
   const pending = ctx.services.pending;
   const care = () => service().care;
@@ -64,12 +66,12 @@ export function followupToolPlugins(ctx) {
         return { followups: service().followups.overview({ limit: value }), readOnly: true };
       },
     },
-    ...careTools(care, pending),
+    ...(messaging ? careTools(care, pending) : []),
   ];
 }
 
-export function registerFollowupTools(ctx, { registry }) {
-  for (const tool of followupToolPlugins(ctx))
+export function registerFollowupTools(ctx, { registry, messaging = true }) {
+  for (const tool of followupToolPlugins(ctx, { messaging }))
     registry.register({
       permission: "tools.execute",
       capability: { backend: "local" },

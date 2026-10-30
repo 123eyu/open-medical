@@ -1107,13 +1107,15 @@ export class PluginHost {
     const sources = [];
     for (const record of this.ordered) {
       if (!this._isActive(record) || !record.spec) continue;
-      for (const source of record.spec.agendaSources)
+      for (const source of record.spec.agendaSources) {
+        if (!this._sourceAvailable(record, source)) continue;
         sources.push({
           pluginId: record.id,
           kind: source.kind,
           label: source.label,
           order: source.order,
         });
+      }
     }
     return sources.sort(
       (a, b) =>
@@ -1121,6 +1123,19 @@ export class PluginHost {
         a.pluginId.localeCompare(b.pluginId) ||
         a.kind.localeCompare(b.kind),
     );
+  }
+
+  // An agenda source may depend on runtime state inside an active plugin
+  // (for example patient messages need a connected channel). A source whose
+  // available(ctx) is false is hidden from both the kind list and the items.
+  _sourceAvailable(record, source) {
+    if (typeof source.available !== "function") return true;
+    try {
+      return source.available(this.contextFor(record)) !== false;
+    } catch (error) {
+      console.error(`插件 ${record.id} 待办来源可用性检查失败:`, error);
+      return false;
+    }
   }
 
   agendaItems({
@@ -1132,6 +1147,7 @@ export class PluginHost {
     for (const record of this.ordered) {
       if (!this._isActive(record) || !record.spec) continue;
       for (const source of record.spec.agendaSources) {
+        if (!this._sourceAvailable(record, source)) continue;
         try {
           const result = source.read(this.contextFor(record), {
             now,
@@ -1430,6 +1446,22 @@ export class PluginHost {
   isActive(id) {
     const record = this.byId.get(id);
     return record ? this._isActive(record) : false;
+  }
+
+  // Connection reported by an active plugin's status hook, read fresh when the
+  // hook is synchronous. Used for features inside a plugin that need a live
+  // channel while the rest of the plugin works without one.
+  isConnected(id) {
+    const record = this.byId.get(id);
+    if (!record || !this._isActive(record) || !record.spec?.status) return false;
+    try {
+      const value = record.spec.status(this.contextFor(record));
+      if (!value || typeof value.then !== "function")
+        return this._connectedValue(value) === true;
+    } catch {
+      return false;
+    }
+    return this.statusCache.get(id)?.connected === true;
   }
 
   // Recompute activation after a connection change: start newly active

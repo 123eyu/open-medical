@@ -29,7 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { careSetupProgress, requestPluginIntent } from "./plugin-navigation";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginActive, usePluginConnected } from "./plugin-slots";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
@@ -256,7 +256,9 @@ const dateLabel = (value) =>
 const SETUP_HIDDEN_KEY = "omw-setup-checklist-hidden";
 // 首次启动检查清单：各项独立探测，接口缺失或失败时显示「未检测」而不阻塞首页。
 function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
-  const followupActive = usePluginActive("followup");
+  // Connecting WeChat/WeCom is optional: follow-up reminders work without it,
+  // so the checklist only shows channel progress once one is connected.
+  const followupActive = usePluginConnected("followup");
   const [facts, setFacts] = useState({});
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(SETUP_HIDDEN_KEY) === "1"; } catch { return false; } });
   useEffect(() => {
@@ -273,9 +275,8 @@ function SetupChecklist({ modelConfigured, onModelSettings, onView }) {
   const items = [
     { id: "model", label: "连接模型", done: modelConfigured, state: modelConfigured ? "已填写连接" : "未填写连接", action: "去连接", open: onModelSettings },
     { id: "knowledge", label: "导入医生知识库", done: facts.knowledge === true, state: facts.knowledge == null ? "未检测" : facts.knowledge ? "已有资料" : "暂无资料", action: "导入资料", open: () => onView?.("knowledge") },
-    // 随访与患者消息休眠时只保留「连接微信/企业微信」这条入口；接入后
-    // 再显示企业微信接入进度与自动回复边界。
-    ...(!followupActive ? [{ id: "channel", label: "连接微信/企业微信", done: false, state: "未连接", action: "去设置", open: () => { requestSettingsTab("followup"); onView?.("settings"); } }] : []),
+    // 连接患者微信/企业微信是可选项（随访提醒不需要）；接入后才显示企业微信
+    // 接入进度与自动回复边界。
     ...(followupActive && facts.wecom === true ? [{ id: "wecom", label: "企业微信已接入", done: true, state: "已接入", action: "管理", open: () => { requestPluginIntent("followup", "care-setup"); onView?.("care"); } }] : []),
     ...(followupActive && facts.autoReply?.saved ? [{ id: "autoReply", label: "自动回复边界", done: true, state: modeLabel[facts.autoReply.mode] || facts.autoReply.mode, action: "设置自动回复", open: () => onView?.("care") }] : []),
   ];

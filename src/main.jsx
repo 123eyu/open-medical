@@ -877,6 +877,9 @@ function App() {
           ready
             .filter((plugin) => plugin.active !== false)
             .map((plugin) => plugin.id),
+          ready
+            .filter((plugin) => plugin.connected === true)
+            .map((plugin) => plugin.id),
         );
       })
       .catch((error) => console.error("插件 UI 加载失败:", error));

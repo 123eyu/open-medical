@@ -54,7 +54,7 @@ async function readOverview(app) {
   return actual;
 }
 
-test("默认未连接渠道：今日待办只剩复诊，随访/消息来源不出现", async (t) => {
+test("默认未连接患者渠道：今日待办有复诊和随访提醒，患者消息来源不出现", async (t) => {
   const app = await startTestServer({
     provider: createScriptedProvider([]),
   });
@@ -62,8 +62,8 @@ test("默认未连接渠道：今日待办只剩复诊，随访/消息来源不�
 
   const actual = await readOverview(app);
   assert.deepEqual(actual, snapshot("agenda-dormant.json"));
-  assert.deepEqual(Object.keys(actual.itemsByKind), ["visit"]);
-  assert.equal(actual.counts.followup, undefined);
+  assert.deepEqual(Object.keys(actual.itemsByKind).sort(), ["followup", "visit"]);
+  assert.equal(actual.counts.followup, 1);
   assert.equal(actual.counts.messages, undefined);
 });
 

@@ -3,16 +3,17 @@ import { ArrowRight, BookOpen, Check, Loader2 } from "lucide-react";
 import { api } from "./agent-runtime";
 import { DEMO_CONTEXT } from "./task-context";
 import { taskTemplateContext } from "../shared/task-templates.mjs";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginActive, usePluginConnected } from "./plugin-slots";
 import {
   DEMO_SCENARIOS,
-  demoScenarioDetail,
+  demoScenarioCopy,
   demoScenarioVisible,
 } from "../shared/demo-experience.mjs";
 import "./demo-experience.css";
 
 export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged, entryHidden, preferenceBusy, onEntryHiddenChange }) {
   const followupActive = usePluginActive("followup");
+  const messaging = usePluginConnected("followup");
   const [state, setState] = useState(null);
   const [group, setGroup] = useState("临床与患者");
   const [busy, setBusy] = useState("");
@@ -60,10 +61,10 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
       ...(flow.id === "followup" ? { patient: 1, tab: "followups" } : {}),
       next: "会先打开示例材料与任务要求。核对后发送，可继续追问、调整草稿和查看成果。",
     })) : DEMO_SCENARIOS
-    .filter((scenario) => scenario.group === group && demoScenarioVisible(scenario, followupActive))
+    .filter((scenario) => scenario.group === group && demoScenarioVisible(scenario, followupActive, messaging))
     .map((scenario) => ({
       ...scenario,
-      detail: demoScenarioDetail(scenario, followupActive),
+      ...demoScenarioCopy(scenario, followupActive, messaging),
     }));
   const groups = ["临床与患者", "资料与研究", "工作台能力", "任务模板"];
   const actionLabel = s => s.tab === "library" ? "查看示例材料" : s.view || s.tab ? "打开功能" : "准备示例任务";
@@ -74,7 +75,7 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
     <section className={`demo-welcome${state?.installed ? " is-ready" : ""}`} aria-label="示例数据管理">
       <BookOpen size={22} aria-hidden="true"/>
       <div><p className="demo-welcome-title"><span className={`om-chip ${state?.installed ? "is-ok" : "is-caution"}`}>{state?.installed ? "已就位" : "未准备"}</span><b>{state?.installed ? "示例资料已就位，可以随时接着体验" : "不用上传资料，也能开始第一项任务"}</b></p>
-        <p>3 位虚构患者 · 原始病历与检验{followupActive ? " · 随访问卷 · 消息草稿" : ""} · 知识库 · 病例与试验方案 · 研究 CSV</p>
+        <p>3 位虚构患者 · 原始病历与检验{messaging ? " · 随访问卷 · 消息草稿" : followupActive ? " · 随访提醒" : ""} · 知识库 · 病例与试验方案 · 研究 CSV</p>
         <small>浏览与本地计算无需模型；AI 问答使用你配置的模型，发送前仍可核对材料和外发许可。</small></div>
       <button className={state?.installed ? "secondary" : "primary"} disabled={Boolean(busy)} onClick={() => run("prepare", async () => { await prepare(); setNotice("示例已准备好。请选择下方场景；重复准备不会覆盖已编辑的数据。"); })}>{busy === "prepare" ? <Loader2 size={16} className="spin"/> : null}{state?.installed ? "补齐示例资料" : "准备全部示例"}</button>
     </section>

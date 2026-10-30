@@ -4,27 +4,7 @@ import { createFollowupApi, FOLLOWUP_LEGACY_API_PATHS } from "./api/followup.mjs
 import { registerFollowupTools } from "./tools.mjs";
 import { followupAgendaSources } from "./agenda.mjs";
 import { legacyFollowupProposals } from "./proposals.mjs";
-
-// A followup channel is connected only when it is enabled and its adapter
-// reports ready. Built-in chat connections are summarized by ChatFollowups;
-// channel plugins (including test fixtures) expose followupChannels().
-function connectedChannels(ctx) {
-  const states = [];
-  for (const entry of Object.values(ctx.plugins || {})) {
-    if (!entry?.service || entry.enabled === false) continue;
-    if (typeof entry.service.followupChannels !== "function") continue;
-    try {
-      const list = entry.service.followupChannels();
-      if (Array.isArray(list)) states.push(...list);
-    } catch {
-      // A broken channel must not make the followup plugin unavailable.
-    }
-  }
-  const chat = ctx.plugins?.followup?.service?.chatFollowups;
-  if (chat && typeof chat.connectionStates === "function")
-    states.push(...chat.connectionStates());
-  return states;
-}
+import { messagingConnected } from "./connection.mjs";
 
 export default definePlugin({
   id: "followup",
@@ -36,7 +16,9 @@ export default definePlugin({
     anyOf: [["channel-wecom", "channel-wechat"]],
   },
   provides: { service: "followup", apiVersion: 1 },
-  activation: { requiresConnection: true },
+  // Follow-up plans and doctor reminders work without any patient channel.
+  // Patient messaging (inbox, replies, campaigns, questionnaires, chat
+  // follow-ups) is gated inside the plugin by status().connected.
   capabilities: ["followup.agenda", "followup.tools"],
   legacyProposalTypes: legacyFollowupProposals(),
   migrations: "./migrations",
@@ -66,10 +48,13 @@ export default definePlugin({
       const service = ctx.plugins.followup?.service;
       const patient = demo.patient(1);
       if (!service || !patient || patient.archived) return;
+      // Without a patient channel the demo only shows the doctor's own
+      // reminder: no questionnaire to send, no patient messages or drafts.
+      const messaging = messagingConnected(ctx);
       if (
         !service.followups
           .list(patient.id)
-          .some((job) => job.questionnaire)
+          .some((job) => job.name === "示例·血糖控制季度随访")
       ) {
         const job = service.followups.create(patient.id, {
           name: "示例·血糖控制季度随访",
@@ -77,7 +62,7 @@ export default definePlugin({
           intervalDays: 90,
           firstDueAt: new Date(Date.now() + 60000).toISOString(),
           checklist: ["近期血糖记录", "用药依从性"],
-          questionnaire: {
+          ...(messaging ? { questionnaire: {
             title: "示例·复诊资料回收",
             questions: [
               {
@@ -92,7 +77,7 @@ export default definePlugin({
                 text: "这次希望医生帮助核对什么？",
               },
             ],
-          },
+          } } : {}),
         });
         // Materialize one occurrence with the normal workflow, then leave the
         // next occurrence in the future so the scheduler cannot duplicate it.
@@ -100,7 +85,7 @@ export default definePlugin({
         await service.followups.execute(job);
       }
       const care = service.care;
-      if (!care) return;
+      if (!care || !messaging) return;
       const message = care.ingest({
         patientId: patient.id,
         text: "【虚构示例】我已整理好近期测量记录，复诊还需要准备哪些资料？",
@@ -156,16 +141,10 @@ export default definePlugin({
     });
   },
   status(ctx) {
-    const connected = connectedChannels(ctx).some(
-      (channel) =>
-        channel &&
-        channel.enabled === true &&
-        channel.state === "ready",
-    );
-    return { connected };
+    return { connected: messagingConnected(ctx) };
   },
   tools(ctx, { registry }) {
-    registerFollowupTools(ctx, { registry });
+    registerFollowupTools(ctx, { registry, messaging: messagingConnected(ctx) });
   },
   api(ctx, req, url, io) {
     return createFollowupApi(ctx)(req, url, io);

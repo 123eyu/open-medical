@@ -39,27 +39,49 @@ export const DEMO_SCENARIOS = [
   { id: "workspace", group: "工作台能力", title: "文件、成果与任务记录", detail: "打开带示例 CSV 和说明书的任务，体验材料阅读、问答、文件生成和历史。", task: true, question: "请读取示例研究数据.csv，检查缺失值和字段，生成一份数据字典 Markdown 文件与数据质量报告。数据为虚构练习，不能据此形成临床结论。", next: "在示例任务中查看材料、成果与执行记录，继续追问或下载产物。" },
 ];
 
-// Demo cards that operate the followup/care surface. They must disappear while
-// the followup plugin is dormant (no connected WeChat/WeCom channel).
+// Demo cards that operate the followup/care surface. Follow-up plans and
+// reminders only need the followup plugin; patient messages also need a
+// connected WeChat/WeCom channel.
 export function isFollowupDemoScenario(scenario) {
   return Boolean(
     scenario &&
       (scenario.flow === "followup" ||
         scenario.tab === "followups" ||
-        scenario.view === "care" ||
-        scenario.id === "messages"),
+        isMessagingDemoScenario(scenario)),
   );
 }
 
-export function demoScenarioVisible(scenario, followupActive) {
+export function isMessagingDemoScenario(scenario) {
+  return Boolean(scenario && (scenario.view === "care" || scenario.id === "messages"));
+}
+
+export function demoScenarioVisible(scenario, followupActive, messaging = followupActive) {
+  if (isMessagingDemoScenario(scenario)) return Boolean(followupActive && messaging);
   return Boolean(followupActive) || !isFollowupDemoScenario(scenario);
 }
 
-export function demoScenarioDetail(scenario, followupActive) {
+// Title and next-step text for a card; without a patient channel the follow-up
+// card no longer mentions questionnaires.
+export function demoScenarioCopy(scenario, followupActive, messaging = followupActive) {
+  if (!scenario) return {};
+  const copy = { detail: demoScenarioDetail(scenario, followupActive, messaging) };
+  if (scenario.id === "followup" && !messaging) {
+    copy.title = "随访与复诊";
+    copy.next = "查看随访计划、登记随访结果；今日待办可以进入复诊处理。";
+  }
+  return copy;
+}
+
+export function demoScenarioDetail(scenario, followupActive, messaging = followupActive) {
   if (!scenario) return "";
   // Today's agenda still exists without followup, but it only contains visit
   // and shared reminders then.
   if (scenario.id === "agenda" && !followupActive)
     return "查看由示例复诊和提醒汇总的工作清单。";
+  if (scenario.id === "agenda" && !messaging)
+    return "查看由示例复诊和逾期随访提醒汇总的工作清单。";
+  // Without a patient channel the demo plan is a doctor reminder, no questionnaire.
+  if (scenario.id === "followup" && !messaging)
+    return "李婉珍已有到期的随访提醒；张沪生已有今日复诊。";
   return scenario.detail || "";
 }

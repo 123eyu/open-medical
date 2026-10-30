@@ -13,13 +13,17 @@ const CHANNEL_FAKE = fileURLToPath(
   new URL("../fixtures/plugins/channel-fake", import.meta.url),
 );
 
-test("随访提案确认后，今日待办出现对应随访事项", async (t) => {
+for (const [label, pluginDirs] of [
+  ["未连接患者渠道", undefined],
+  ["已连接患者渠道", [PLUGIN_ROOT, CHANNEL_FAKE]],
+])
+test(`${label}：随访提案确认后，今日待办出现对应随访事项`, async (t) => {
   const provider = createScriptedProvider([]);
-  // The followup plugin is dormant without a connected channel. This test is
-  // about followup behaviour, so inject the test-only connected channel.
+  // Doctor-only follow-up reminders never need a patient channel; run the
+  // same flow with and without the test-only connected channel.
   const app = await startTestServer({
     provider,
-    serverOptions: { pluginDirs: [PLUGIN_ROOT, CHANNEL_FAKE] },
+    serverOptions: pluginDirs ? { pluginDirs } : {},
   });
   t.after(() => app.close());
 

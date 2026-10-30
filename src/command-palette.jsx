@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginConnected } from "./plugin-slots";
 import { Activity, ArrowRight, CalendarClock, FolderOpen, Inbox, Search, Stethoscope, UserPlus } from "lucide-react";
 
 // 命令面板（Cmd/Ctrl+K）：患者快速检索（姓名 / 编号 / 姓氏拼音首字母）
@@ -26,7 +26,8 @@ const COMMANDS = (medical, followupActive) => [
 ];
 
 export function CommandPalette({ open, onClose, patients, medical, onOpenPatient, onNavigate, onCreatePatient }) {
-  const followupActive = usePluginActive("followup");
+  // The only followup command here is 患者消息, which needs a connected channel.
+  const followupActive = usePluginConnected("followup");
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef(null), listRef = useRef(null);

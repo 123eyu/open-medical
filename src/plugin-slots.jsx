@@ -48,6 +48,7 @@ const listeners = new Set();
 const EMPTY = Object.freeze([]);
 let enabledIds = new Set();
 let activeIds = new Set();
+let connectedIds = new Set();
 let slotsByName = new Map();
 let activeSlotsByName = new Map();
 let version = 0;
@@ -103,7 +104,9 @@ function rebuild() {
       Object.freeze(
         list.filter(
           (item) =>
-            activeIds.has(item.pluginId) ||
+            (activeIds.has(item.pluginId) &&
+              (item.requiresConnection !== true ||
+                connectedIds.has(item.pluginId))) ||
             item.availableWhenDormant === true,
         ),
       ),
@@ -300,6 +303,10 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
           throw new Error(
             `插件 ${id} 的插槽 patient.tabs.${item.id} 的 area 必须是 record 或 communication`,
           );
+        if (item.requiresConnection !== undefined && typeof item.requiresConnection !== "boolean")
+          throw new Error(
+            `插件 ${id} 的插槽 ${name}.${item.id} 的 requiresConnection 必须是布尔值`,
+          );
         if (item.replacesBuiltin !== undefined && typeof item.replacesBuiltin !== "boolean")
           throw new Error(
             `插件 ${id} 的插槽 ${name}.${item.id} 的 replacesBuiltin 必须是布尔值`,
@@ -310,6 +317,9 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
           label: item.label || item.id,
           order: Number.isFinite(item.order) ? item.order : 100,
           ...(item.meta ? { meta: Object.freeze({ ...item.meta }) } : {}),
+          // A contribution inside an active plugin that only makes sense
+          // while the plugin reports a live connection (e.g. patient messages).
+          ...(item.requiresConnection === true ? { requiresConnection: true } : {}),
           ...(name === "patient.tabs"
             ? {
                 area,
@@ -336,7 +346,7 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
 // entries are eager, E2E fixture entries are materialized before this call).
 // Only plugins whose server status is "ready" are registered, so a disabled or
 // unavailable plugin never contributes DOM.
-export function registerUiPlugins(modules = {}, enabled = [], active = enabled) {
+export function registerUiPlugins(modules = {}, enabled = [], active = enabled, connected = undefined) {
   enabledIds = new Set(
     Array.isArray(enabled) ? enabled : enabled instanceof Set ? enabled : [],
   );
@@ -345,6 +355,11 @@ export function registerUiPlugins(modules = {}, enabled = [], active = enabled) 
   // pass `enabled` keep the previous behavior.
   activeIds = new Set(
     Array.isArray(active) ? active : active instanceof Set ? active : activeIds,
+  );
+  // `connected` is each plugin's status().connected. Plugins that do not
+  // report a connection simply never satisfy requiresConnection.
+  connectedIds = new Set(
+    Array.isArray(connected) ? connected : connected instanceof Set ? connected : connectedIds,
   );
   registrations.clear();
   for (const key of Object.keys(modules).sort()) {
@@ -388,6 +403,14 @@ export function usePluginEnabled(id) {
 export function usePluginActive(id) {
   useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return activeIds.has(id);
+}
+
+// "Active and reporting a live connection". The followup plugin is always
+// active (doctor reminders), but patient messaging needs a WeChat/WeCom
+// channel; UI that reaches patients checks this instead of usePluginActive.
+export function usePluginConnected(id) {
+  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return activeIds.has(id) && connectedIds.has(id);
 }
 
 // Exported so the server-render regression test can exercise the fallback

@@ -246,11 +246,17 @@ export function definePlugin(spec = {}) {
       "PLUGIN_SPEC",
       `插件 ${id} 的 agendaSource order 必须是数字`,
     );
+    check(
+      source.available === undefined || typeof source.available === "function",
+      "PLUGIN_SPEC",
+      `插件 ${id} 的 agendaSource available 必须是函数`,
+    );
     return Object.freeze({
       kind: source.kind,
       label: source.label ?? source.kind,
       order: source.order ?? 100,
       read: source.read,
+      ...(source.available ? { available: source.available } : {}),
     });
   });
 

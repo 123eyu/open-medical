@@ -35,8 +35,8 @@ const CHANNEL_FAKE = fileURLToPath(
   new URL("../../../tests/fixtures/plugins/channel-fake", import.meta.url),
 );
 const followupDirs = [PLUGIN_ROOT, CHANNEL_FAKE];
-// Followup is dormant without a connected channel; these tests exercise the
-// active plugin, so every server starts with the test-only channel adapter.
+// Patient messaging needs a connected channel; these tests exercise the
+// full plugin, so every server starts with the test-only channel adapter.
 const startServer = (options = {}) =>
   startTestServer({
     ...options,

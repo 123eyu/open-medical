@@ -642,11 +642,15 @@ export function createServer(options = {}) {
     pluginActive("channel-wecom")
       ? pluginService("channel-wecom")?.connector || null
       : null;
+  // Unassigned patient messages only exist once a WeChat/WeCom channel is
+  // connected; follow-up reminders themselves never need one.
   const requireFollowupActive = () => {
     if (!pluginActive("followup"))
+      throw new AppError("FOLLOWUP_INACTIVE", "随访插件未启用", 409);
+    if (!pluginHost.isConnected("followup"))
       throw new AppError(
-        "FOLLOWUP_INACTIVE",
-        "随访与患者消息尚未启用，请先连接微信或企业微信",
+        "PATIENT_CHANNEL_NOT_CONNECTED",
+        "患者消息需要先连接微信或企业微信；随访计划和提醒不受影响",
         409,
       );
   };

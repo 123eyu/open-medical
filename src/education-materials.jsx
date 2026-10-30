@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { api } from "./agent-runtime";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginConnected } from "./plugin-slots";
 
 // 患教素材工具条：允许对外引用的素材可按患者分组批量群发
 // (走待确认托盘,确认后逐患者创建企业微信单发任务,成员仍需手动点发送)。
 export function EducationTools({ onCreated, onProposed, onError }) {
-  const followupActive = usePluginActive("followup");
+  // Group broadcast sends to patients over WeCom; it needs a connected channel.
+  const followupActive = usePluginConnected("followup");
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: "", body: "" });
   const [busy, setBusy] = useState(false);

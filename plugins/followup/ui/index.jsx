@@ -14,6 +14,7 @@ export default defineUiPlugin({
         area: "communication",
         legacyTab: "messages",
         replacesBuiltin: true,
+        requiresConnection: true,
         component: () => import("./PatientMessagesTab.jsx"),
       },
       {
@@ -45,6 +46,7 @@ export default defineUiPlugin({
         id: "care",
         label: "患者消息",
         order: 50,
+        requiresConnection: true,
         meta: {
           name: "患者消息",
           description: "查看患者消息，处理回复草稿与客户联系。",

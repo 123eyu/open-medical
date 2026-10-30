@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarPlus, RotateCw } from "lucide-react";
 import { useClinicalDraft } from "./clinical-drafts";
 import { api } from "./agent-runtime";
-import { usePluginActive } from "./plugin-slots";
+import { usePluginConnected } from "./plugin-slots";
 import "./care.css";
 
 const STATUS = { scheduled: "已预约", attended: "已到诊", missed: "未到诊", cancelled: "已取消" };
@@ -12,7 +12,8 @@ const localToday = () => { const d = new Date(); return new Date(d.getTime() - d
 
 // Return-visit appointments; the day before and the day itself show up in 今日待办.
 export function AppointmentsPanel({ patient }) {
-  const followupActive = usePluginActive("followup");
+  // Reminder drafts are messages to the patient; they need a connected channel.
+  const followupActive = usePluginConnected("followup");
   const [data, setData] = useState(null), [error, setError] = useState(""), [notice, setNotice] = useState(""), [busy, setBusy] = useState(false);
   const [form, setForm] = useClinicalDraft(patient.id, "appointment", null);
   const inFlight = useRef(false);

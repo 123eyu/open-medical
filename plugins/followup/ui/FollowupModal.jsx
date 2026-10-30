@@ -3,10 +3,14 @@ import { useRef, useState } from "react";
 import { Modal } from "../../../src/components";
 import { useClinicalDraft } from "../../../src/clinical-drafts";
 import { api } from "../../../src/agent-runtime";
+import { usePluginConnected } from "../../../src/plugin-slots.jsx";
 import { QuestionnaireEditor, buildQuestionnaire, emptyQuestionnaire } from "./QuestionnaireEditor.jsx";
 
 export function FollowupModal({ patientId, job, source, existingSourceJob, onViewExisting, onClose, onCreated }) {
   const editing = Boolean(job);
+  // Message summaries and questionnaires involve patient messages; without a
+  // connected channel a plan is a reminder for the doctor only.
+  const messaging = usePluginConnected("followup");
   const toLocal = (iso) => {
     const d = new Date(iso);
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -91,8 +95,8 @@ export function FollowupModal({ patientId, job, source, existingSourceJob, onVie
           ...(source ? { source: { kind: "treatment-review", reviewDate: source.reviewDate } } : {}),
           ...payload,
           requestId: currentDraft.requestId,
-          externalConsent: form.externalConsent,
-          ...(withSurvey
+          externalConsent: messaging && form.externalConsent,
+          ...(messaging && withSurvey
             ? { questionnaire: buildQuestionnaire(questionnaire) }
             : {}),
         });
@@ -155,7 +159,7 @@ export function FollowupModal({ patientId, job, source, existingSourceJob, onVie
             onChange={set("checklist")}
           />
         </label>
-        {!editing && (
+        {!editing && messaging && (
           <label className="consent">
             <input
               type="checkbox"
@@ -165,7 +169,7 @@ export function FollowupModal({ patientId, job, source, existingSourceJob, onVie
             授权本计划到期时，自动把该患者待整理的消息原文发送给当前模型服务生成摘要（仅本次随访计划生效）
           </label>
         )}
-        {!editing && (
+        {!editing && messaging && (
           <label className="consent">
             <input
               type="checkbox"
@@ -175,7 +179,7 @@ export function FollowupModal({ patientId, job, source, existingSourceJob, onVie
             附带结构化随访问卷（到期生成，患者按题号回复自动计分，越界进今日待办）
           </label>
         )}
-        {!editing && withSurvey && (
+        {!editing && messaging && withSurvey && (
           <QuestionnaireEditor value={questionnaire} onChange={setQuestionnaire} />
         )}
         {dueError && <p role="alert" className="error-text">{dueError}</p>}

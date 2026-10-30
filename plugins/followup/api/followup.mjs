@@ -3,15 +3,15 @@ import { careApi } from "./care.mjs";
 import { chatFollowupsApi } from "../core/chat-followups-api.mjs";
 import { chatAutoFollowApi } from "../core/chat-autofollow-api.mjs";
 import { chatAibotApi } from "../core/aibot.mjs";
+import { MESSAGING_DISCONNECTED, messagingConnected } from "../connection.mjs";
 
 const REPLY = (send, status, value) => {
   send(status, value);
   return true;
 };
 
-// Connection management stays available while followup is dormant: the doctor
-// must be able to connect a channel (and hence activate the plugin) from the
-// same settings panel. Every other followup route answers 409.
+// Connection management stays available without a connected channel: the
+// doctor must be able to connect one from the settings panel.
 export function isFollowupConnectionRoute(path, method) {
   if (method === "GET" && path === "/api/chat-followups/settings") return true;
   if (method === "POST" && path === "/api/chat-followups/plugins") return true;
@@ -23,6 +23,15 @@ export function isFollowupConnectionRoute(path, method) {
       path,
     )
   );
+}
+
+// Routes that reach patients or patient chat history. They need a connected
+// WeChat/WeCom channel; follow-up plans, reminders, contact records and
+// manually recorded questionnaire answers do not.
+export function isFollowupMessagingRoute(path, method) {
+  if (isFollowupConnectionRoute(path, method)) return false;
+  if (/^\/api\/(?:care|chat-followups|chat-autofollow|chat-aibot)\//.test(path)) return true;
+  return method === "POST" && /^\/api\/patients\/[^/]+\/followup-surveys\/[^/]+\/send$/.test(path);
 }
 
 // All followup-private legacy routes. Paths, status codes and response bodies
@@ -42,10 +51,12 @@ export function createFollowupApi(ctx) {
 
     if (!active() && !isFollowupConnectionRoute(path, req.method)) {
       return REPLY(send, 409, {
-        error: "随访与患者消息尚未启用，请先连接微信或企业微信",
+        error: "随访插件未启用",
         code: "FOLLOWUP_INACTIVE",
       });
     }
+    if (isFollowupMessagingRoute(path, req.method) && !messagingConnected(ctx))
+      return REPLY(send, 409, { ...MESSAGING_DISCONNECTED });
 
     if (path === "/api/followup-plans" && req.method === "GET")
       return REPLY(send, 200, { plans: followups.listPlans() });

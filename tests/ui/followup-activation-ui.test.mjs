@@ -46,7 +46,7 @@ function harness(slots) {
   return createElement("div", null, createElement(Tabs), createElement(Settings));
 }
 
-test("patient tabs：followup 未激活时不渲染消息/随访 tab，但保留设置连接面板", async (t) => {
+test("patient tabs：followup 停用时不渲染消息/随访 tab，但保留设置连接面板", async (t) => {
   const { vite, slots, plugin } = await load();
   t.after(() => vite.close());
 
@@ -61,7 +61,7 @@ test("patient tabs：followup 未激活时不渲染消息/随访 tab，但保留
   assert.match(html, /data-panel="followup"/, "连接渠道的设置面板必须保留");
 });
 
-test("dormant：settingsTab=followup 仍解析到患者随访连接面板", async (t) => {
+test("followup 停用：settingsTab=followup 仍解析到患者随访连接面板", async (t) => {
   const { vite, slots, plugin, settings } = await load();
   t.after(() => vite.close());
 
@@ -89,11 +89,22 @@ test("dormant：settingsTab=followup 仍解析到患者随访连接面板", asyn
   );
 });
 
-test("patient tabs：followup 激活后消息/随访 tab 恢复", async (t) => {
+test("patient tabs：followup 启用但未连接患者渠道时只有随访 tab，消息 tab 不出现", async (t) => {
   const { vite, slots, plugin } = await load();
   t.after(() => vite.close());
 
-  slots.registerUiPlugins({ followup: plugin }, ["followup"], ["followup"]);
+  slots.registerUiPlugins({ followup: plugin }, ["followup"], ["followup"], []);
+  const html = renderToStaticMarkup(harness(slots));
+
+  const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(keys, ["appointments", "followups"]);
+});
+
+test("patient tabs：连接患者渠道后消息/随访 tab 都出现", async (t) => {
+  const { vite, slots, plugin } = await load();
+  t.after(() => vite.close());
+
+  slots.registerUiPlugins({ followup: plugin }, ["followup"], ["followup"], ["followup"]);
   const html = renderToStaticMarkup(harness(slots));
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CalendarClock } from "lucide-react";
 import { api } from "../../../src/agent-runtime";
+import { usePluginConnected } from "../../../src/plugin-slots.jsx";
 import { CampaignPanel } from "./CareInbox.jsx";
 import { FollowupModal } from "./FollowupModal.jsx";
 import { FollowupRecords } from "./FollowupRecords.jsx";
@@ -26,6 +27,9 @@ export default function PatientFollowupsTab({
   surveyFocus,
   setSurveyFocus,
 }) {
+  // Questionnaires and WeCom campaigns reach the patient; without a connected
+  // channel this tab is the doctor's own reminder list only.
+  const messaging = usePluginConnected("followup");
   const [editingFollowup, setEditingFollowup] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [source, setSource] = useState(null);
@@ -89,7 +93,7 @@ export default function PatientFollowupsTab({
                 onViewSurvey={target => setSurveyFocusState({ ...target, token: Date.now() })}
               />
               </div>
-              <div>
+              {messaging && <div>
               <SurveyPanel
                 key={`surveys-${detail.id}`}
                 focus={surveyFocus}
@@ -99,7 +103,7 @@ export default function PatientFollowupsTab({
                 onRefresh={onRefreshPanels}
                 onChanged={refreshPatient}
               />
-              </div>
+              </div>}
               <h3 className="followup-merged-title">提醒计划 <small>{followups.length} 个 · 到期后在本机生成提醒，不会发送给患者</small></h3>
               <div>
               {followups.map((job) => (
@@ -173,10 +177,10 @@ export default function PatientFollowupsTab({
               ))}
               {!followups.length && <p className="muted">还没有本机提醒计划。点击右上角「新建随访计划」安排。</p>}
               </div>
-              <details className="followup-auto-collapsed">
+              {messaging && <details className="followup-auto-collapsed">
                 <summary>自动随访（企业微信发送并收集回复，可选）</summary>
                 <CampaignPanel key={`campaigns-${detail.id}`} patientId={detail.id} />
-              </details>
+              </details>}
             </div>
       {modalOpen && (
         <FollowupModal
