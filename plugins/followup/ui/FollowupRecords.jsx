@@ -10,6 +10,17 @@ const outcomeLabels = {
   declined: "患者暂不接受",
 };
 const date = followupDate;
+// Urgency of a pending reminder relative to now: overdue days or due today.
+function dueState(record, now = Date.now()) {
+  if (record.outcome || record.kind === "manual-contact" || !record.dueAt) return null;
+  const due = new Date(record.dueAt).getTime();
+  if (!Number.isFinite(due)) return null;
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  const days = Math.floor((startOfToday.getTime() - due) / 86400000) + 1;
+  if (due < startOfToday.getTime()) return { tone: "overdue", label: `已逾期 ${Math.max(1, days)} 天` };
+  if (due < startOfToday.getTime() + 86400000) return { tone: "due", label: "今天到期" };
+  return null;
+}
 const contactForm = (record = {}) => ({ requestId: crypto.randomUUID(), title: "主动联系记录", contactedAt: "", status: record.attempt ? "" : "completed", note: "", contactMethod: "unspecified", clinical: { symptoms: "", medications: "", results: "", plan: "" }, checkedItems: [], nextDueAt: "", nextName: "后续随访", noRetryReason: "" });
 const hasContactInput = form => [form.note, form.contactedAt, form.nextDueAt, form.noRetryReason, ...Object.values(form.clinical || {})].some(value => String(value || "").trim()) || form.checkedItems?.length || (form.title && form.title !== "主动联系记录") || (form.contactMethod && form.contactMethod !== "unspecified") || (form.status && form.status !== "completed");
 
@@ -163,6 +174,7 @@ export function FollowupRecords({
     <section className="followup-records" aria-label="随访结果登记">
       <div className="hub-section-head">
         <h3>随访待办与记录</h3>
+        {records?.counts.pending > 0 && !history && <span className="om-chip is-caution">{records.counts.pending} 条待登记</span>}
         <button
           className="secondary"
           disabled={busy || Boolean(editing) || Boolean(addendum)}
@@ -179,15 +191,15 @@ export function FollowupRecords({
           记录一次联系
         </button>
         <button
-          className="text-button"
+          className="om-link"
           disabled={busy || Boolean(editing)}
           onClick={() => onRefresh ? onRefresh() : refresh().catch((err) => setError(err.message))}
         >
           刷新
         </button>
       </div>
-      <p className="muted">
-        提醒触发后，请记录实际联系结果。记录留在患者档案中，不会自动发送给患者。
+      <p className="muted followup-help">
+        提醒到期后登记实际联系结果；记录留在患者档案，不会发送给患者。
       </p>
       {error && (
         <p role="alert" className="form-error">
@@ -226,9 +238,11 @@ export function FollowupRecords({
       </div>
       <div className="followup-record-filters">
         {!patientId && (
-          <label>
-            查找患者或随访主题
+          <label className="followup-search">
+            <span className="sr-only">查找患者或随访主题</span>
             <input
+              type="search"
+              placeholder="查找患者或随访主题"
               aria-label="查找患者或随访主题"
               value={query}
               onChange={(e) => {
@@ -272,11 +286,13 @@ export function FollowupRecords({
       <div className={`followup-workspace ${editing || addendum ? "is-editing" : ""}`}><div className="followup-queue-column">
       <ul className="job-list">
         {(records?.reminders || []).map((record) => (
-          <li key={record.id} className="followup-record-row">
+          <li key={record.id} className={`followup-record-row${dueState(record) ? ` is-${dueState(record).tone}` : ""}`}>
             <div className="job-main">
-              <b>
-                {record.patientName} · {record.title}
-              </b>
+              <div className="followup-row-title">
+                <b>{record.patientName}</b>
+                <span>{record.title}</span>
+                {dueState(record) && <em className={`om-chip ${dueState(record).tone === "overdue" ? "is-danger" : "is-caution"}`}>{dueState(record).label}</em>}
+              </div>
               <small>
                 {record.kind === "manual-contact"
                   ? { campaign: "自动随访收集", chat: "聊天随访归档" }[record.source?.kind] || "主动联系"
@@ -407,7 +423,7 @@ export function FollowupRecords({
               )}
               {!record.outcome && (
                 <button
-                  className="secondary"
+                  className="primary"
                   disabled={busy || Boolean(editing) || Boolean(addendum)}
                   onClick={() => begin(record)}
                 >

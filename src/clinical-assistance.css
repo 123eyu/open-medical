@@ -1,10 +1,19 @@
-.clinical-assistance { width:100%; max-width:820px; margin:48px auto; }
-.clinical-assistance h1 { font-size:24px; margin:0 0 24px; }
-.clinical-assistance textarea { box-sizing:border-box; width:100%; min-height:160px; resize:vertical; padding:16px; line-height:1.8; font:inherit; border:1px solid var(--border); border-radius:8px; }
+.clinical-assistance { width:100%; max-width:860px; margin:28px auto 48px; }
+.clinical-assistance h1 { font-size:var(--title-size, 24px); margin:0 0 6px; }
+.clinical-assistance .assistance-lead { margin:0 0 18px; color:var(--muted); font-size:var(--meta-size, 14px); }
+.clinical-assistance textarea { box-sizing:border-box; width:100%; min-height:132px; resize:vertical; padding:16px; line-height:1.8; font:inherit; border:1px solid var(--border); border-radius:10px; background:#fff; }
 .assistance-submit { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; }
 .assistance-submit span { color:var(--muted); font-size:12px; }
-.clinical-assistance .patient-question-starters { margin:28px 0; text-align:left; }
-.clinical-assistance .patient-question-starters p { display:none; }
-.clinical-assistance .patient-question-starters > div { justify-content:flex-start; }
+.assistance-suggestions { margin:28px 0 0; }
+.assistance-suggestions h2 { display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:var(--meta-size, 14px); font-weight:600; color:var(--muted); }
+.assistance-suggestions h2 svg { color:var(--accent); }
+.assistance-suggestions ul { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+.medical-shell .assistance-suggestions button { display:flex; align-items:center; gap:12px; width:100%; padding:12px 16px; border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--ink); text-align:left; font-size:var(--body-size, 16px); line-height:1.5; }
+.assistance-suggestions button svg { color:var(--accent); flex-shrink:0; }
+.assistance-suggestions button:hover { border-color:var(--accent-line); background:var(--accent-soft); }
+.clinical-assistance .patient-question-starters { margin:22px 0; text-align:left; }
+.clinical-assistance .patient-question-starters p { display:block; margin:0 0 10px; color:var(--muted); font-size:var(--meta-size, 14px); font-weight:600; }
+.clinical-assistance .patient-question-starters > div { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; }
 .clinical-assistance :is(textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-@media(max-width:600px) { .clinical-assistance { margin:24px auto; } .clinical-assistance h1 { font-size:21px; } }
+@media(max-width:600px) { .clinical-assistance { margin:20px auto; } .clinical-assistance h1 { font-size:21px; } }
+.workbench-suggestions { width: 100%; max-width: 760px; margin: 28px auto 8px; text-align: left; }

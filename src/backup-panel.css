@@ -6,3 +6,7 @@
 .backup-list .backup-new { border-left: 3px solid var(--accent); padding-left: 12px; }
 .backup-recovery { border-top: 1px solid var(--border); padding-top: 16px; }
 .backup-recovery pre { font: inherit; line-height: 1.7; }
+.backup-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0 4px; font-size: var(--meta-size, 14px); }
+.backup-warning { margin: 0 0 12px; color: var(--muted); font-size: var(--small-size, 13px); }
+.backup-panel > details { margin: 0 0 12px; }
+.backup-panel > details > summary, .backup-panel details > summary { cursor: pointer; color: var(--muted); font-size: var(--small-size, 13px); }

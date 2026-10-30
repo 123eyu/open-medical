@@ -1,0 +1,68 @@
+/* Patient list as a scannable table: one row per patient, clinical columns. */
+.medical-shell .patients-view .patients-toolbar.om-page-head { margin-bottom: 4px; }
+.medical-shell .patients-view .patients-toolbar h2 { font-size: var(--title-size, 24px); font-weight: 650; }
+.medical-shell .patient-grid.patient-table {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  overflow: hidden;
+}
+.patient-table .patient-table-head,
+.medical-shell .patient-table .patient-card {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.25fr) minmax(150px, 1.2fr) minmax(170px, 1.5fr) minmax(110px, .8fr) minmax(140px, .9fr);
+  gap: 16px;
+  align-items: start;
+}
+.patient-table .patient-table-head {
+  padding: 10px 18px;
+  background: var(--soft, #f0f4f2);
+  border-bottom: 1px solid var(--border);
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  font-weight: 500;
+}
+.medical-shell .patient-table .patient-card {
+  min-height: 0;
+  padding: 14px 18px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  color: var(--ink);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.55;
+}
+.medical-shell .patient-table .patient-table-head + .patient-card { border-top: 0; }
+.medical-shell .patient-table .patient-card:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--line); }
+.medical-shell .patient-table .patient-line { display: grid; gap: 3px; justify-items: start; min-width: 0; }
+.medical-shell .patient-table .patient-line b { font-size: var(--body-size, 16px); font-weight: 650; line-height: 1.4; }
+.medical-shell .patient-table .patient-line small,
+.medical-shell .patient-table .patient-col small { display: block; color: var(--muted); font-size: var(--small-size, 13px); line-height: 1.5; }
+.medical-shell .patient-table .patient-row-allergy { white-space: normal; text-align: left; }
+.patient-table .patient-col { min-width: 0; overflow-wrap: anywhere; }
+.patient-table .patient-dx { font-weight: 500; }
+.patient-table .patient-flags { display: flex; flex-wrap: wrap; gap: 4px; align-content: start; }
+.patient-table .patient-meds b,
+.patient-table .patient-dates b { display: block; font-weight: 600; font-variant-numeric: tabular-nums; }
+.patient-table .patient-dates b.is-today { color: var(--accent-deep); }
+.patient-table .patient-dates b.is-today small { display: inline; color: var(--accent); font-weight: 650; }
+.medical-shell .patient-table .patient-empty-state { grid-column: 1 / -1; margin: 24px; }
+@media (max-width: 1000px) {
+  .patient-table .patient-table-head { display: none; }
+  .medical-shell .patient-table .patient-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .patient-table .patient-flags { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .medical-shell .patient-table .patient-card { grid-template-columns: 1fr; gap: 6px; }
+}
+.patients-batch > div { min-width: 170px; }
+.medical-shell .patients-filter { gap: 8px; margin: 4px 0 2px; }
+.medical-shell .patients-filter .search { flex: 1 1 320px; max-width: 440px; padding: 2px 12px; }
+.medical-shell .patients-filter .search input { min-height: 40px; font-size: var(--meta-size, 14px); }
+.medical-shell .patients-filter select { min-height: 42px; font-size: var(--meta-size, 14px); padding: 6px 10px; }
+.medical-shell .patients-filter .chip { min-height: 36px; padding: 4px 14px; font-size: var(--meta-size, 14px); }

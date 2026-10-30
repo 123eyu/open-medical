@@ -4,6 +4,7 @@ import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
 import { requestSettingsTab } from "./extension-center";
 import { usePluginActive } from "./plugin-slots";
+import "./doctor-agenda.css";
 
 // The server returns the enabled agenda kinds (including "all") in display
 // order. Keep this fallback only for the first paint before that response.
@@ -114,11 +115,11 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
   };
   return (
     <section className="doctor-agenda" aria-label="今日待办" aria-busy={loading}>
-      <div className="agenda-heading">
-        <div><h1>今日待办 <span>{data?.counts.all ?? "—"}</span></h1></div>
-        <button className="icon-button" title="刷新今日待办" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><RotateCw size={16} /></button>
+      <div className="agenda-heading om-page-head">
+        <div><h1>今日待办 <span>{data?.counts.all ?? "—"}</span></h1>
+          <span className="om-page-meta agenda-context">{data?.criticalCount > 0 ? <><em className="om-chip is-danger">{data.criticalCount} 项高优先级</em> 已排在最前，</> : "按优先级排列，"}点击事项即可继续处理。</span></div>
+        <button className="icon-button" title="刷新今日待办" aria-label="刷新今日待办" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><RotateCw size={16} /></button>
       </div>
-      <p className="agenda-context">{data?.criticalCount > 0 ? `${data.criticalCount} 项高优先级事项排在最前。` : "按事项优先级排列。"}点击事项即可继续处理。</p>
       <div className="agenda-toolbar">
         <div className="agenda-filters" aria-label="待办分类">{kindOptions.filter((item) => item.kind === "all" || item.kind === kind || !data || data.counts[item.kind] > 0).map((item) => <button key={item.kind} aria-pressed={kind === item.kind} data-zero={data && !data.counts[item.kind] ? "" : undefined} className={kind === item.kind ? "active" : ""} onClick={() => { setKind(item.kind); setOffset(0); }}>{item.label}<span>{data?.counts[item.kind] ?? "—"}</span></button>)}</div>
         <label className="agenda-search"><Search size={14} /><input aria-label="搜索今日待办" placeholder="患者或事项" value={query} onChange={(e) => { setQuery(e.target.value); setOffset(0); }} /></label>
@@ -140,8 +141,8 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       </div>}
       <div className="agenda-items">{data?.items.map((item) => {
         const row = <button className={`agenda-item ${item.severity === "critical" ? "urgent" : ""}`} key={item.id} disabled={Boolean(opening) || loading} onClick={() => open(item)}>
-          <span className="agenda-kind">{kindLabels[item.kind] || item.kind}<small>{item.at ? date(item.at) : ""}</small></span>
-          <span className="agenda-person"><b>{item.patientName}</b><small>{item.patientNumber || "未编号"}{item.birthYear ? ` · ${item.birthYear} 年生` : ""}</small></span>
+          <span className={`agenda-kind kind-${item.kind}`}><em>{kindLabels[item.kind] || item.kind}</em><small>{item.at ? date(item.at) : ""}</small></span>
+          <span className="agenda-person"><b>{item.patientName}</b><small>{[item.patientNumber, item.birthYear ? `约${new Date().getFullYear() - item.birthYear}岁` : ""].filter(Boolean).join(" · ")}</small></span>
           <span className="agenda-content"><b>{item.title}</b><small>{item.detail}</small></span>
           <span className="agenda-action">{opening === item.id ? "打开中…" : item.action.label}<ArrowUpRight size={14} /></span>
         </button>;

@@ -1,0 +1,39 @@
+/* Today's agenda: one card list, patient + what to do, nothing truncated. */
+.doctor-agenda .agenda-heading { align-items: flex-end; margin-bottom: 8px; }
+.doctor-agenda .agenda-heading h1 { font-size: var(--title-size, 24px); font-weight: 650; margin: 0; letter-spacing: -0.01em; }
+.doctor-agenda .agenda-heading h1 span { font-size: var(--title-size, 24px); color: var(--accent); font-weight: 650; margin-left: 6px; }
+.doctor-agenda .agenda-context { margin: 4px 0 0; }
+.doctor-agenda .agenda-context .om-chip { vertical-align: 1px; }
+.doctor-agenda .agenda-toolbar { margin: 16px 0 14px; gap: 10px 12px; }
+.doctor-agenda .agenda-filters button { font-size: var(--meta-size, 14px); padding: 6px 12px; min-height: 36px; }
+.doctor-agenda .agenda-search { border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 10px; }
+.doctor-agenda .agenda-search input { font-size: var(--meta-size, 14px); min-height: 38px; }
+.doctor-agenda .agenda-group-filter { border: 0; background: transparent; padding: 0; }
+.doctor-agenda .agenda-items { margin-top: 0; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); overflow: hidden; }
+.doctor-agenda .agenda-items:empty { display: none; }
+.doctor-agenda .agenda-item,
+.agenda-page .doctor-agenda .agenda-item { grid-template-columns: 96px minmax(130px, 180px) minmax(0, 1fr) auto; gap: 18px; align-items: start; margin: 0; padding: 14px 18px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.doctor-agenda .agenda-items > :first-child,
+.doctor-agenda .agenda-items > .agenda-row:first-child .agenda-item { border-top: 0; }
+.doctor-agenda .agenda-item:hover:not(:disabled) { background: var(--accent-soft); }
+.doctor-agenda .agenda-item.urgent { box-shadow: inset 3px 0 0 var(--high); border-left: 0; }
+.doctor-agenda .agenda-kind em { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--muted); font-style: normal; font-size: var(--small-size, 13px); font-weight: 600; }
+.doctor-agenda .agenda-kind.kind-risk em,
+.doctor-agenda .agenda-item.urgent .agenda-kind em { background: var(--high-soft); color: var(--high); }
+.doctor-agenda .agenda-kind.kind-visit em { background: var(--accent-soft); color: var(--accent-deep); }
+.doctor-agenda .agenda-kind.kind-tracking em,
+.doctor-agenda .agenda-kind.kind-followup em { background: var(--low-soft); color: var(--low); }
+.doctor-agenda .agenda-kind.kind-messages em { background: var(--caution-soft); color: var(--caution); }
+.doctor-agenda .agenda-item small { font-size: var(--small-size, 13px); margin-top: 3px; }
+.doctor-agenda .agenda-person b { font-size: var(--body-size, 16px); font-weight: 650; }
+.doctor-agenda .agenda-content b { font-size: var(--body-size, 16px); font-weight: 600; }
+.doctor-agenda .agenda-content b,
+.doctor-agenda .agenda-content small { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.doctor-agenda .agenda-content small { font-size: var(--meta-size, 14px); color: var(--muted); line-height: 1.6; }
+.doctor-agenda .agenda-action { font-size: var(--meta-size, 14px); font-weight: 600; white-space: nowrap; padding-top: 2px; }
+.doctor-agenda .agenda-empty { background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); padding: 20px; }
+.doctor-agenda .agenda-work { margin-top: 18px; }
+@media (max-width: 760px) {
+  .doctor-agenda .agenda-item,
+  .agenda-page .doctor-agenda .agenda-item { grid-template-columns: 80px minmax(0, 1fr); gap: 8px 12px; }
+}

@@ -1,0 +1,576 @@
+/*
+ * Tools area: one page pattern for every tool (literature, statistics,
+ * quick reference, trials, cases, DRG) and the tool/project/task directories.
+ * Page title → one-line purpose → sections as cards → result with a clear
+ * headline → short footnote for method limits.
+ */
+
+/* ---------- Tool page shell ---------- */
+.medical-shell .module-view.tool-page,
+.module-view.tool-page {
+  display: block;
+  place-items: initial;
+  padding: 24px 32px 56px;
+}
+.medical-shell .module-view.tool-page > .module-card,
+.module-view.tool-page > .module-card {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tool-page .module-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 18px;
+}
+.tool-page .module-head > div:first-child {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.medical-shell .tool-page .module-head h1 {
+  margin: 0;
+  font-size: var(--title-size, 24px);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.medical-shell .tool-page .module-head .module-phase {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.tool-page .tool-head-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Underline tabs (kept as buttons with aria-pressed). */
+.tool-page .tool-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.medical-shell .tool-page .tool-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: var(--body-size, 16px);
+}
+.medical-shell .tool-page .tool-tabs button:hover {
+  color: var(--ink);
+}
+.medical-shell .tool-page .tool-tabs button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 620;
+}
+.tool-page .tool-tabs button svg {
+  color: var(--accent);
+}
+
+/* Segmented control for two-way modes. */
+.tool-page .tool-segment {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--soft);
+}
+.medical-shell .tool-page .tool-segment button {
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .tool-page .tool-segment button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px #1f3a2c1f;
+}
+
+/* ---------- Sections ---------- */
+.tool-page .tool-section {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  min-width: 0;
+}
+.tool-page .tool-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0 0 12px;
+}
+.medical-shell .tool-page .tool-section-head :is(h2, h3) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+  line-height: 1.4;
+}
+.tool-page .tool-section-head :is(h2, h3) svg {
+  color: var(--accent);
+}
+.medical-shell .tool-page .tool-section-head p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.medical-shell .tool-page .tool-section-head .om-link {
+  white-space: nowrap;
+}
+.tool-page .tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+}
+.tool-page .tool-row > :is(input, textarea, select).grow,
+.tool-page .tool-row > .grow {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.tool-page .tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+.tool-page .tool-grid .wide {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .tool-page .tool-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.medical-shell .tool-page label.tool-field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+  min-width: 0;
+}
+.tool-page :is(input, select, textarea) {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+}
+.tool-page textarea {
+  padding: 10px 12px;
+  line-height: 1.7;
+  font: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tool-page .tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.tool-page .tool-actions .om-meta {
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .tool-page :is(.primary, .secondary) {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: var(--meta-size, 14px);
+}
+
+/* ---------- Results ---------- */
+.tool-page .tool-result {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.tool-page .tool-result.is-empty {
+  border-color: var(--line);
+  background: var(--soft);
+}
+.tool-page .tool-result-headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.tool-page .tool-result-value {
+  color: var(--accent-deep);
+  font-size: calc(var(--title-size, 24px) + 4px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+.tool-page .tool-result-value.is-alert {
+  color: var(--high);
+}
+.tool-page .tool-result-label {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .tool-page .tool-result p {
+  margin: 8px 0 0;
+  color: var(--ink);
+  font-size: var(--body-size, 16px);
+  line-height: 1.7;
+}
+.medical-shell .tool-page .tool-result p.om-source,
+.medical-shell .tool-page .tool-result p.om-meta {
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+}
+.tool-page .tool-result .om-table {
+  margin-top: 10px;
+  background: #fff;
+  border-radius: 8px;
+}
+.tool-page .tool-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 8px 0 0;
+}
+.tool-page .tool-kv div {
+  display: grid;
+  gap: 0;
+}
+.tool-page .tool-kv dt {
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+}
+.tool-page .tool-kv dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lists of results (articles, cases, lab entries, codes). */
+.tool-page .tool-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.tool-page .tool-list > li {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tool-page .tool-list > li:first-child {
+  border-top: 0;
+}
+.tool-page .tool-list-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.medical-shell .tool-page .tool-list-title b,
+.medical-shell .tool-page .tool-list-title .literature-title {
+  font-size: var(--body-size, 16px);
+  font-weight: 620;
+  color: var(--ink);
+  line-height: 1.5;
+}
+.medical-shell .tool-page .tool-list-title > span {
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .tool-page .tool-list p {
+  margin: 4px 0 0;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.7;
+  color: var(--ink);
+}
+.medical-shell .tool-page .tool-list p b {
+  color: var(--muted);
+  font-weight: 600;
+}
+.tool-page .tool-list .om-chip + .om-chip {
+  margin-left: 4px;
+}
+.tool-page .tool-list-empty {
+  padding: 18px 0 6px;
+  color: var(--faint);
+  font-size: var(--meta-size, 14px);
+}
+
+/* Method limits: one quiet line at the end, never a paragraph in the way. */
+.medical-shell .tool-page .tool-footnote {
+  margin: 8px 0 0;
+  padding: 12px 2px 0;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  line-height: 1.65;
+}
+.tool-page .tool-caution {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--caution-line);
+  border-radius: 10px;
+  background: var(--caution-soft);
+  color: var(--caution);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.medical-shell .tool-page .tool-caution {
+  font-size: var(--meta-size, 14px);
+}
+.tool-page .tool-caution svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+/* ---------- Breadcrumb above tool pages (rendered by the shell) ---------- */
+.v6-shell .page-trail {
+  padding: 10px 32px;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+.v6-shell .product-content .page-trail button:not([class]) {
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: var(--small-size, 13px);
+}
+.v6-shell .product-content .page-trail button:not([class]):hover {
+  background: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Directories: tools, projects, tasks ---------- */
+.work-directory.tool-directory-page .directory-heading {
+  align-items: flex-end;
+  margin-bottom: 18px;
+}
+.work-directory.tool-directory-page .directory-heading h1 {
+  margin: 0;
+  font-size: var(--title-size, 24px);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.medical-shell .work-directory.tool-directory-page .directory-heading p {
+  margin: 4px 0 0;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.work-directory.tool-directory-page .directory-heading .om-page-actions {
+  flex-shrink: 0;
+}
+.work-directory.tool-directory-page .directory-toolbar {
+  margin-bottom: 18px;
+}
+.medical-shell .work-directory.tool-directory-page .directory-filters button {
+  min-height: 36px;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .work-directory.tool-directory-page .directory-filters button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.work-directory.tool-directory-page .directory-search {
+  min-width: min(100%, 300px);
+  border-radius: 8px;
+}
+.work-directory.tool-directory-page .directory-search input {
+  max-width: none;
+  width: 100%;
+}
+
+/* Tools directory: grouped sections with compact cards. */
+.tools-directory .tool-group + .tool-group {
+  margin-top: 26px;
+}
+.medical-shell .tools-directory .tool-group > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: var(--meta-size, 14px);
+  font-weight: 620;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.tools-directory .tool-group > h2 small {
+  display: inline;
+  font-weight: 400;
+  color: var(--faint);
+  letter-spacing: 0;
+  font-size: var(--small-size, 13px);
+}
+.tools-directory .directory-tools {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+.tools-directory .directory-tools article {
+  display: flex;
+  min-width: 0;
+}
+.tools-directory .directory-tools .tool-card-link {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  column-gap: 14px;
+  align-items: start;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: var(--card, #fff);
+  color: var(--ink);
+}
+.tools-directory .directory-tools .tool-card-link:hover {
+  border-color: var(--accent-line);
+  background: #fbfdfc;
+  box-shadow: 0 2px 10px #1f3a2c12;
+}
+.tools-directory .directory-tools .tool-card-link > svg {
+  grid-row: 1 / span 3;
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.medical-shell .tools-directory .directory-tools h2 {
+  margin: 1px 0 2px;
+  font-size: var(--body-size, 16px);
+  font-weight: 650;
+  line-height: 1.45;
+}
+.medical-shell .tools-directory .directory-tools p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.tools-directory .directory-tools footer {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+.medical-shell .tools-directory .directory-tools footer small {
+  display: inline-flex;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  line-height: 1.7;
+}
+.medical-shell .tools-directory .directory-tools .tool-card-action {
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: var(--meta-size, 14px);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tools-directory .directory-tools .tool-card-link:hover .tool-card-action {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Project and task rows as a single bordered list. */
+.tool-directory-page .directory-rows {
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: var(--card, #fff);
+  overflow: hidden;
+}
+.tool-directory-page .directory-rows:empty {
+  display: none;
+}
+.tool-directory-page :is(.project-directory-row, .task-directory-row) {
+  gap: 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.tool-directory-page :is(.project-directory-row, .task-directory-row):last-child {
+  border-bottom: 0;
+}
+.tool-directory-page :is(.project-directory-row, .task-directory-row) > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.tool-directory-page .task-directory-row:hover,
+.tool-directory-page .project-directory-row:hover {
+  background: var(--accent-soft);
+}
+.medical-shell .tool-directory-page .task-directory-row em,
+.medical-shell .tool-directory-page .directory-status {
+  flex-shrink: 0;
+  font-style: normal;
+}
+.tool-directory-page .task-directory-row em.om-chip {
+  font-size: var(--small-size, 13px);
+}
+.tool-directory-page .directory-empty {
+  padding: 56px 20px;
+}
+.tool-page .tool-result .om-table :is(td, th):first-child {
+  padding-left: 12px;
+}

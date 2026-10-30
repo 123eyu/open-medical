@@ -33,8 +33,9 @@ import { usePluginActive } from "./plugin-slots";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
 import { requestPendingReview } from "./pending-tray";
+import "./home-today.css";
 
-function HomeCockpit({ onView, reloadKey }) {
+function HomeCockpit({ onView, onPatient, onOpenTask, reloadKey }) {
   const [overview, setOverview] = useState(null);
   const [overviewError, setOverviewError] = useState("");
   const [pendingCount, setPendingCount] = useState(null);
@@ -64,11 +65,30 @@ function HomeCockpit({ onView, reloadKey }) {
     window.addEventListener(PENDING_REFRESH_EVENT, load);
     return () => { alive = false; clearInterval(timer); window.removeEventListener(PENDING_REFRESH_EVENT, load); };
   }, [reloadKey, retry]);
-  return <section className="home-activity" aria-label="工作提醒">
-    <button type="button" onClick={() => onView?.("agenda")}><CalendarClock size={16}/><span>今日待办</span><b>{overview?.total ?? "—"}</b><ArrowUpRight size={14}/></button>
-    {overview?.criticalCount > 0 && <span className="home-urgent" role="status">其中 {overview.criticalCount} 项高优先级</span>}
-    <button type="button" onClick={() => requestPendingReview()}><ClipboardList size={16}/><span className="cockpit-label">待确认提案</span><b className="cockpit-number">{pendingCount ?? "—"}</b><ArrowUpRight size={14}/></button>
-    {(overviewError || pendingError) && <p role="alert">{overviewError ? `患者事项加载失败：${overviewError}` : `待确认提案加载失败：${pendingError}`}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
+  const items = overview?.items || [];
+  const open = async (item) => {
+    try {
+      if (item.action?.type === "patient" && item.patientId) await onPatient?.({ id: item.patientId, tab: item.action.tab });
+      else if (item.action?.type === "task" && item.action.sessionId) await onOpenTask?.(item.action.sessionId, { tab: item.action.tab || "materials" });
+      else onView?.("agenda");
+    } catch { onView?.("agenda"); }
+  };
+  return <section className="home-today" aria-label="今天">
+    <div className="home-activity" aria-label="工作提醒">
+      <h2>今天</h2>
+      <button type="button" onClick={() => onView?.("agenda")}><CalendarClock size={16}/><span>今日待办</span><b>{overview?.total ?? "—"}</b><ArrowUpRight size={14}/></button>
+      {overview?.criticalCount > 0 && <span className="home-urgent om-chip is-danger" role="status">其中 {overview.criticalCount} 项高优先级</span>}
+      <button type="button" onClick={() => requestPendingReview()}><ClipboardList size={16}/><span className="cockpit-label">待确认提案</span><b className="cockpit-number">{pendingCount ?? "—"}</b><ArrowUpRight size={14}/></button>
+    </div>
+    {(overviewError || pendingError) && <p role="alert" className="form-error">{overviewError ? `患者事项加载失败：${overviewError}` : `待确认提案加载失败：${pendingError}`}<button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>重试</button></p>}
+    {overview && (items.length ? <ul className="home-today-list">
+      {items.slice(0, 4).map((item) => <li key={item.id}><button type="button" className={item.severity === "critical" ? "is-critical" : ""} onClick={() => open(item)}>
+        <span className="home-today-who"><b>{item.patientName || "工作台"}</b>{item.title && <em>{item.title}</em>}</span>
+        <span className="home-today-detail">{item.detail}</span>
+        <span className="home-today-action">{item.action?.label || "查看"}<ArrowUpRight size={13}/></span>
+      </button></li>)}
+      {overview.total > 4 && <li className="home-today-more"><button type="button" className="om-link" onClick={() => onView?.("agenda")}>查看全部 {overview.total} 项待办<ArrowUpRight size={13}/></button></li>}
+    </ul> : <p className="om-empty home-today-empty">今天没有需要处理的患者事项。</p>)}
   </section>;
 }
 
@@ -537,7 +557,7 @@ export function WorkbenchHome({
       )}
       {isHome ? (
         <>
-      <HomeCockpit onView={onView} reloadKey={reloadKey} />
+          {!config?.modelConfigured && <div className="agent-setup-note"><span>连接模型后可使用 AI 完成任务；本地资料整理仍可使用。</span><button onClick={onModelSettings}>配置模型</button></div>}
           <form className="hub-composer" onSubmit={submit}>
             <div className="hub-composer-caption">
               <h1>{selectedFlow ? selectedFlow.title : "新任务"}</h1>
@@ -833,6 +853,7 @@ export function WorkbenchHome({
               <div className="agent-template-grid">{allFlows.filter(f => f.category === category).map(flow => <button key={flow.id} disabled={starting || uploading} aria-pressed={flow.id === flowId} onClick={() => chooseFlow(flow)}><flow.icon size={18}/><span><b>{flow.title}</b><small>{flow.desc}</small></span></button>)}</div>
             </div>}
           </section>
+          <HomeCockpit onView={onView} onPatient={onPatient} onOpenTask={onOpenTask} reloadKey={reloadKey} />
           <details className="workspace-optional"><summary>模板、连接与工作台设置</summary>
           {medicalEnabled(config) && <section className="hub-customize" aria-label="定制我的工作台">
             <div><b>模板与提醒规则</b><span>{customFlows.length ? `已保存 ${customFlows.length} 个模板。` : ""}填写医院模板或提醒要求，核对后保存。</span></div>
@@ -842,7 +863,6 @@ export function WorkbenchHome({
           <BackupStatus onManage={() => {requestSettingsTab("backup");onView?.("settings");}} />
           {config && <SetupChecklist modelConfigured={Boolean(config.modelConfigured)} onModelSettings={onModelSettings} onView={onView} />}
           </details>
-          {!config?.modelConfigured && <div className="agent-setup-note"><span>连接模型后可使用 AI 完成任务；本地资料整理仍可使用。</span><button onClick={onModelSettings}>配置模型</button></div>}
         </>
       ) : (
         <section className="hub-history">

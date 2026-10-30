@@ -1,27 +1,63 @@
-/* Clinical quick-reference page. Shared .literature-* list primitives remain
-   in style.css because the fixed case library also uses them. */
-.clinical-ref-view {
-  width: min(860px, 100%);
+/* Clinical quick-reference page. Layout comes from src/tools-clarity.css. */
+.tool-page .clinical-ref-view .scale-panel > .om-meta {
+  margin: 14px 0 10px;
 }
-.scale-form {
-  display: grid;
-  gap: 10px;
-  margin: 10px 0 14px;
+.tool-page .clinical-ref-view .scale-form {
+  margin: 0;
 }
-.scale-item {
-  display: grid;
-  gap: 4px;
-  font-size: 12.5px;
-  color: #3c4a3e;
-}
-.scale-item span {
-  color: #4d5c50;
-}
-.scale-item select,
-.scale-item input {
-  border: 1px solid var(--border);
-  border-radius: 8px;
+.tool-page .clinical-ref-view .scale-item select,
+.tool-page .clinical-ref-view .scale-item input {
+  width: 100%;
   padding: 8px 10px;
   font: inherit;
-  background: white;
+  color: var(--ink);
+}
+.tool-page .clinical-ref-view .lab-ref-list {
+  margin-top: 14px;
+}
+.medical-shell .tool-page .clinical-ref-view .lab-ref-range {
+  color: var(--muted);
+}
+.medical-shell .tool-page .clinical-ref-view .lab-ref-range strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.tool-page .clinical-ref-view .lab-ref-dirs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin-top: 4px;
+}
+.medical-shell .tool-page .clinical-ref-view .lab-ref-dirs p {
+  margin: 0;
+}
+.tool-page .clinical-ref-view .lab-ref-dirs .om-chip {
+  margin-right: 8px;
+}
+@media (max-width: 760px) {
+  .tool-page .clinical-ref-view .lab-ref-dirs {
+    grid-template-columns: 1fr;
+  }
+}
+.tool-page .clinical-ref-view .code-list {
+  margin-top: 14px;
+}
+.tool-page .clinical-ref-view .code-row code {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--soft);
+  color: var(--accent-deep);
+  font-size: var(--meta-size, 14px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.medical-shell .tool-page .clinical-ref-view .code-count {
+  font-size: var(--small-size, 13px);
+  margin: 6px 0 0;
+}
+.tool-page .clinical-ref-view .adr-list {
+  margin-top: 8px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #fff;
 }

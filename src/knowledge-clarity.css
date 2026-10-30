@@ -1,0 +1,458 @@
+/* Knowledge area — clarity layer (loaded with the lazy knowledge view, after
+   knowledge-workspace.css and medical-modules.css). */
+
+/* ---------- Library list ---------- */
+.medical-shell .module-view.library-hub {
+  /* Fill the content column so dropdown menus near the end are not clipped
+     by this scroll container. */
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 28px 32px 40px;
+}
+.medical-shell .library-hub .kl-head {
+  margin-bottom: 18px;
+}
+.medical-shell .library-hub .kl-head h1 {
+  font-size: var(--title-size, 24px);
+}
+.medical-shell .library-hub .kl-search input {
+  width: min(320px, 60vw);
+  min-height: 42px;
+  font-size: var(--meta-size, 14px);
+  border-radius: 8px;
+}
+.medical-shell .library-hub .kl-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 14px;
+  border: 0;
+}
+.medical-shell .library-hub .kl-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  box-shadow: none;
+}
+.medical-shell .library-hub .kl-card:hover {
+  border-color: var(--accent-line, #c8d8ce);
+}
+.medical-shell .library-hub .kl-open {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.medical-shell .library-hub .kl-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.medical-shell .library-hub .kl-card h2 {
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+  font-weight: 650;
+  line-height: 1.4;
+}
+.medical-shell .library-hub .kl-open:hover h2 {
+  color: var(--accent);
+}
+.medical-shell .library-hub .kl-open p {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.65;
+}
+.medical-shell .library-hub .kl-open small {
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+  line-height: 1.55;
+}
+.medical-shell .library-hub .kl-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.medical-shell .library-hub .kl-card-actions .secondary {
+  min-height: 36px;
+  padding: 6px 16px;
+  font-size: var(--meta-size, 14px);
+}
+
+/* ---------- Dropdown menu (更多 / 管理知识库) ---------- */
+.medical-shell .kl-menu {
+  position: relative;
+}
+.medical-shell .kl-menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.medical-shell .kl-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.medical-shell .kl-menu > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.medical-shell .kl-menu > summary:hover,
+.medical-shell .kl-menu[open] > summary {
+  border-color: var(--border);
+  background: #fff;
+  color: var(--ink);
+}
+.medical-shell .kl-menu > div {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 8;
+  display: grid;
+  min-width: 168px;
+  margin: 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #243b2918;
+}
+.medical-shell .kl-menu > div > button,
+.medical-shell .kl-menu > div > .text-button {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 9px 12px;
+  border-radius: 6px;
+  text-align: left;
+  white-space: nowrap;
+  font-size: var(--meta-size, 14px);
+  color: var(--ink);
+}
+.medical-shell .kl-menu > div > button:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.medical-shell .kl-menu > div > :is(.library-delete-button, .danger) {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 6px 6px;
+  color: var(--high, #b3261e);
+}
+.medical-shell .kl-menu > div:has(> small) {
+  min-width: 240px;
+}
+.medical-shell .kl-menu > div > small {
+  display: block;
+  padding: 6px 12px;
+  color: var(--caution);
+  white-space: normal;
+  max-width: 260px;
+}
+
+/* ---------- Library header ---------- */
+.medical-shell .library-hub .library-topbar {
+  margin: 0 0 8px;
+}
+.medical-shell .library-hub .kl-back {
+  min-height: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .library-hub .kl-back:hover {
+  color: var(--accent);
+}
+.medical-shell .library-hub .library-description.om-page-head {
+  align-items: flex-start;
+  margin: 0 0 4px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+.medical-shell .library-hub .kl-title {
+  min-width: 0;
+  flex: 1 1 520px;
+}
+.medical-shell .library-hub .library-description h2 {
+  margin: 0;
+  font-size: var(--title-size, 24px);
+  font-weight: 650;
+  line-height: 1.3;
+}
+.medical-shell .library-hub .kl-desc {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: var(--body-size, 16px);
+  line-height: 1.6;
+}
+.medical-shell .library-hub .kl-scope {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+.medical-shell .library-hub .kl-scope > div {
+  display: flex;
+  gap: 10px;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.medical-shell .library-hub .kl-scope dt {
+  flex-shrink: 0;
+  color: var(--faint);
+  font-weight: 600;
+}
+.medical-shell .library-hub .kl-scope dd {
+  margin: 0;
+  color: var(--muted);
+}
+.medical-shell .library-hub .kl-scope .kl-caution dd {
+  color: var(--caution);
+}
+
+/* ---------- Workspace tabs & documents ---------- */
+.medical-shell .library-hub .kw-nav {
+  gap: 24px;
+  margin-top: 16px;
+  padding: 0;
+}
+.medical-shell .library-hub .kw-nav button {
+  min-height: 0;
+  padding: 10px 0 9px;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--body-size, 16px);
+}
+.medical-shell .library-hub .kw-nav button.active {
+  background: transparent;
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 650;
+}
+.medical-shell .library-hub .kw-content {
+  padding: 18px 0 8px;
+}
+.medical-shell .library-hub .kw-section-heading {
+  margin-bottom: 14px;
+}
+.medical-shell .library-hub .kw-document-filter input {
+  min-height: 42px;
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .library-hub .kw-document-count {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .library-hub .kl-banner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--caution-line);
+  border-radius: 8px;
+  background: var(--caution-soft);
+  color: var(--caution);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.medical-shell .library-hub .kw-table-scroll {
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: var(--card, #fff);
+  overflow: visible;
+}
+.medical-shell .library-hub .kw-documents-table {
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+.medical-shell .library-hub .kw-documents-table th {
+  padding: 10px 16px;
+  background: var(--soft);
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  font-weight: 500;
+}
+.medical-shell .library-hub .kw-documents-table td {
+  padding: 12px 16px;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.55;
+  vertical-align: middle;
+}
+.medical-shell .library-hub .kw-documents-table td:first-child {
+  width: auto;
+}
+.medical-shell .library-hub .kw-documents-table td:last-child {
+  min-width: 0;
+  width: 1%;
+  white-space: nowrap;
+}
+.medical-shell .library-hub .kw-documents-table tr.is-retired .kw-doc-title {
+  color: var(--faint);
+}
+.medical-shell .library-hub .kw-doc-title {
+  min-height: 0;
+  padding: 0;
+  font-size: var(--body-size, 16px);
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+}
+.medical-shell .library-hub .kw-doc-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.medical-shell .library-hub .kw-documents-table td:first-child small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .library-hub .kl-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.medical-shell .library-hub .kw-document-actions {
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.medical-shell .library-hub .kw-document-actions .kl-read {
+  min-height: 0;
+  padding: 6px 10px;
+  font-size: var(--meta-size, 14px);
+  color: var(--accent);
+}
+.medical-shell .library-hub .kw-document-more .kw-row-actions {
+  margin-top: 0;
+}
+.medical-shell .library-hub .kw-empty {
+  border-radius: var(--card-radius, 10px);
+}
+.medical-shell .library-hub .kw-library-tools {
+  margin: 20px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+.medical-shell .library-hub .kw-library-tools > summary {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+@media (max-width: 760px) {
+  .medical-shell .module-view.library-hub {
+    padding: 18px 16px 32px;
+  }
+  .medical-shell .library-hub .kl-search input {
+    width: 100%;
+  }
+  .medical-shell .library-hub .kl-head .om-page-actions {
+    width: 100%;
+  }
+  .medical-shell .library-hub .kl-search {
+    flex: 1;
+  }
+}
+
+/* ---------- Search & knowledge map ---------- */
+.medical-shell .library-hub .kw-content h2 {
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+}
+.medical-shell .library-hub .kg-heading {
+  align-items: flex-start;
+  margin: 0 0 14px;
+}
+.medical-shell .library-hub .kg-heading h3 {
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+}
+.medical-shell .library-hub .kg-heading p {
+  color: var(--ink);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .library-hub .kg-status {
+  gap: 4px 16px;
+  padding: 4px 0 0;
+  border: 0;
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .library-hub .kd-views {
+  display: inline-flex;
+  gap: 0;
+  margin: 4px 0 8px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+}
+.medical-shell .library-hub .kd-views button {
+  min-height: 34px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .library-hub .kd-views button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+.medical-shell .library-hub .kd-recommendation {
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+}
+.medical-shell .library-hub .knowledge-map-empty {
+  border: 1px dashed var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: var(--card, #fff);
+}
+.medical-shell .library-hub .kl-menu > div > button {
+  min-height: 36px;
+  padding: 7px 12px;
+  line-height: 1.4;
+}
+.medical-shell .library-hub .kl-card-actions .kl-menu > div {
+  left: 0;
+  right: auto;
+}
+.medical-shell .library-hub .kw-reader-toolbar {
+  background: transparent;
+  border: 0;
+  padding: 0 0 10px;
+}
+.medical-shell .library-hub .kw-reader-toolbar button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: var(--meta-size, 14px);
+}

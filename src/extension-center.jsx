@@ -61,23 +61,22 @@ export function ExtensionCenter({ onAsk, view = "workbench" }) {
   </article>;
 
   if (view === "skills") return <section className="ext-center" aria-label="技能">
-    <h2>技能</h2>
-    <p className="muted">在对话中描述医院模板或提供技能仓库地址，核对后启用。技能中的脚本不会执行。</p>
+    <div className="ext-head">
+      <div><h2>技能</h2>
+      <p className="muted">在对话中描述医院模板或提供技能仓库地址，核对后启用。技能中的脚本不会执行。</p></div>
+      <div className="ext-examples" aria-label="新建或安装技能">{SKILL_EXAMPLES.map(([label, prompt]) => <button key={label} className="secondary" onClick={() => onAsk?.(prompt)}>{label}</button>)}</div>
+    </div>
     {notices}
     <div className="ext-block">
-      <h3>新建或安装</h3>
-      <div className="ext-examples">{SKILL_EXAMPLES.map(([label, prompt]) => <button key={label} className="secondary" onClick={() => onAsk?.(prompt)}>{label}</button>)}</div>
-    </div>
-    <div className="ext-block">
       <h3>我的技能 <small>{skills.length}</small></h3>
-      {skills.length ? skills.map(card) : <p className="muted">还没有技能，可从上方新建或安装。</p>}
+      {skills.length ? skills.map(card) : <p className="muted">还没有自建技能，可用右上角按钮新建或安装。</p>}
     </div>
     <div className="ext-block">
       <h3>内置技能 <small>{builtinSkills.length}</small></h3>
       <p className="muted">随应用内置、始终可用，对话中会按需自动调用；无需安装，也不能删除。</p>
-      <ul className="ext-builtin-skills">{builtinSkills.map((s) => <li key={s.id}><b>{s.title || s.name || s.id}</b><details><summary>技能标识</summary><code>{s.id}</code></details><p className="muted">{s.description}</p></li>)}</ul>
+      <ul className="ext-builtin-skills">{builtinSkills.map((s) => <li key={s.id}><b>{s.title || s.name || s.id}</b><p className="muted">{s.description}</p><code className="ext-skill-id" aria-label={`技能标识 ${s.id}`}>{s.id}</code></li>)}</ul>
     </div>
-    <p className="muted">安全规则不会被定制改变：红旗症状提醒、发给患者前的确认、知情同意和引用出处始终有效。</p>
+    <p className="ext-safety">安全规则不会被定制改变：红旗症状提醒、发给患者前的确认、知情同意和引用出处始终有效。</p>
   </section>;
 
   return <section className="ext-center" aria-label="自动化规则">
@@ -97,21 +96,21 @@ export function ExtensionCenter({ onAsk, view = "workbench" }) {
     </div>}
 
     <div className="ext-block">
-      <h3>系统自动做的调整</h3><LearningChanges />
-      {applied.map((c) => <p key={c.id} className="ext-change"><span>{fmt(c.createdAt)} · {c.title}{c.detail ? `（${c.detail}）` : ""}</span>
-        <button className="text-button" disabled={Boolean(busy)} onClick={() => act(c.id, () => api(`/api/extensions/changes/${c.id}/undo`, "POST", {}), "已撤销，并停止自动调整这一项。")}><Undo2 size={14} />撤销</button></p>)}
+      <h3>我的规则 <small>{rules.length}</small></h3>
+      {rules.length ? rules.map(card) : <p className="muted">还没有自动化规则。定时提醒、检验阈值提醒、复诊前起草消息、定期汇总都可以做成规则。</p>}
     </div>
-
     <div className="ext-block">
-      <h3>新建</h3>
+      <h3>新建规则</h3>
       <p className="muted">在对话里说出你的要求，比如：</p>
       <div className="ext-examples">{EXAMPLES.map(([label, prompt]) => <button key={label} className="secondary" onClick={() => onAsk?.(prompt)}>{label}</button>)}</div>
     </div>
 
     <div className="ext-block">
-      <h3>我的规则 <small>{rules.length}</small></h3>
-      {rules.length ? rules.map(card) : <p className="muted">还没有自动化规则。定时提醒、检验阈值提醒、复诊前起草消息、定期汇总都可以做成规则。</p>}
+      <h3>系统自动做的调整</h3><LearningChanges emptyText={applied.length ? "" : "暂无自动调整。学会、暂停或恢复习惯时会记录在这里。"} />
+      {applied.map((c) => <p key={c.id} className="ext-change"><span>{fmt(c.createdAt)} · {c.title}{c.detail ? `（${c.detail}）` : ""}</span>
+        <button className="text-button" disabled={Boolean(busy)} onClick={() => act(c.id, () => api(`/api/extensions/changes/${c.id}/undo`, "POST", {}), "已撤销，并停止自动调整这一项。")}><Undo2 size={14} />撤销</button></p>)}
     </div>
-    <p className="muted">安全规则不会被定制改变：红旗症状提醒、发给患者前的确认、知情同意和引用出处始终有效。</p>
+
+    <p className="ext-safety">安全规则不会被定制改变：红旗症状提醒、发给患者前的确认、知情同意和引用出处始终有效。</p>
   </section>;
 }

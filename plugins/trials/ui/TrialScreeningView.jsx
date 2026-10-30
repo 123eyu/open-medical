@@ -6,6 +6,8 @@ import { api } from "../../../src/agent-runtime";
 import { importKnowledge } from "../../../src/import-knowledge";
 import { patientOptionLabel } from "../../../src/patient-labels";
 import { takePluginIntent } from "../../../src/plugin-navigation";
+import "../../../src/tools-clarity.css";
+import "./trials.css";
 const blank = {
   title: "",
   registration: "",
@@ -209,12 +211,12 @@ export function TrialScreeningView({ onOpenPatient }) {
                       setNotice(result.summary);
                     });
   return (
-    <div className="module-view trial-hub">
+    <div className="module-view trial-hub trial-page">
       <div className="module-head">
         <div>
           <h1>临床试验入组初筛</h1>
           <p className="module-phase">
-            选择方案和患者，开始初筛。
+            {trial ? "逐项核对入排标准，结论由医生确认。" : `${trials.length} 个试验方案 · 打开方案后选择患者，逐项核对入排标准。`}
           </p>
         </div>
         <button
@@ -595,16 +597,19 @@ export function TrialScreeningView({ onOpenPatient }) {
           )}
         </section>
       ) : (
-        <div className="trial-grid">
+        <div className="trial-grid trial-list">
           {trials.map((t) => (
             <article key={t.id} className="module-card trial-card">
-              <h2>{t.title}</h2>
-              <p>
-                {t.registration || "注册号待补"} · {t.version}
-              </p>
-              <p>
-                {t.recruitment} · {t.criteria.length} 项条件
-              </p>
+              <div className="trial-card-main">
+                <h2>{t.title}</h2>
+                <p className="trial-card-meta">
+                  {[t.registration || "注册号待补", t.version, t.site].filter(Boolean).join(" · ")}
+                </p>
+                <div className="trial-card-chips">
+                  <span className={`om-chip ${/招募中|recruiting/i.test(t.recruitment || "") && !/不招募/.test(t.recruitment || "") ? "is-ok" : ""}`}>{t.recruitment || "招募状态未记录"}</span>
+                  <span className="om-chip">{t.criteria.length} 项条件</span>
+                </div>
+              </div>
               <button
                 className="secondary"
                 onClick={() => {
@@ -618,7 +623,7 @@ export function TrialScreeningView({ onOpenPatient }) {
             </article>
           ))}
           {!trials.length && (
-            <p>
+            <p className="om-empty trial-empty">
               先添加一份试验方案，再选择患者逐项排查。可从上方注册平台查找方案与研究中心。
             </p>
           )}

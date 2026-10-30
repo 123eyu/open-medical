@@ -96,8 +96,8 @@ export function AppointmentsPanel({ patient }) {
 
 
   return <section className="detail-panel appointments" aria-label="复诊预约">
-    <header className="care-tracking-header"><div><h3>复诊预约</h3><p className="muted">登记下次复诊。前一天和当天会出现在今日待办；过了日期没登记结果也会提醒。这里不会自动通知患者。</p></div>
-      <button className="text-button" disabled={busy || loading} onClick={loadAppointments} aria-label="刷新预约"><RotateCw size={14} /></button><button className="primary" disabled={patient.archived || busy || Boolean(form)} onClick={() => setForm({ date: "", time: "", reason: "", place: "", requestId: requestId() })}><CalendarPlus size={14} /> 预约复诊</button></header>
+    <header className="care-tracking-header"><div><h3>复诊预约</h3><p className="muted">前一天和当天会进入今日待办，到期未登记结果会提醒；不会自动通知患者。</p></div>
+      <div className="care-tracking-actions"><button className="text-button" disabled={busy || loading} onClick={loadAppointments} aria-label="刷新预约" title="刷新"><RotateCw size={15} /></button><button className="primary" disabled={patient.archived || busy || Boolean(form)} onClick={() => setForm({ date: "", time: "", reason: "", place: "", requestId: requestId() })}><CalendarPlus size={14} /> 预约复诊</button></div></header>
     {error && <p className="error-text" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     {loadError && <p className="error-text" role="alert">{loadError}<button className="text-button" disabled={loading} onClick={loadAppointments}>重试读取预约</button></p>}
     {form && <form className="appointment-form" onSubmit={saveForm}>

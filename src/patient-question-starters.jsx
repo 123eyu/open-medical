@@ -8,12 +8,12 @@ const starters = [
   ['followup', '整理随访', '请结合已记录的诊疗安排，整理这位患者的后续复查与随访事项。'],
 ];
 
-export function PatientQuestionStarters({ onChoose }) {
+export function PatientQuestionStarters({ onChoose, label = "直接输入问题，或选择一个方向开始。" }) {
   const similarCasesEnabled = usePluginEnabled("similar-cases");
   const followupActive = usePluginActive("followup");
   const available = starters.filter(([id]) => (id !== "similar" || similarCasesEnabled) && (id !== "followup" || followupActive));
   return <div className="patient-question-starters">
-    <p>直接输入问题，或选择一个方向开始。</p>
+    <p>{label}</p>
     <div aria-label="常用患者问题">{available.map(([id, label, prompt]) => <button type="button" className="secondary" key={id} onClick={() => onChoose({ prompt, ...(id === 'literature' ? { workflow: 'literature-research' } : {}) })}>{label}</button>)}</div>
   </div>;
 }

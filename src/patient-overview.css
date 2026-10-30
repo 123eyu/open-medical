@@ -1,444 +1,199 @@
+/* Patient overview: facts strip → summary & gaps → open items → detail cards. */
 .patient-overview {
-  --overview-muted: var(--muted);
+  display: grid;
+  gap: 16px;
   min-width: 0;
 }
-.patient-dashboard .patient-overview-grid {
+.patient-overview > * {
+  min-width: 0;
+}
+.patient-overview .ov-suspected {
+  color: var(--caution);
+  font-weight: 500;
+  font-size: 0.85em;
+}
+.patient-overview .ov-relative {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: var(--small-size, 13px);
+  font-weight: 600;
+  vertical-align: 2px;
+}
+
+/* Narrative summary + data gaps share one quiet band. */
+.patient-overview .ov-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+.patient-overview .ov-summary p {
+  margin: 0;
+  font-size: var(--body-size, 16px);
+  line-height: 1.7;
+  color: var(--ink);
+}
+.patient-overview .ov-summary b,
+.patient-overview .ov-gaps > b {
+  display: inline-block;
+  margin-right: 12px;
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.patient-overview .ov-gaps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.patient-overview .ov-gaps button.om-chip {
+  cursor: pointer;
+}
+.patient-overview .ov-gaps button.om-chip:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+/* Two columns: data (labs, visits) on the left, problem list & meds right. */
+.patient-overview .ov-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
-.patient-overview .overview-column {
+.patient-overview .ov-column {
   display: grid;
   gap: 16px;
   min-width: 0;
   align-content: start;
 }
-.patient-dashboard .patient-overview-grid .overview-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 16px 18px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
+@media (max-width: 1100px) {
+  .patient-overview .ov-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
-.patient-overview .overview-card-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 12px;
+
+.patient-overview .ov-labs .om-table {
+  margin-top: 2px;
 }
-.patient-overview .overview-card-heading h3 {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+.patient-overview .ov-labs .om-table td:first-child {
+  min-width: 96px;
+}
+.patient-overview .ov-inline-chip {
+  margin-left: 6px;
+}
+.patient-overview .ov-note {
+  margin: 10px 0 0;
+}
+
+.patient-overview .ov-visit-list {
+  list-style: none;
   margin: 0;
-  color: var(--ink);
-  font-size: var(--body-size, 16px);
-  font-weight: 600;
-  line-height: 1.5;
-}
-.patient-overview .overview-card-heading h3 svg {
-  color: var(--accent-deep);
-}
-.patient-overview .overview-card-heading > span,
-.patient-overview .overview-meta,
-.patient-overview .overview-lab-list small {
-  color: var(--overview-muted);
-  font-size: var(--meta-size, 14px);
-  font-weight: 400;
-  line-height: 1.65;
-}
-.patient-overview .overview-card-body {
-  min-width: 0;
-}
-.patient-overview p {
-  margin: 0 0 12px;
-  font-size: var(--body-size, 16px);
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-}
-.patient-overview .overview-empty {
-  color: var(--overview-muted);
-  font-size: var(--meta-size, 14px);
-}
-.patient-overview .overview-status {
-  display: inline-block;
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: #f1f5f2;
-  color: #52685b;
-  font-size: var(--meta-size, 14px);
-  line-height: 1.6;
-  font-weight: 400;
-}
-.patient-overview .overview-diagnosis-list,
-.patient-overview .overview-lab-list {
-  list-style: none;
   padding: 0;
-  margin: 0 0 14px;
+  display: grid;
+  gap: 0;
 }
-.patient-overview .overview-diagnosis-list li {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+.patient-overview .ov-visit-list li {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
   gap: 12px;
-  padding: 8px 0;
-}
-.patient-overview .overview-diagnosis-list li:first-child {
-  padding-top: 0;
-}
-.patient-overview .overview-diagnosis-list strong {
-  font-size: var(--body-size, 16px);
-  line-height: 1.6;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.patient-overview .overview-plan h4 {
-  margin: 0 0 8px;
-  font-size: var(--reading-size, 16px);
-  font-weight: 600;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-.patient-overview .overview-plan .overview-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-}
-.patient-overview .overview-medication-list {
-  list-style: none;
-  padding: 0;
-  margin: 6px 0 12px;
-}
-.patient-overview .overview-medication-list li {
-  display: block;
-  padding: 8px 0;
-  font-size: var(--body-size, 16px);
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-.patient-overview .overview-medication-list li + li {
+  padding: 10px 0;
   border-top: 1px solid var(--line);
 }
-.patient-overview .overview-medication-list strong {
-  font-weight: 500;
+.patient-overview .ov-visit-list li:first-child {
+  border-top: 0;
+  padding-top: 2px;
 }
-.patient-overview .overview-medication-details {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 12px;
-  margin: 5px 0 0;
+.patient-overview .ov-visit-list time {
   color: var(--muted);
   font-size: var(--meta-size, 14px);
   font-variant-numeric: tabular-nums;
+  padding-top: 1px;
 }
-.patient-overview .overview-medication-details dt {
-  display: inline;
-  margin-right: 8px;
+.patient-overview .ov-visit-list b {
+  font-size: var(--body-size, 16px);
+  font-weight: 600;
 }
-.patient-overview .overview-medication-details dd {
-  display: inline;
-  margin: 0;
+.patient-overview .ov-visit-list p {
+  margin: 3px 0 0;
   color: var(--ink);
-}
-.patient-overview .overview-visit time {
-  display: block;
-  color: var(--overview-muted);
   font-size: var(--meta-size, 14px);
-  margin-bottom: 8px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
 }
-.patient-overview .overview-visit p {
-  font-weight: 500;
+
+.patient-overview .ov-dx-group + .ov-dx-group {
+  margin-top: 10px;
 }
-.patient-overview .overview-lab-list li {
-  display: block;
-  padding: 10px 0;
+.patient-overview .ov-dx-group h4 {
+  margin: 0 0 4px;
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  font-weight: 600;
 }
-.patient-overview .overview-lab-main {
+.patient-overview .ov-dx-list,
+.patient-overview .ov-med-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.patient-overview .ov-dx-list li,
+.patient-overview .ov-med-list li {
   display: flex;
-  align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
 }
-.patient-overview .overview-lab-list li:first-child {
-  padding-top: 0;
+.patient-overview .ov-dx-list li:first-child,
+.patient-overview .ov-med-list li:first-child {
+  border-top: 0;
 }
-.patient-overview .overview-lab-list li + li {
-  border-top: 1px solid #edf0ed;
-}
-.patient-overview .overview-lab-main > div {
+.patient-overview .ov-dx-name,
+.patient-overview .ov-med-list b {
+  font-size: var(--body-size, 16px);
+  font-weight: 600;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.patient-overview .overview-lab-list b {
-  font-size: var(--body-size, 16px);
-  font-weight: 500;
-}
-.patient-overview .overview-lab-list small {
-  display: block;
-  margin-top: 3px;
-}
-.patient-overview .overview-lab-value {
-  max-width: 55%;
-  text-align: right;
-}
-.patient-overview .overview-lab-value strong {
-  font-size: max(20px, var(--body-size, 16px));
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.patient-overview .overview-lab-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  text-align: left;
-  white-space: normal;
-  color: var(--accent-deep);
-}
-.patient-overview .overview-lab-name b {
-  text-decoration: underline;
-  text-decoration-color: var(--accent-line);
-  text-underline-offset: 4px;
-}
-.patient-overview .overview-lab-evidence {
-  margin-top: 6px;
-  font-size: var(--meta-size, 14px);
-  line-height: 1.7;
+.patient-overview .ov-med-list span {
   color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.patient-overview .overview-lab-evidence summary {
-  min-height: 32px;
-  padding: 4px 0;
-  cursor: pointer;
   font-size: var(--meta-size, 14px);
-  color: var(--muted);
+  white-space: nowrap;
 }
-.patient-overview .overview-lab-evidence[open] summary {
-  color: var(--ink);
-}
-.patient-overview .overview-lab-evidence-record {
-  padding: 8px 12px;
-  margin: 6px 0;
-  background: var(--surface);
-  border-left: 2px solid var(--border);
-}
-.patient-overview .overview-lab-evidence dl {
-  margin: 0;
-}
-.patient-overview .overview-lab-evidence dl > div {
-  display: grid;
-  grid-template-columns: minmax(6em, auto) minmax(0, 1fr);
-  gap: 4px 12px;
-}
-.patient-overview .overview-lab-evidence dd {
-  margin: 0;
-  color: var(--ink);
-}
-.patient-overview .overview-lab-evidence p {
-  margin: 4px 0 0;
-  font-size: inherit;
-}
-.patient-overview .overview-lab-evidence button,
-.patient-overview .overview-review-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  min-height: 44px;
-  padding: 6px 0;
-  font-size: var(--meta-size, 14px);
-  text-align: left;
-  white-space: normal;
-}
-.patient-overview summary:focus-visible {
-  outline: 2px solid var(--accent-deep);
-  outline-offset: 3px;
-}
-.patient-overview .overview-link {
+.patient-overview .ov-plan {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  min-height: 40px;
-  padding: 10px 0 0;
-  border: 0;
-  border-top: 1px solid #edf0ed;
-  border-radius: 0;
-  background: transparent;
-  color: var(--accent-deep);
-  font-size: var(--meta-size, 14px);
-  text-align: left;
-  white-space: normal;
-}
-.patient-overview button {
-  cursor: pointer;
-  transition:
-    color 160ms ease,
-    background-color 160ms ease;
-}
-.patient-overview button:hover {
-  color: var(--accent-deep);
-  background-color: #f4f7f3;
-}
-.patient-overview button:focus-visible {
-  outline: 2px solid var(--accent-deep);
-  outline-offset: 4px;
-  border-radius: 4px;
-}
-.patient-overview button svg {
-  flex-shrink: 0;
-}
-.patient-overview .overview-attention {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 8px 22px;
-  padding: 10px 16px;
-  margin-bottom: 16px;
-  border: 1px solid #e4dcc8;
-  border-radius: 8px;
-  background: #faf7ef;
-}
-.patient-overview .overview-attention h3 {
-  font-size: 14px;
-  color: #796034;
-  margin: 0;
-}
-.patient-overview .overview-attention button {
-  display: flex;
   align-items: center;
-  gap: 10px;
-  border: 0;
-  background: transparent;
-  padding: 6px 0;
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink);
-}
-.patient-overview .overview-record-links {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  margin-top: 16px;
-  padding: 4px 2px;
-}
-.patient-overview .overview-record-links > span {
-  font-size: var(--meta-size, 14px);
-  color: var(--overview-muted);
-  margin-right: 4px;
-}
-.patient-overview .overview-record-links button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  background: transparent;
-  padding: 6px 4px;
-  color: var(--overview-muted);
-  font: inherit;
-  font-size: var(--meta-size, 14px);
-}
-.patient-overview .overview-record-links b {
-  font-weight: 500;
-  color: var(--ink);
-}
-.patient-overview time,
-.patient-overview b {
-  font-variant-numeric: tabular-nums;
-}
-@media (max-width: 1000px) {
-  .patient-dashboard .patient-overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-@media (max-width: 600px) {
-  .patient-dashboard .patient-overview-grid .overview-card {
-    padding: 16px 16px 12px;
-  }
-  .patient-overview .overview-record-links {
-    gap: 6px 12px;
-  }
-  .patient-overview .overview-medication-details,
-  .patient-overview .overview-lab-evidence dl > div {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .patient-overview button {
-    transition: none;
-  }
-}
-.medical-shell .patient-dashboard .chart-heading {
-  padding-bottom: 16px;
-}
-.medical-shell .patient-dashboard .chart-heading h2 {
-  font-size: max(20px, var(--body-size, 16px));
-  margin: 0;
-}
-.patient-dashboard .chart-heading .eyebrow {
-  display: none;
-}
-.patient-dashboard .chart-heading p {
-  margin-top: 5px;
-}
-.medical-shell .patients-view.has-patient .patients-toolbar {
-  margin-bottom: 10px;
-}
-.medical-shell .has-patient .detail-head {
-  padding: 12px 0 16px;
-  gap: 16px;
-}
-.medical-shell .has-patient .detail-head .patient-line {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.medical-shell .has-patient .detail-head .patient-line > b {
-  font-size: 24px;
-}
-.medical-shell .has-patient .patient-back {
-  min-height: 28px;
-  font-size: 14px;
-  padding: 0;
-  margin: 0 0 8px;
-  color: var(--muted);
-}
-.medical-shell .has-patient .detail-head .patient-line > small {
-  font-size: 14px;
-}
-.medical-shell .has-patient .patient-area-tabs {
-  margin-top: 0;
-}
-.medical-shell .has-patient .patient-section-tabs {
-  margin: 8px 0 16px;
-}
-
-/* Patient navigation remains reachable when the page exceeds the viewport. */
-.medical-shell .patient-area-tabs,
-.medical-shell .patient-section-tabs {
-  flex-shrink: 0;
-  min-height: 44px;
-}
-
-.patient-overview .overview-diagnosis-group h4 {
-  margin: 0 0 6px;
-  color: var(--overview-muted);
-  font-size: var(--meta-size, 14px);
-  font-weight: 500;
-}
-.patient-overview .overview-diagnosis-group + .overview-diagnosis-group {
-  border-top: 1px solid #edf0ed;
+  gap: 6px 10px;
+  margin-top: 10px;
   padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+.patient-overview .ov-plan b {
+  font-weight: 600;
+}
+.patient-overview .ov-files {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.patient-overview .ov-nowrap {
+  white-space: nowrap;
+}
+.patient-overview .ov-relative,
+.patient-overview .om-table td.num {
+  white-space: nowrap;
+}
+.patient-overview .ov-visit-list li {
+  grid-template-columns: minmax(104px, max-content) minmax(0, 1fr);
+}
+.patient-overview .ov-visit-list time {
+  white-space: nowrap;
 }

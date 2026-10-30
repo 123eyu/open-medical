@@ -1,6 +1,8 @@
 import { patientPhone } from "../shared/patient-phone.mjs";
 import { messageProvenance, messageSpeakerLabel, messageTimeLabel } from "../shared/message-provenance.mjs";
 import { dashboardLabLayout } from "../shared/patient-dashboard.mjs";
+import { patientListBrief } from "../shared/patient-list-brief.mjs";
+import { localCalendarDate } from "../shared/calendar-date.mjs";
 import { sqliteTransaction } from "./sqlite-transaction.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { AppError, check, identifier, string } from "./errors.mjs";
@@ -35,7 +37,7 @@ export class PatientRegistry {
       .all()
       .map((row) => JSON.parse(row.data));
   }
-  summaries() {
+  summaries({ brief = false } = {}) {
     // Clinical histories can grow indefinitely. List and picker requests only
     // need identity fields, so SQLite projects those without transferring charts.
     return this.store.db.prepare(`SELECT json_object(
@@ -46,7 +48,10 @@ export class PatientRegistry {
       'revision',json_extract(data,'$.revision'),'updatedAt',json_extract(data,'$.updatedAt'),
       'createdAt',json_extract(data,'$.createdAt'),'archived',json_extract(data,'$.archived'),
       'groups',json_extract(data,'$.groups'),'tags',json_extract(data,'$.tags'),
-      'diagnoses',json_extract(data,'$.diagnoses'),'visits',json_extract(data,'$.visits')) AS data FROM patients`)
+      'diagnoses',json_extract(data,'$.diagnoses'),'visits',json_extract(data,'$.visits')${brief ? `,
+      'allergies',json_extract(data,'$.allergies'),'allergyStatus',json_extract(data,'$.allergyStatus'),
+      'medications',json_extract(data,'$.medications'),'labs',json_extract(data,'$.labs'),
+      'treatmentPlan',json_extract(data,'$.treatmentPlan')` : ""}) AS data FROM patients`)
       .all().map((row) => JSON.parse(row.data));
   }
   row(id) {
@@ -107,7 +112,9 @@ export class PatientRegistry {
     }
     return counts;
   }
-  list({ query, group, includeArchived = false, summary = false } = {}) {
+  // `brief` adds compact clinical facts (allergy, active meds, abnormal labs,
+  // next visit) for list rows; without it the response shape is unchanged.
+  list({ query, group, includeArchived = false, summary = false, brief = false } = {}) {
     const counts = this.allCounts();
     const diagnosisText = (p) =>
       typeof p.diagnoses === "string"
@@ -116,18 +123,39 @@ export class PatientRegistry {
             .map((d) => (typeof d === "string" ? d : d?.name || ""))
             .filter(Boolean)
             .join(" ");
-    const patients = (summary ? this.summaries() : this.all())
+    const patients = (summary ? this.summaries({ brief }) : this.all())
       .filter((p) => includeArchived || !p.archived)
       .filter((p) => !group || p.groups?.includes(group))
       .filter((p) => [p.name, p.patientNumber, p.id, p.phone, ...(p.tags || []), diagnosisText(p)]
         .some((value) => String(value || "").toLowerCase().includes(String(query || "").trim().toLowerCase())))
       .sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt) || a.id.localeCompare(b.id));
-    return patients.map((p) => ({
-      ...p,
-      counts: counts.get(p.id) || { unprocessedMessages: 0, activeFollowups: 0, dueFollowups: 0, pendingReminders: 0 },
-      lastVisitAt: (p.visits || []).map((v) => v?.date).filter(Boolean).sort().at(-1) || "",
-      diagnosisSummary: diagnosisText(p).split(" ").filter(Boolean).slice(0, 3).join(" · "),
-    }));
+    const appointments = brief ? this.upcomingAppointments() : null;
+    return patients.map((p) => {
+      const row = {
+        ...p,
+        counts: counts.get(p.id) || { unprocessedMessages: 0, activeFollowups: 0, dueFollowups: 0, pendingReminders: 0 },
+        lastVisitAt: (p.visits || []).map((v) => v?.date).filter(Boolean).sort().at(-1) || "",
+        diagnosisSummary: diagnosisText(p).split(" ").filter(Boolean).slice(0, 3).join(" · "),
+      };
+      if (!brief) return row;
+      row.brief = patientListBrief(p, appointments.get(p.id));
+      // The summary projection only needs the brief; charts stay on the detail route.
+      if (summary) for (const key of ["labs", "medications", "treatmentPlan", "allergies", "allergyStatus"]) delete row[key];
+      return row;
+    });
+  }
+  upcomingAppointments() {
+    // Optional table owned by the schedule service; absent in minimal setups.
+    try {
+      const today = localCalendarDate();
+      const map = new Map();
+      for (const row of this.store.db.prepare("SELECT patient_id, date FROM appointments WHERE status='scheduled' AND substr(date,1,10)>=? ORDER BY date").all(today)) {
+        if (!map.has(row.patient_id)) map.set(row.patient_id, row.date);
+      }
+      return map;
+    } catch {
+      return new Map();
+    }
   }
   get(id) {
     const patient = this.row(id);

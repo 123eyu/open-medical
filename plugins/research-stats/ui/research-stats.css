@@ -1,8 +1,45 @@
-/* Research statistics page. The shared .research-table rules remain in
-   style.css because the fixed DRG page also renders a research table. */
-.research-view {
-  width: min(860px, 100%);
+/* Research statistics page. Layout comes from src/tools-clarity.css; the
+   shared .research-table rules remain in style.css for the DRG page. */
+.tool-page .research-import {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
 }
-.research-import { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
-.research-import button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
-.research-import span { font-size: 14px; color: var(--muted); }
+.tool-page .research-import button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-page .research-view .research-table {
+  width: 100%;
+  margin: 0;
+  border: 0;
+}
+.tool-page .research-view .research-table td b {
+  font-weight: 600;
+}
+.tool-page .research-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .tool-page .research-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.tool-page .research-raw {
+  margin-top: 10px;
+}
+.tool-page .research-raw pre {
+  max-height: 260px;
+  overflow: auto;
+  margin: 8px 0 0;
+  font-size: var(--small-size, 13px);
+}
+.tool-page .research-groups {
+  max-width: 520px;
+}

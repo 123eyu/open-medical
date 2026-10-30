@@ -1,14 +1,16 @@
 .patient-history-workspace { --history-accent: var(--accent, #37644e); --history-muted: var(--muted); container-type: inline-size; min-width: 0; }
 .patient-history-workspace .text-button { display: inline-flex; align-items: center; gap: 5px; font-size: var(--meta-size, 13px); }
 .patient-history-workspace :is(button,input,textarea,select,summary):focus-visible { outline: 2px solid var(--history-accent); outline-offset: 3px; }
-.history-section { padding: 22px 0; border-bottom: 1px solid var(--border); min-width: 0; overflow-wrap: anywhere; }
-.history-section:first-child { padding-top: 8px; }
-.history-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.medical-shell .history-section h3 { margin: 0; font-size: var(--body-size, 17px); line-height: 1.5; font-weight: 600; }
+.history-section { padding: 16px 18px; margin-bottom: 16px; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); min-width: 0; overflow-wrap: anywhere; }
+.history-section > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.medical-shell .history-section h3 { margin: 0; font-size: var(--h2-size, 17px); line-height: 1.5; font-weight: 600; }
 .medical-shell .history-section h3 small { font-size: var(--meta-size, 13px); color: var(--history-muted); font-weight: 400; }
 .history-summary-actions { display: flex; align-items: center; gap: 18px; }
 .history-summary-menu { position: relative; }
-.history-summary-menu > summary { color: var(--history-muted); cursor: pointer; padding: 8px 0; font-size: var(--meta-size, 13px); }
+.history-summary-menu > summary { color: var(--history-muted); cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid transparent; border-radius: 7px; font-size: var(--meta-size, 13px); }
+.history-summary-menu > summary::-webkit-details-marker { display: none; }
+.history-summary-menu > summary::after { content: ''; width: 6px; height: 6px; margin-top: -3px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.history-summary-menu > summary:hover, .history-summary-menu[open] > summary { border-color: var(--border); background: #fff; }
 .history-summary-menu > div { position: absolute; right: 0; z-index: 5; width: 300px; max-width: 75vw; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface, #fff); box-shadow: 0 8px 24px #263a3320; }
 .history-summary-copy { font-size: var(--body-size, 16px); line-height: 1.85; max-width: 70ch; }
 .history-summary-copy p { margin: 0 0 10px; white-space: pre-wrap; }
@@ -29,7 +31,7 @@
 .history-diagnosis-list { margin: 0; padding: 0; list-style: none; }
 .history-diagnosis-record { border-top: 1px solid var(--border); padding: 0; }
 .history-diagnosis-record:first-child { border-top: 0; }
-.history-diagnosis-record > details > summary { display: flex; align-items: baseline; gap: 14px; padding: 16px 0; cursor: pointer; list-style: none; }
+.history-diagnosis-record > details > summary { display: flex; align-items: baseline; gap: 14px; padding: 10px 0 4px; cursor: pointer; list-style: none; }
 .history-diagnosis-record > details > summary::-webkit-details-marker { display: none; }
 .history-diagnosis-name { color: var(--ink); min-width: 0; flex: 1; font-size: var(--body-size, 16px); line-height: 1.6; font-weight: 550; }
 .history-diagnosis-badge { flex-shrink: 0; padding: 3px 7px; font-size: var(--meta-size, 12px); background: #eff3ef; color: #526a5a; border-radius: 4px; }
@@ -40,8 +42,8 @@
 .history-diagnosis-record details[open] .history-detail-label::after { content: ' −'; }
 .history-diagnosis-detail { padding: 0 0 14px; color: var(--history-muted); font-size: var(--meta-size, 13px); }
 .history-diagnosis-detail p { margin: 0 0 6px; }
-.history-diagnosis-note { margin: -2px 0 16px; max-width: 75ch; color: var(--ink); white-space: pre-wrap; line-height: 1.8; font-size: var(--body-size, 15px); }
-.history-record-notes { padding: 18px 0; font-size: var(--meta-size, 13px); color: var(--history-muted); }
+.history-diagnosis-note { margin: 0 0 10px; max-width: 75ch; color: var(--muted); white-space: pre-wrap; line-height: 1.7; font-size: var(--meta-size, 14px); }
+.history-record-notes { padding: 4px 0 8px; font-size: var(--meta-size, 13px); color: var(--history-muted); }
 .history-record-notes > summary { cursor: pointer; width: fit-content; }
 .history-record-notes p { white-space: pre-wrap; margin: 14px 0 0; line-height: 1.8; overflow-wrap: anywhere; }
 .history-summary fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }

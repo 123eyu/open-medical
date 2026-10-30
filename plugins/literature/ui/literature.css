@@ -1,12 +1,81 @@
-/* Literature research page. Shared .literature-* primitives remain in
-   style.css because the fixed case library still uses them. */
-.literature-view {
-  width: min(760px, 100%);
+/* Literature research page. Layout comes from src/tools-clarity.css; shared
+   .literature-* primitives remain in style.css for the case library. */
+.tool-page .literature-search .tool-section-head {
+  align-items: center;
+  margin-bottom: 8px;
 }
-.literature-view .literature-form { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
-.literature-view textarea.literature-query { flex-basis:100%; width:100%; box-sizing:border-box; min-height:130px; resize:vertical; padding:16px; font:inherit; line-height:1.8; border:1px solid var(--border); border-radius:8px; }
-.literature-modes { display:flex; gap:12px; margin:22px 0; }
-.literature-modes button[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--accent-deep); }
-.literature-options { flex:1; }
-.literature-options summary { cursor:pointer; color:var(--muted); font-size:14px; }
-.literature-options>div { display:flex; flex-wrap:wrap; gap:10px; padding-top:12px; }
+.medical-shell .tool-page .literature-mode-hint {
+  margin: 0 0 10px;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.tool-page .literature-view .literature-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+.tool-page .literature-view textarea.literature-query {
+  flex-basis: 100%;
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  padding: 12px 14px;
+  font: inherit;
+  line-height: 1.7;
+}
+.tool-page .literature-options {
+  flex: 1;
+}
+.tool-page .literature-options > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+}
+.tool-page .literature-options select,
+.tool-page .literature-options .literature-year {
+  padding: 6px 10px;
+}
+.medical-shell .tool-page .literature-meta {
+  margin: 0 0 8px;
+}
+.tool-page .literature-results.tool-section {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.tool-page .literature-results .literature-item {
+  border: 0;
+  border-radius: 0;
+  padding: 14px 0;
+}
+.medical-shell .tool-page .literature-results .literature-title {
+  color: var(--ink);
+  text-align: left;
+}
+.tool-page .literature-results .literature-title:hover {
+  color: var(--accent);
+}
+.medical-shell .tool-page .literature-results .literature-journal {
+  white-space: normal;
+}
+.tool-page .literature-results .literature-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+.tool-page .literature-results .literature-abstract {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+.tool-page .literature-results .literature-actions {
+  margin-top: 8px;
+}
+.medical-shell .tool-page .literature-results .literature-actions .secondary {
+  min-height: 36px;
+  padding: 4px 12px;
+}

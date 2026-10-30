@@ -52,19 +52,20 @@ export function BackupPanel() {
   return <section className="backup-panel" aria-label="备份与恢复">
     <h2>备份与恢复</h2><p>{scope}</p>
     {error && <p className="form-error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-    <div className="toolbar-actions"><button disabled={!!busy || !status?.supported} onClick={run}>{busy==='create'?'正在创建…':'创建数据库备份'}</button><button className="secondary" disabled={!!busy} onClick={refresh}>刷新备份清单</button>{window.omwDesktop?.openBackupDirectory && status?.supported && <button className="secondary" disabled={!!busy} onClick={open}>打开备份目录</button>}</div>
+    <div className="toolbar-actions"><button className="primary" disabled={!!busy || !status?.supported} onClick={run}>{busy==='create'?'正在创建…':'创建数据库备份'}</button><button className="secondary" disabled={!!busy} onClick={refresh}>刷新备份清单</button>{window.omwDesktop?.openBackupDirectory && status?.supported && <button className="secondary" disabled={!!busy} onClick={open}>打开备份目录</button>}</div>
     {busy==='loading' && <p role="status">正在读取备份清单…</p>}
     {status && !status.supported && <p>当前实例使用内存数据库，不支持文件备份。</p>}
     {status?.supported && <>
-      <p>共 {status.count} 份数据库备份，保留最近 {status.retention} 份。备份位于同一台电脑，需另行复制到其它存储位置以防设备故障。</p>
+      <p className="backup-summary"><span className={`om-chip ${status.count ? "is-ok" : "is-caution"}`}>{status.count ? `最近备份 ${date(status.items[0]?.createdAt)}` : "尚无备份"}</span><span>共 {status.count} 份数据库备份，保留最近 {status.retention} 份。</span></p>
+      <p className="backup-warning">备份位于同一台电脑，需另行复制到其它存储位置以防设备故障。</p>
       <details><summary>备份位置与范围</summary><p>数据库：<code>{status.databasePath}</code></p><p>备份目录：<code>{status.directory}</code></p>{!window.omwDesktop?.openBackupDirectory && <p>当前在浏览器中，请在本机文件管理器中打开以上路径。</p>}<p>{scope}</p></details>
-      {!status.items.length && !error && <p>尚未创建数据库备份。</p>}
+      {!status.items.length && !error && <p className="om-empty">尚未创建数据库备份。</p>}
       <ul className="backup-list">{status.items.map(item=><li key={item.name} className={created===item.name?'backup-new':''}>
         <div><strong>{date(item.createdAt)}</strong>{created===item.name && <span> · 刚刚创建</span>}<span> · 数据库快照 · {size(item.size)}</span><small>{item.name}</small></div>
         <div className="toolbar-actions"><button className="secondary" disabled={!!busy} onClick={()=>checkFile(item)}>{busy===`check:${item.name}`?'正在检查…':'检查备份'}</button><button className="text-button" disabled={!!busy} onClick={()=>setSelected(item)}>如何恢复此数据库备份</button></div>
         {checks[item.name] && <p role="status">数据库检查通过 · 版本 {checks[item.name].schemaVersion} · 检查于 {date(checks[item.name].checkedAt)}。未检查外部原文件。</p>}
       </li>)}</ul>
-      {selected && <section className="backup-recovery" aria-label="所选备份恢复步骤"><h3 ref={stepHeading} tabIndex={-1}>恢复 {date(selected.createdAt)} 的数据库备份</h3><p>先保存步骤，再完全退出应用。以下步骤会替换当前数据库，请保留原库用于回退。</p><pre>{recoverySteps(status,selected)}</pre><button onClick={download}>保存恢复步骤文本</button><button className="text-button" onClick={()=>setSelected(null)}>收起恢复步骤</button></section>}
+      {selected && <section className="backup-recovery" aria-label="所选备份恢复步骤"><h3 ref={stepHeading} tabIndex={-1}>恢复 {date(selected.createdAt)} 的数据库备份</h3><p>先保存步骤，再完全退出应用。以下步骤会替换当前数据库，请保留原库用于回退。</p><pre>{recoverySteps(status,selected)}</pre><button className="secondary" onClick={download}>保存恢复步骤文本</button><button className="text-button" onClick={()=>setSelected(null)}>收起恢复步骤</button></section>}
     </>}
   </section>;
 }

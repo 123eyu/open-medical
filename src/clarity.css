@@ -1,0 +1,412 @@
+/*
+ * Clarity layer — loaded last.
+ *
+ * One reading order for every page: page title → the few facts that need a
+ * decision → details on demand. Semantic colours are reserved for clinical
+ * meaning (high / low / allergy / overdue) so they stay noticeable.
+ */
+:root {
+  --high: #b3261e;
+  --high-soft: #fdf0ee;
+  --high-line: #f1c9c3;
+  --low: #1f5f99;
+  --low-soft: #edf4fb;
+  --low-line: #c7dbee;
+  --caution: #8a5a12;
+  --caution-soft: #fdf6e9;
+  --caution-line: #ecd7ae;
+  --ok: #2f7353;
+  --ok-soft: #edf5f0;
+  --card: #fff;
+  --card-radius: 10px;
+  --faint: #6b7a73;
+}
+.medical-shell {
+  --title-size: calc(var(--body-size, 16px) + 8px);
+  --h2-size: calc(var(--body-size, 16px) + 1px);
+  --small-size: calc(var(--meta-size, 14px) - 1px);
+}
+
+/* ---------- Page header ---------- */
+.om-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  margin: 0 0 20px;
+}
+.om-page-head h1,
+.om-page-head h2 {
+  margin: 0;
+  font-size: var(--title-size, 24px);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.om-page-head .om-page-meta {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+}
+.om-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Cards & sections ---------- */
+.om-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 16px 18px;
+  min-width: 0;
+}
+.om-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.om-card-head h2,
+.om-card-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.om-card-head h2 svg,
+.om-card-head h3 svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.om-card-head .om-count {
+  color: var(--faint);
+  font-weight: 400;
+  font-size: var(--meta-size, 14px);
+}
+.om-card-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.om-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--accent);
+  font-size: var(--meta-size, 14px);
+  font-weight: 500;
+  cursor: pointer;
+}
+.om-link:hover:not(:disabled) {
+  color: var(--accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.om-empty {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.om-meta {
+  color: var(--faint);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+}
+.om-source {
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+}
+
+/* ---------- Chips ---------- */
+button.om-chip {
+  font-family: inherit;
+}
+.om-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  font-style: normal;
+}
+.om-chip.is-danger {
+  background: var(--high-soft);
+  border-color: var(--high-line);
+  color: var(--high);
+}
+.om-chip.is-caution {
+  background: var(--caution-soft);
+  border-color: var(--caution-line);
+  color: var(--caution);
+}
+.om-chip.is-ok {
+  background: var(--ok-soft);
+  border-color: #cfe3d7;
+  color: var(--ok);
+}
+.om-chip.is-info {
+  background: var(--low-soft);
+  border-color: var(--low-line);
+  color: var(--low);
+}
+.om-chip svg {
+  flex-shrink: 0;
+}
+
+/* ---------- Lab value flags ---------- */
+.om-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--ink);
+}
+.om-value.high {
+  color: var(--high);
+}
+.om-value.low {
+  color: var(--low);
+}
+.om-flag {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+.om-flag.high {
+  color: var(--high);
+}
+.om-flag.low {
+  color: var(--low);
+}
+.om-range-generic {
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+}
+
+/* ---------- Key facts strip ---------- */
+.om-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+}
+.om-fact {
+  min-width: 0;
+  padding: 14px 18px 15px;
+  border-left: 1px solid var(--line);
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+.om-fact:first-child {
+  border-left: 0;
+}
+.om-fact > span {
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.om-fact > strong {
+  font-size: calc(var(--body-size, 16px) + 1px);
+  font-weight: 650;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.om-fact > strong.is-danger {
+  color: var(--high);
+}
+.om-fact > strong.is-muted {
+  color: var(--faint);
+  font-weight: 500;
+}
+.om-fact > small {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.om-fact.alert {
+  background: var(--high-soft);
+}
+@media (max-width: 1100px) {
+  .om-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .om-fact:nth-child(3) {
+    border-left: 0;
+  }
+  .om-fact:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+}
+@media (max-width: 620px) {
+  .om-facts {
+    grid-template-columns: 1fr;
+  }
+  .om-fact {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .om-fact:first-child {
+    border-top: 0;
+  }
+}
+
+/* ---------- Compact data table ---------- */
+.om-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--meta-size, 14px);
+}
+.om-table th {
+  padding-right: 12px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  padding: 0 10px 8px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.medical-shell .om-table td,
+.om-table td {
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--ink);
+}
+.om-table tr:last-child td {
+  border-bottom: 0;
+}
+.om-table tr.abnormal td:first-child {
+  box-shadow: inset 3px 0 0 var(--high);
+  padding-left: 10px;
+}
+.om-table tr.abnormal.low td:first-child {
+  box-shadow: inset 3px 0 0 var(--low);
+}
+.om-table td.num,
+.om-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.om-table .om-row-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: var(--ink);
+  font-weight: 560;
+  cursor: pointer;
+}
+.om-table .om-row-button:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Quiet disclosure ---------- */
+.om-disclosure > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.om-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.om-disclosure > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.om-disclosure[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Inline controls inside dense views keep text height; 44px targets are for
+   standalone buttons (see business-layout.css). */
+.medical-shell button.om-link,
+.medical-shell button.om-chip,
+.medical-shell .om-table button.om-row-button {
+  min-height: 0;
+  font-size: var(--meta-size, 14px);
+  line-height: 1.5;
+}
+.medical-shell .om-table button.om-row-button {
+  font-size: var(--body-size, 16px);
+}
+.medical-shell button.om-chip {
+  font-size: var(--small-size, 13px);
+}
+
+/* Sidebar: create → work areas → recent conversations → examples & settings. */
+.medical-shell .app-navigation .demo-nav-bottom {
+  margin: auto 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.medical-shell .app-navigation .demo-nav-bottom + .business-preferences {
+  margin-top: 0;
+  padding-top: 2px;
+}
+.medical-shell .app-navigation .demo-nav-bottom button:not(.demo-nav-hide) {
+  min-height: 38px;
+  color: var(--muted);
+}
+.medical-shell .agent-recents-tail button {
+  color: var(--muted);
+}
+.medical-shell .agent-recents-tail button:hover {
+  color: var(--accent);
+}

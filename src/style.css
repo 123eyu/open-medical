@@ -4830,8 +4830,10 @@ nav.toolbox .session b{font-weight:500;}
 .patient-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 18px 0; }
 .patient-pagination small { margin-right: auto; color: var(--muted); }
 
-.care-tracking-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 16px; }
-.care-tracking-header h3 { margin: 0 0 8px; }
+.care-tracking-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 16px; }
+.care-tracking-header h3 { margin: 0 0 4px; font-size: var(--h2-size, 17px); }
+.care-tracking-header p { margin: 0; }
+.care-tracking-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .care-tracking-header .primary { flex-shrink: 0; }
 .care-tracking-card { border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-top: 14px; background: var(--paper, white); }
 .care-tracking-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 12px; }

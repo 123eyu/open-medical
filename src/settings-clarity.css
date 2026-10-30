@@ -1,0 +1,519 @@
+/*
+ * Settings: page head → left nav (with status hints) → one panel at a time.
+ * Every panel opens with a title and one muted lead line; status reads as a
+ * coloured chip; actions are real buttons, never browser chrome.
+ */
+.app-settings-page.app-settings-page {
+  padding: 28px 32px 48px;
+  max-width: 1240px;
+}
+.app-settings-page .settings-head {
+  margin-bottom: 24px;
+}
+.app-settings-page .app-settings-layout {
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 36px;
+}
+
+/* Left navigation */
+.app-settings-page .settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+.v6-shell .app-settings-page button.settings-nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  text-align: left;
+}
+.v6-shell .app-settings-page button.settings-nav-item:hover {
+  background: var(--soft, #f0f4f2);
+  color: var(--ink);
+}
+.v6-shell .app-settings-page button.settings-nav-item[aria-pressed="true"] {
+  background: var(--accent-soft, #edf3eb);
+  color: var(--accent-deep);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.app-settings-page .settings-nav-item .om-chip {
+  font-weight: 500;
+}
+
+/* Sub navigation: segmented tabs */
+.app-settings-page .settings-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 0 12px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+.v6-shell .app-settings-page button.settings-subnav-item {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.v6-shell .app-settings-page button.settings-subnav-item:hover {
+  background: var(--soft, #f0f4f2);
+  color: var(--ink);
+}
+.v6-shell .app-settings-page button.settings-subnav-item[aria-pressed="true"] {
+  background: #fff;
+  border-color: var(--accent-line, #c8d8ce);
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+/* Panel head inside content */
+.app-settings-content > section,
+.app-settings-content > div > section {
+  max-width: 880px;
+}
+.app-settings-page .app-settings-content h2 {
+  margin: 0 0 4px;
+  font-size: calc(var(--body-size, 16px) + 4px);
+  font-weight: 650;
+  line-height: 1.35;
+}
+.app-settings-page .app-settings-content > section + section {
+  margin-top: 32px;
+}
+/* Panels from plugins start with h2 + p; the lead reads as helper text. */
+.app-settings-page .app-settings-content section > h2 + p,
+.app-settings-page .settings-lead {
+  margin: 0 0 18px;
+  max-width: 72ch;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.65;
+}
+.app-settings-page .app-settings-content section > h2 + p + p {
+  margin-top: -10px;
+  max-width: 72ch;
+  color: var(--faint);
+  font-size: var(--small-size, 13px);
+  line-height: 1.6;
+}
+.app-settings-page .settings-channel-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 18px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+
+/* Model status / toggle cards */
+.app-settings-page .settings-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.app-settings-page .settings-status-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.app-settings-page .settings-status-main p {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  font-size: var(--body-size, 16px);
+}
+.app-settings-page .settings-status-main b {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.app-settings-page .settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+.app-settings-page .settings-toggle input {
+  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.app-settings-page .settings-toggle span {
+  display: grid;
+  gap: 2px;
+}
+.app-settings-page .settings-toggle b {
+  font-weight: 600;
+  font-size: var(--body-size, 16px);
+}
+.app-settings-page .settings-toggle small {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.6;
+}
+.app-settings-page .settings-empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.app-settings-page .settings-project-picker {
+  display: grid;
+  gap: 6px;
+  max-width: 480px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.app-settings-page .settings-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--high);
+}
+
+/* Plugins: compact on/off list */
+.app-settings-page .settings-plugin-count {
+  margin: -8px 0 14px;
+}
+.app-settings-page .plugin-settings-list {
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: #fff;
+  overflow: hidden;
+}
+.app-settings-page .plugin-settings-item {
+  padding: 12px 18px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.app-settings-page .plugin-settings-item:first-child {
+  border-top: 0;
+}
+.app-settings-page .plugin-settings-item.is-off .plugin-settings-title b {
+  color: var(--muted);
+}
+.app-settings-page .plugin-settings-summary {
+  align-items: center;
+}
+.app-settings-page .plugin-settings-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.app-settings-page .plugin-settings-summary small {
+  font-size: var(--small-size, 13px);
+  color: var(--faint);
+}
+.app-settings-page .plugin-settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 2px;
+}
+.app-settings-page .plugin-settings-links .om-meta {
+  font-size: var(--small-size, 13px);
+  font-weight: 400;
+}
+.app-settings-page .plugin-settings-summary .settings-login-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: var(--meta-size, 14px);
+  color: var(--muted);
+}
+.app-settings-page .plugin-settings-summary .settings-login-item input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+/* Channel / notification cards from plugins */
+.app-settings-page .notification-channel {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  box-shadow: none;
+}
+.app-settings-page .notification-channel h3 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+}
+.app-settings-page .notification-channel h3 small,
+.app-settings-page .notification-channel h3 .om-chip {
+  margin-left: 0;
+}
+.app-settings-page .notification-channel > p,
+.app-settings-page .notification-channel header p:not([role="status"]) {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+  line-height: 1.65;
+}
+.app-settings-page .notification-channel header .om-chip {
+  margin-top: 2px;
+}
+.app-settings-page .doctor-notifications {
+  max-width: 880px;
+}
+.app-settings-page .doctor-notifications .notification-actions,
+.app-settings-page .notification-channel .toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.app-settings-page .notification-channel form {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+.app-settings-page .notification-channel fieldset {
+  margin: 0;
+}
+.app-settings-page .notification-channel .notification-check {
+  margin: 4px 0 12px;
+}
+.app-settings-page .doctor-notifications h3:not(.notification-channel h3) {
+  margin: 22px 0 4px;
+  font-size: var(--body-size, 16px);
+}
+.app-settings-page .settings-bot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.app-settings-page .settings-bot-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+
+/* Transcription settings (form from knowledge-transcription-settings.jsx) */
+.app-settings-content section[aria-label="音视频转写设置"] fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  max-width: 760px;
+  margin: 12px 0 0;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: #fff;
+}
+.app-settings-content section[aria-label="音视频转写设置"] fieldset > label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.app-settings-content section[aria-label="音视频转写设置"] fieldset > label :is(input, select) {
+  width: 100%;
+}
+.app-settings-content section[aria-label="音视频转写设置"] fieldset > :is(p, button) {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.app-settings-content section[aria-label="音视频转写设置"] fieldset > button {
+  justify-self: start;
+}
+@media (max-width: 700px) {
+  .app-settings-content section[aria-label="音视频转写设置"] fieldset {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Skills & rules */
+.app-settings-page .ext-center > h2 + p.muted {
+  margin-bottom: 18px;
+}
+.app-settings-page .ext-block {
+  margin: 0 0 24px;
+}
+.app-settings-page .ext-block > h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+}
+.app-settings-page .ext-block > h3 small {
+  color: var(--faint);
+  font-weight: 400;
+  font-size: var(--meta-size, 14px);
+}
+.app-settings-page ul.ext-builtin-skills li {
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.app-settings-page ul.ext-builtin-skills li b {
+  display: block;
+  font-size: var(--meta-size, 14px);
+}
+.app-settings-page ul.ext-builtin-skills li p {
+  font-size: var(--small-size, 13px);
+  line-height: 1.6;
+}
+.app-settings-page .ext-skill-id {
+  display: block;
+  margin-top: 6px;
+  color: var(--faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+.app-settings-page .ext-safety {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--soft, #f0f4f2);
+  color: var(--muted);
+  font-size: var(--small-size, 13px);
+}
+.app-settings-page .ext-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.app-settings-page .ext-head .ext-examples {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Backup */
+.app-settings-page .backup-panel .toolbar-actions {
+  margin: 4px 0 12px;
+}
+
+@media (max-width: 900px) {
+  .app-settings-page.app-settings-page {
+    padding: 22px 18px 40px;
+  }
+  .app-settings-page .app-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .app-settings-page .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .v6-shell .app-settings-page button.settings-nav-item {
+    width: auto;
+  }
+  .v6-shell .app-settings-page button.settings-nav-item[aria-pressed="true"] {
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+}
+
+/* Plugin panels style bare buttons as soft secondary; keep the one primary
+   action per card visibly primary. */
+.app-settings-page .doctor-notifications button.primary,
+.app-settings-page .doctor-notifications button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.app-settings-page .doctor-notifications button.primary:hover:not(:disabled) {
+  background: var(--accent-deep);
+}
+.app-settings-page .doctor-notifications button.secondary {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--accent-deep);
+}
+.app-settings-page .doctor-notifications button.text-button {
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.app-settings-page .doctor-notifications button.text-button.danger {
+  color: var(--high);
+}
+.app-settings-page .notification-channel p {
+  font-size: var(--meta-size, 14px);
+  line-height: 1.65;
+}
+.app-settings-page .notification-channel p[role="status"] {
+  margin: 0 0 8px;
+}
+
+/* Patient follow-up connections (followup plugin) */
+.app-settings-page .chat-channel-group {
+  margin-top: 18px;
+}
+.app-settings-page .chat-channel-group h3 {
+  font-size: var(--meta-size, 14px);
+  font-weight: 600;
+  color: var(--muted);
+}
+.app-settings-page .chat-tabs {
+  margin: 8px 0 18px;
+}
+.app-settings-page .chat-setup {
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius, 10px);
+  background: #fff;
+}
+.app-settings-page .chat-setup > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.app-settings-page .chat-setup > p[role="status"] {
+  color: var(--ink);
+  font-weight: 500;
+}
+.app-settings-page .chat-setup > button,
+.app-settings-page .chat-setup form > button {
+  align-self: flex-start;
+}
+.app-settings-page .chat-setup h3 {
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+}

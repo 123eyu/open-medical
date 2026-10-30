@@ -7,6 +7,7 @@ import { careSetupProgress, takePluginIntent } from "../../../src/plugin-navigat
 import { CareContacts } from "../../channel-wecom/ui/CareContacts.jsx";
 import { CareSetup } from "./CareSetup.jsx";
 import "../../../src/care.css";
+import "./followup-clarity.css";
 
 const TABS = [["alerts", "提醒", Bell], ["drafts", "待回复草稿", MessageSquare], ["messages", "全部消息", Inbox], ["contacts", "客户与群", Contact], ["settings", "设置", Settings2]];
 const LEVEL = { urgent: "紧急", attention: "需关注", routine: "常规" };
@@ -83,18 +84,19 @@ export function CareInbox({ onOpenPatient }) {
   const stats = overview?.stats || {};
   const counts = patientFilter ? {} : { alerts: stats.openAlerts, drafts: stats.drafts, contacts: stats.contactMatches };
   return <main id="main" className="work-directory care-inbox">
-    <header className="directory-heading"><div><h1>患者消息</h1></div></header>
+    <header className="directory-heading om-page-head care-head"><div><h1>患者消息</h1>
+      <span className="om-page-meta">{overview ? [stats.openAlerts ? `${stats.openAlerts} 条提醒待处理` : "暂无未处理提醒", stats.drafts ? `${stats.drafts} 份草稿待发送` : "", stats.pending ? `${stats.pending} 条消息待处理` : ""].filter(Boolean).join(" · ") : "正在读取…"}</span></div></header>
     {patientFilter && <section className="care-notice" aria-label="患者筛选"><span>当前患者：{patientFilter.name || patientFilter.id}</span><button type="button" className="text-button" onClick={() => { loadGeneration.current++; setData({}); setError(""); setPatientFilter(null); }}>清除患者筛选</button></section>}
     {setup && !setup.essential && !setupLater && <section className="care-setup-banner" aria-label="企业微信接入">
       <div><strong>患者消息连接尚未就绪</strong>
-        <span>可先导入聊天记录整理随访</span></div>
+        <span>新消息不会自动进入；可先在患者「消息记录」中粘贴聊天记录整理随访。</span></div>
       <button type="button" className="primary" onClick={() => setSetupOpen(true)}>查看连接方式</button>
       <button type="button" className="secondary" onClick={() => { setSetupLater(true); try { sessionStorage.setItem("omw-care-setup-later", "1"); } catch { /* storage unavailable */ } }}>稍后</button>
     </section>}
     {setupOpen && <CareSetup onClose={() => { setSetupOpen(false); loadSetup(); load(); }} onChanged={loadSetup} />}
     {!patientFilter && <section className="care-stats" aria-label="今日统计（全部患者）">
-      {[["今日消息", stats.messagesToday], ["待处理", stats.pending], ["未处理提醒", stats.openAlerts, stats.urgentAlerts ? "urgent" : ""], ["今日自动回复", stats.autoRepliedToday], ["待发送草稿", stats.drafts], ["进行中随访", stats.activeCampaigns]].filter(([, value], index) => index < 3 || value > 0).map(([label, value, tone]) =>
-        <div key={label} className={`care-stat ${tone || ""}`}><strong>{value ?? "—"}</strong><span>{label}</span></div>)}
+      {[["未处理提醒", stats.openAlerts, stats.urgentAlerts ? "urgent" : stats.openAlerts ? "attention" : "", stats.urgentAlerts ? `其中 ${stats.urgentAlerts} 条紧急` : ""], ["待处理消息", stats.pending, stats.pending ? "attention" : ""], ["待发送草稿", stats.drafts, stats.drafts ? "attention" : ""], ["今日消息", stats.messagesToday], ["今日自动回复", stats.autoRepliedToday], ["进行中随访", stats.activeCampaigns]].filter(([, value], index) => index < 4 || value > 0).map(([label, value, tone, note]) =>
+        <div key={label} className={`care-stat ${tone || ""}`}><span>{label}</span><strong>{value ?? "—"}</strong>{note && <small>{note}</small>}</div>)}
     </section>}
     {overview && <details className="care-channel-details"><summary>连接状态 · {MODES.find(([id]) => id === overview.settings?.autoReply?.mode)?.[1] || "未设置"}</summary><div className="care-channels">
       自动回复：<b>{MODES.find(([id]) => id === overview.settings?.autoReply?.mode)?.[1] || "未设置"}</b>
@@ -133,7 +135,7 @@ export function CareInbox({ onOpenPatient }) {
         <pre>{sending.text}</pre>
         <p className="care-hint">发送后无法撤回。需成员确认的渠道会在企业微信生成待发送任务。</p>
         <footer><button className="secondary" onClick={() => setSending(null)}>取消</button>
-          <button disabled={Boolean(busy)} onClick={() => { const r = sending; setSending(null); act(r.id + "send", () => api(`/api/care/replies/${r.id}/send`, "POST", { confirmed: true }), "已提交发送。"); }}><Send size={15} />确认发送</button></footer>
+          <button className="primary" disabled={Boolean(busy)} onClick={() => { const r = sending; setSending(null); act(r.id + "send", () => api(`/api/care/replies/${r.id}/send`, "POST", { confirmed: true }), "已提交发送。"); }}><Send size={15} />确认发送</button></footer>
       </div>
     </Modal>}
   </main>;
@@ -145,14 +147,14 @@ function PatientLink({ id, name, onOpenPatient }) {
 }
 
 function AlertList({ alerts, busy, onAction, onOpenPatient }) {
-  if (!alerts.length) return <Empty>没有未处理的提醒。AI 无法处理或命中红旗规则的消息会出现在这里。</Empty>;
+  if (!alerts.length) return <Empty>没有未处理的提醒。命中红旗症状或需要医生判断的消息会出现在这里。</Empty>;
   return <ul className="care-list">{alerts.map((a) => <li key={a.id} className={`care-card level-${a.level}`}>
     <header><span className={`care-level ${a.level}`}><AlertTriangle size={14} />{LEVEL[a.level] || a.level}</span><PatientLink id={a.patientId} name={a.patientName} onOpenPatient={onOpenPatient} /><time>{fmt(a.createdAt)}</time></header>
     <p className="care-reason">{a.reason}</p>
     {a.messageText && <blockquote>{a.messageText}</blockquote>}
     <footer>
       {a.status === "open" && <button className="secondary" disabled={Boolean(busy)} onClick={() => onAction(a, "acknowledge")}>我已知晓</button>}
-      <button disabled={Boolean(busy)} onClick={() => onAction(a, "resolve")}>已处理</button>
+      <button className="primary" disabled={Boolean(busy)} onClick={() => onAction(a, "resolve")}>已处理</button>
     </footer>
   </li>)}</ul>;
 }
@@ -172,9 +174,9 @@ function DraftCard({ reply, busy, onSave, onSend, onDiscard, onOpenPatient }) {
     {reply.sources?.length > 0 && <p className="care-sources">依据：{reply.sources.map((s) => <span key={s.id}>{s.title || s.id}</span>)}</p>}
     {reply.detail && <p className="care-hint">{reply.detail}</p>}
     <footer>
-      <button className="secondary" disabled={Boolean(busy)} onClick={() => onDiscard(reply)}>丢弃</button>
+      <button className="text-button care-discard" disabled={Boolean(busy)} onClick={() => onDiscard(reply)}>丢弃</button>
       {dirty && <button className="secondary" disabled={Boolean(busy) || !text.trim()} onClick={() => onSave(reply, text)}>保存修改</button>}
-      <button disabled={Boolean(busy) || dirty || !text.trim()} title={dirty ? "请先保存修改" : undefined} onClick={() => onSend(reply)}><Send size={15} />发送</button>
+      <button className="primary" disabled={Boolean(busy) || dirty || !text.trim()} title={dirty ? "请先保存修改" : undefined} onClick={() => onSend(reply)}><Send size={15} />发送</button>
     </footer>
   </li>;
 }
@@ -186,7 +188,7 @@ function AssignControl({ message, patients, busy, onAssign }) {
       <option value="">选择患者…</option>
       {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
     </select>
-    <button disabled={Boolean(busy) || !patientId} onClick={() => onAssign(message, patientId)}>关联患者</button>
+    <button className="secondary" disabled={Boolean(busy) || !patientId} onClick={() => onAssign(message, patientId)}>关联患者</button>
   </span>;
 }
 
@@ -287,7 +289,7 @@ function CareSettings({ settings, busy, onSave, onSetup }) {
     </fieldset>
     <fieldset disabled={busy}>
       <legend>企业微信连接</legend>
-      <button type="button" onClick={onSetup}>查看患者消息连接</button>
+      <button type="button" className="secondary care-setup-start" onClick={onSetup}>查看患者消息连接</button>
       {kfSync?.polling && <p className="care-hint">微信客服：每 {kfSync.pollSeconds} 秒自动拉取 · 上次成功 {fmt(kfSync.lastSyncAt)}{kfSync.lastError ? ` · 最近错误：${kfSync.lastError}（下次 ${fmt(kfSync.nextAt)}）` : ""}</p>}
       <div className="care-test">
         <button type="button" className="secondary" disabled={testing} onClick={testConnection}>{testing ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}测试已保存的连接</button>
@@ -333,7 +335,7 @@ export function PatientCareSettings({ patient, onClose, onSaved }) {
         <label>发送渠道<select value={form.channel} onChange={(e) => set({ channel: e.target.value })}>{CHANNELS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <p>患者的客服会话会在关联消息时自动识别。</p>
       </fieldset>
-      <footer><button type="button" className="secondary" onClick={onClose}>取消</button><button type="submit" disabled={saving}>{saving ? "正在保存…" : "保存"}</button></footer>
+      <footer><button type="button" className="secondary" onClick={onClose}>取消</button><button type="submit" className="primary" disabled={saving}>{saving ? "正在保存…" : "保存"}</button></footer>
     </form>}
   </Modal>;
 }

@@ -118,7 +118,7 @@ test("可选接口 404 后概览组件仍渲染患者概览标题", async (t) =>
     }),
   );
 
-  assert.match(html, /<h2>患者概览<\/h2>/);
+  assert.match(html, /<h2[^>]*>患者概览<\/h2>/);
   assert.match(html, /class="patient-overview"/);
   assert.doesNotMatch(html, /接口不存在/);
 });

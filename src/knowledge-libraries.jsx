@@ -3,6 +3,13 @@ import { api } from "./agent-runtime";
 import { KnowledgeView } from "./knowledge";
 import { EducationTools } from "./education-materials";
 import "./medical-modules.css";
+import "./knowledge-clarity.css";
+
+// Close the enclosing <details> menu before running a menu action.
+function closeMenu(event) {
+  const menu = event.currentTarget.closest("details");
+  if (menu) menu.open = false;
+}
 export function KnowledgeLibraries({ onOpenTask }) {
   const [loading, setLoading] = useState(true);
   const [libraries, setLibraries] = useState([]),
@@ -166,13 +173,30 @@ export function KnowledgeLibraries({ onOpenTask }) {
   return (
     <div className="module-view library-hub">
       {!selected && (
-        <div className="module-head">
+        <div className="om-page-head kl-head">
           <div>
             <h1>知识库</h1>
+            <span className="om-page-meta">
+              {loading
+                ? "正在读取…"
+                : `${libraries.length} 个知识库 · ${libraries.reduce((n, c) => n + c.documentCount, 0)} 份资料 · AI 回答时只引用库中原文`}
+            </span>
           </div>
-          <button className="primary" onClick={startCreate}>
-            新建知识库
-          </button>
+          <div className="om-page-actions">
+            <label className="kl-search">
+              <span className="sr-only">查找知识库</span>
+              <input
+                aria-label="查找知识库"
+                type="search"
+                placeholder="查找知识库：名称或收录内容"
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+              />
+            </label>
+            <button className="primary" onClick={startCreate}>
+              新建知识库
+            </button>
+          </div>
         </div>
       )}
       {error && (
@@ -293,7 +317,7 @@ export function KnowledgeLibraries({ onOpenTask }) {
         <>
           <div className="library-topbar">
             <button
-              className="text-button"
+              className="text-button kl-back"
               onClick={() => {
                 selectLibrary(null);
                 load().catch((e) => setError(e.message));
@@ -301,45 +325,58 @@ export function KnowledgeLibraries({ onOpenTask }) {
             >
               ← 全部知识库
             </button>
-            <button className="text-button" onClick={startCreate}>
-              新建知识库
-            </button>
           </div>
-          <section className="library-description">
-            <header>
+          <section className="library-description om-page-head" aria-label="知识库说明">
+            <div className="kl-title">
               <h2>{selected.name}</h2>
-              <details className="library-description-actions kw-library-manage">
-                <summary>管理知识库</summary>
+              <p className="kl-desc">{selected.description || "尚未填写收录说明"}</p>
+              <dl className="kl-scope">
                 <div>
-                  <button
-                    className="text-button"
-                    onClick={() => setForm({ ...selected, isNew: false })}
-                  >
-                    编辑说明
-                  </button>
-                  <button
-                    className="text-button library-delete-button"
-                    disabled={busy}
-                    onClick={() => prepareDelete(selected.name)}
-                  >
-                    删除知识库
-                  </button>
+                  <dt>什么时候用</dt>
+                  <dd className={selected.whenToUse ? "" : "om-meta"}>
+                    {selected.whenToUse || "未填写，可在“编辑说明”中补充"}
+                  </dd>
                 </div>
-              </details>
-            </header>
-            <p>{selected.description || "尚未填写收录说明"}</p>
-            <details className="kw-library-scope">
-              <summary>用途与适用范围</summary>
-              <p>
-                <b>使用场景：</b>
-                {selected.whenToUse || "请补充什么时候使用此库"}
-              </p>
-              {selected.limitations && (
-                <p>
-                  <b>注意事项：</b>
-                  {selected.limitations}
-                </p>
-              )}
+                {selected.limitations && (
+                  <div className="kl-caution">
+                    <dt>注意事项</dt>
+                    <dd>{selected.limitations}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+            <details className="kl-menu kw-library-manage">
+              <summary>管理知识库</summary>
+              <div>
+                <button
+                  className="text-button"
+                  onClick={(e) => {
+                    closeMenu(e);
+                    setForm({ ...selected, isNew: false });
+                  }}
+                >
+                  编辑说明
+                </button>
+                <button
+                  className="text-button"
+                  onClick={(e) => {
+                    closeMenu(e);
+                    startCreate();
+                  }}
+                >
+                  新建其他知识库
+                </button>
+                <button
+                  className="text-button library-delete-button"
+                  disabled={busy}
+                  onClick={(e) => {
+                    closeMenu(e);
+                    prepareDelete(selected.name);
+                  }}
+                >
+                  删除知识库
+                </button>
+              </div>
             </details>
           </section>
           <KnowledgeView
@@ -369,66 +406,72 @@ export function KnowledgeLibraries({ onOpenTask }) {
         </>
       ) : (
         <>
-          <div className="kw-filters">
-            <label>
-              查找知识库
-              <input
-                aria-label="查找知识库"
-                placeholder="名称或收录内容"
-                value={libraryQuery}
-                onChange={(e) => setLibraryQuery(e.target.value)}
-              />
-            </label>
-            <span>
-              {libraries.length} 个知识库 ·{" "}
-              {libraries.reduce((n, c) => n + c.documentCount, 0)} 份资料
-            </span>
-          </div>
-          <div className="library-grid">
+          <div className="library-grid kl-list">
             {libraries
               .filter(
                 (item) =>
                   !libraryQuery ||
-                  `${item.name} ${item.description || ""}`
+                  `${item.name} ${item.description || ""} ${item.whenToUse || ""}`
                     .toLowerCase()
                     .includes(libraryQuery.toLowerCase()),
               )
               .map((item) => (
-                <article className="module-card library-card" key={item.name}>
-                  <div className="library-card-content">
-                  <h2>{item.name}</h2>
-                  <p>
-                    {item.description || "待补充：这个知识库收录什么资料？"}
-                  </p>
-                  <small>{item.documentCount} 份资料</small>
-                  </div>
-                  <div className="toolbar-actions">
-                    <button
-                      className="secondary"
-                      onClick={() => selectLibrary(item)}
-                    >
-                      打开知识库
+                <article className="module-card library-card kl-card" key={item.name}>
+                  <button
+                    className="kl-open"
+                    aria-label={`打开知识库 ${item.name}`}
+                    onClick={() => selectLibrary(item)}
+                  >
+                    <span className="kl-card-title">
+                      <h2>{item.name}</h2>
+                      <span className={`om-chip ${item.documentCount ? "" : "is-caution"}`}>
+                        {item.documentCount ? `${item.documentCount} 份资料` : "暂无资料"}
+                      </span>
+                    </span>
+                    <p>{item.description || "待补充：这个知识库收录什么资料？"}</p>
+                    {item.whenToUse && <small>什么时候用：{item.whenToUse}</small>}
+                  </button>
+                  <div className="kl-card-actions">
+                    <button className="secondary" onClick={() => selectLibrary(item)}>
+                      打开
                     </button>
-                    <button
-                      className="text-button"
-                      onClick={() => setForm({ ...item, isNew: false })}
-                    >
-                      编辑说明
-                    </button>
-                    <button
-                      className="text-button library-delete-button"
-                      disabled={busy}
-                      onClick={() => prepareDelete(item.name)}
-                    >
-                      删除知识库
-                    </button>
+                    <details className="kl-menu">
+                      <summary aria-label={`更多操作：${item.name}`}>更多</summary>
+                      <div>
+                        <button
+                          className="text-button"
+                          onClick={(e) => {
+                            closeMenu(e);
+                            setForm({ ...item, isNew: false });
+                          }}
+                        >
+                          编辑说明
+                        </button>
+                        <button
+                          className="text-button library-delete-button"
+                          disabled={busy}
+                          onClick={(e) => {
+                            closeMenu(e);
+                            prepareDelete(item.name);
+                          }}
+                        >
+                          删除知识库
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 </article>
               ))}
           </div>
+          {!loading && libraryQuery && libraries.length > 0 &&
+            !libraries.some((item) =>
+              `${item.name} ${item.description || ""} ${item.whenToUse || ""}`
+                .toLowerCase()
+                .includes(libraryQuery.toLowerCase()),
+            ) && <p className="om-empty">没有匹配“{libraryQuery}”的知识库。</p>}
           {loading && <p role="status">正在读取知识库…</p>}
           {!loading && !error && !libraries.length && (
-            <p className="module-card">
+            <p className="module-card om-empty">
               还没有知识库。先创建一个，例如“科室随访规范”，然后上传资料。
             </p>
           )}

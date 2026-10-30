@@ -1,0 +1,84 @@
+/* Follow-up & patient messages: what needs the doctor now comes first. */
+.care-inbox .care-head { margin-bottom: 14px; }
+.care-inbox .care-head h1 { font-size: var(--title-size, 24px); font-weight: 650; margin: 0; }
+.care-card .care-discard { color: var(--muted); }
+.care-card .care-discard:hover:not(:disabled) { color: var(--high, #b3261e); }
+.care-card > footer .primary { display: inline-flex; align-items: center; gap: 6px; }
+.care-card .care-reason { font-size: var(--body-size, 16px); }
+
+/* Follow-up management page */
+.medical-shell .module-view > .followups-view .module-head h1 { font-size: var(--title-size, 24px); font-weight: 650; margin: 0; }
+.medical-shell .followups-view .module-head { margin-bottom: 14px; }
+.medical-shell .followups-view .followups-overview { margin: 0 0 14px; }
+
+/* Records queue (all patients and per patient) */
+.medical-shell .followup-records { margin: 14px 0 24px; }
+.medical-shell .followup-records .hub-section-head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 2px; }
+.medical-shell .followup-records .hub-section-head h3 { margin: 0 auto 0 0; font-size: var(--h2-size, 17px); font-weight: 620; }
+.medical-shell .followup-records > .followup-help { margin: 0 0 10px; color: var(--muted); font-size: var(--meta-size, 14px); }
+.medical-shell .followup-records .followup-record-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 10px 0; }
+.medical-shell .followup-records .followup-record-filters input { max-width: 360px; min-height: 40px; }
+.medical-shell .followup-records .job-list { list-style: none; margin: 0; padding: 0; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); overflow: hidden; }
+.medical-shell .followup-records .job-list:empty { display: none; }
+.medical-shell .followup-records .job-list > li.followup-record-row { display: flex; gap: 12px 20px; align-items: flex-start; justify-content: space-between; padding: 14px 18px; margin: 0; border: 0; border-top: 1px solid var(--line, #e8edea); border-radius: 0; background: transparent; }
+.medical-shell .followup-records .job-list > li.followup-record-row:first-child { border-top: 0; }
+.medical-shell .followup-records .job-list > li.is-overdue { box-shadow: inset 3px 0 0 var(--high, #b3261e); }
+.medical-shell .followup-records .job-list > li.is-due { box-shadow: inset 3px 0 0 var(--caution, #8a5a12); }
+.medical-shell .followup-records .followup-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.medical-shell .followup-records .followup-row-title b { font-size: var(--body-size, 16px); font-weight: 650; line-height: 1.5; }
+.medical-shell .followup-records .followup-row-title span { color: var(--ink); font-size: var(--body-size, 16px); }
+.medical-shell .followup-records .job-main { display: grid; gap: 2px; min-width: 0; flex: 1 1 320px; }
+.medical-shell .followup-records .job-main small { color: var(--muted); font-size: var(--meta-size, 14px); }
+.medical-shell .followup-records .job-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.medical-shell .followup-records .memory-empty { padding: 14px 18px; border: 1px dashed var(--border); border-radius: var(--card-radius, 10px); color: var(--muted); list-style: none; }
+
+/* Patient → 随访计划 */
+.medical-shell .patient-followup-workspace .followup-tab-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin: 0 0 4px; }
+.medical-shell .patient-followup-workspace .followup-tab-head h2 { margin: 0; font-size: var(--h2-size, 17px); font-weight: 650; }
+.medical-shell .patient-followup-workspace .followup-tab-head p { margin: 2px 0 0; color: var(--muted); font-size: var(--meta-size, 14px); }
+.medical-shell .patient-followup-workspace .followup-merged-title { display: flex; align-items: baseline; gap: 8px; margin: 26px 0 8px; padding-top: 0; border-top: 0; font-size: var(--h2-size, 17px); font-weight: 620; }
+.medical-shell .patient-followup-workspace .followup-merged-title small { color: var(--faint, var(--muted)); font-weight: 400; font-size: var(--meta-size, 14px); }
+.medical-shell .patient-followup-workspace .followup-card { background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); padding: 12px 16px; margin: 0 0 10px; }
+.medical-shell .patient-followup-workspace .followup-card .toolbar-actions { margin-top: 6px; }
+.medical-shell .patient-followup-workspace .followup-card .followup-delete { color: var(--muted); }
+.medical-shell .patient-followup-workspace .followup-card .followup-delete:hover:not(:disabled) { color: var(--high, #b3261e); }
+.medical-shell .patient-followup-workspace .followup-auto-collapsed summary { margin-top: 22px; font-size: var(--meta-size, 14px); }
+
+/* Patient → 消息记录 */
+.medical-shell .patient-messages .msg-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px 20px; flex-wrap: wrap; margin: 0 0 10px; }
+.medical-shell .patient-messages .msg-head h2 { margin: 0; font-size: var(--h2-size, 17px); font-weight: 650; }
+.medical-shell .patient-messages .msg-head p { margin: 2px 0 0; color: var(--muted); font-size: var(--meta-size, 14px); }
+.medical-shell .patient-messages .msg-head .digest-action { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.medical-shell .patient-messages .msg-head .digest-action small { color: var(--faint, var(--muted)); font-size: var(--small-size, 13px); max-width: 360px; text-align: right; }
+.medical-shell .patient-messages .msg-list { background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); padding: 4px 16px; margin: 0 0 16px; }
+.medical-shell .patient-messages .msg-list:has(> .msg-empty:only-child) { background: transparent; border-style: dashed; }
+.medical-shell .patient-messages .msg-row.is-unprocessed { box-shadow: inset 3px 0 0 var(--caution, #8a5a12); padding-left: 10px; }
+.medical-shell .patient-messages .msg-empty { margin: 10px 0; color: var(--muted); }
+.medical-shell .patient-messages .msg-import { margin: 0 0 16px; }
+.medical-shell .patient-messages .msg-import > summary { cursor: pointer; color: var(--accent-deep); font-weight: 600; font-size: var(--meta-size, 14px); padding: 6px 0; }
+.medical-shell .patient-messages .msg-import .paste-box { margin-top: 8px; }
+.medical-shell .patient-messages .chat-followups { padding: 18px 0 8px; border-top: 1px solid var(--border); }
+.medical-shell .patient-messages .chat-followups h2 { font-size: var(--h2-size, 17px); }
+.medical-shell .patient-messages .wecom-panel { margin-top: 12px; }
+.medical-shell .patient-followup-workspace .followup-head { display: flex; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 6px 8px; }
+.medical-shell .patient-followup-workspace .followup-head b { font-size: var(--body-size, 16px); margin-right: 4px; }
+.medical-shell .patient-followup-workspace .followup-head .badge { margin: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--small-size, 13px); background: var(--soft, #f0f4f2); color: var(--muted); }
+.medical-shell .patient-followup-workspace .survey-panel { margin-top: 22px; }
+.medical-shell .patient-followup-workspace .survey-panel .hub-section-head h3 { margin: 0; font-size: var(--h2-size, 17px); font-weight: 620; }
+.medical-shell .patient-followup-workspace .survey-panel > .followup-help { margin: 2px 0 10px; font-size: var(--meta-size, 14px); }
+.medical-shell .followups-view .followups-section { margin-top: 18px; padding-top: 16px; }
+.medical-shell .followups-view .followups-section:first-child { border-top: 0; margin-top: 4px; padding-top: 0; }
+.medical-shell .followups-view .followups-section h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--h2-size, 17px); font-weight: 620; }
+.medical-shell .followups-view .followups-section .job-list { list-style: none; margin: 0; padding: 0; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); overflow: hidden; }
+.medical-shell .followups-view .followups-section .job-list > li { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; padding: 12px 18px; margin: 0; border: 0; border-top: 1px solid var(--line, #e8edea); border-radius: 0; background: transparent; }
+.medical-shell .followups-view .followups-section .job-list > li:first-child { border-top: 0; }
+.medical-shell .followups-view .followups-section .job-list > li.memory-empty { color: var(--muted); }
+.medical-shell .followups-view .followups-section .job-main b { font-weight: 650; }
+.medical-shell .followups-view .followups-section .job-main small { display: block; color: var(--muted); font-size: var(--meta-size, 14px); }
+.care-inbox .care-channel-details > summary { cursor: pointer; color: var(--muted); font-size: var(--meta-size, 14px); padding: 4px 0; }
+.care-inbox .care-channel-details { margin: 0 0 12px; }
+.medical-shell .patient-messages .msg-list { gap: 0; }
+.medical-shell .patient-messages .msg-list > .msg-row { border: 0; border-top: 1px solid var(--line, #e8edea); border-radius: 0; padding: 12px 4px; font-size: var(--meta-size, 14px); }
+.medical-shell .patient-messages .msg-list > .msg-row:first-child { border-top: 0; }
+.medical-shell .patient-messages .msg-list > .msg-row.is-unprocessed { padding-left: 12px; }
+.medical-shell .patient-messages .msg-row small { font-size: var(--small-size, 13px); }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../src/agent-runtime";
+import "../../../src/tools-clarity.css";
 import "./research-stats.css";
 import { Download, Loader2, Sigma, Upload } from "lucide-react";
 
@@ -8,6 +9,38 @@ import { Download, Loader2, Sigma, Upload } from "lucide-react";
 // draft material — methods and assumptions are always displayed.
 const fmt = (value) =>
   typeof value === "number" ? String(Number(value.toFixed(4))) : value == null ? "—" : String(value);
+const METHOD_LABEL = { "welch-t": "Welch t 检验", "mann-whitney": "Mann-Whitney U 检验", "chi-square": "卡方检验", "fisher-exact": "Fisher 精确检验" };
+const pText = (p) => (typeof p !== "number" ? "—" : p < 0.001 ? "< 0.001" : fmt(Number(p.toFixed(4))));
+
+// Two-group test result: the p value and direction first, method details after.
+function TestResult({ result }) {
+  const significant = typeof result.p === "number" && result.p < 0.05;
+  const stats = [
+    ["t", result.t], ["df", result.df], ["U", result.u], ["z", result.z], ["χ²", result.chi2], ["OR", result.oddsRatio], ["合计", result.total],
+  ].filter(([, value]) => value !== undefined && value !== null);
+  const groups = result.group1 && result.group2 ? [result.group1, result.group2] : null;
+  return (
+    <div className="tool-result" role="status">
+      <div className="tool-result-headline">
+        <span className="tool-result-value">p {pText(result.p)}</span>
+        <span className="tool-result-label">{METHOD_LABEL[result.method] || result.method} · {result.outcome} 按 {result.group} 分组</span>
+        <span className={`om-chip ${significant ? "is-ok" : ""}`}>{significant ? "p < 0.05" : "p ≥ 0.05"}</span>
+      </div>
+      {groups && (
+        <table className="om-table research-groups">
+          <thead><tr><th>组别</th><th className="num">n</th><th className="num">均值</th><th className="num">SD</th></tr></thead>
+          <tbody>{groups.map((g, i) => <tr key={i}><td>{result.levels?.[i] ?? `第 ${i + 1} 组`}</td><td className="num">{g.n}</td><td className="num">{fmt(g.mean)}</td><td className="num">{fmt(g.sd)}</td></tr>)}</tbody>
+        </table>
+      )}
+      {result.n1 !== undefined && !groups && <p className="om-meta">两组例数：{result.n1} / {result.n2}{result.levels ? `（${result.levels.join(" / ")}）` : ""}</p>}
+      {stats.length > 0 && <dl className="tool-kv">{stats.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{fmt(value)}</dd></div>)}</dl>}
+      <details className="om-disclosure research-raw"><summary>原始结果</summary>
+        <pre className="doctor-digest">{JSON.stringify(Object.fromEntries(Object.entries(result).filter(([key]) => key !== "note")), null, 1)}</pre>
+      </details>
+      {result.note && <p className="om-source">{result.note}</p>}
+    </div>
+  );
+}
 
 export function ResearchView() {
   const selectionGeneration = useRef(0);
@@ -155,13 +188,15 @@ export function ResearchView() {
       URL.revokeObjectURL(url);
     });
 
+  const columns = profile ? Object.keys(profile.columns) : [];
+  const selectedFile = files.find((f) => f.id === sourceId);
   return (
-    <div className="module-view">
+    <div className="module-view tool-page">
       <section className="module-card research-view">
         <div className="module-head">
           <div>
             <h1>科研统计 · 数据分析</h1>
-            <p className="module-phase">支持 CSV 数据。</p>
+            <p className="module-phase">支持 CSV 数据：描述统计、组间比较、样本量估算与脱敏导出，均在本机计算。</p>
           </div>
         </div>
         {error && (
@@ -169,56 +204,66 @@ export function ResearchView() {
             {error}
           </p>
         )}
-        <div className="research-import">
-          <button className="secondary" disabled={busy || uploading} onClick={useExample}>使用示例数据</button>
-          <button className="primary" disabled={busy || uploading} onClick={() => uploadRef.current?.click()}><Upload size={16}/>{uploading ? "正在导入…" : "上传 CSV 数据"}</button>
-          <input ref={uploadRef} type="file" accept=".csv" hidden onChange={uploadDataset}/>
-          <span>也可以选择已有数据。文件保存在本机任务中。</span>
-        </div>
-        {uploadNotice && <p role="status">{uploadNotice}</p>}
-        <div className="followup-apply">
-          <select aria-label="选择数据所在任务" value={sessionId} disabled={busy || uploading} onChange={(e) => pickSession(e.target.value)}>
-            <option value="">选择已有任务…</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-          <select aria-label="选择 CSV 数据" value={sourceId} onChange={(e) => { setSourceId(e.target.value); setProfile(null); setTestResult(null); setError(""); }} disabled={busy || uploading || filesLoading || !files.length}>
-            <option value="">{filesLoading ? "正在读取材料…" : !sessionId ? "请上传 CSV 或选择任务" : files.length ? "选择 CSV 数据…" : "该会话没有 CSV 材料"}</option>
-            {files.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <section className="tool-section research-source">
+          <div className="tool-section-head">
+            <div>
+              <h2>1 · 选择数据</h2>
+              <p>{selectedFile ? `当前数据：${selectedFile.name}` : "上传 CSV，或从已有任务中选择。文件保存在本机任务中。"}</p>
+            </div>
+          </div>
+          <div className="research-import">
+            <button className="primary" disabled={busy || uploading} onClick={() => uploadRef.current?.click()}><Upload size={16}/>{uploading ? "正在导入…" : "上传 CSV 数据"}</button>
+            <button className="secondary" disabled={busy || uploading} onClick={useExample}>使用示例数据</button>
+            <input ref={uploadRef} type="file" accept=".csv" hidden onChange={uploadDataset}/>
+          </div>
+          {uploadNotice && <p role="status" className="om-meta">{uploadNotice}</p>}
+          <div className="tool-row research-pick">
+            <select className="grow" aria-label="选择数据所在任务" value={sessionId} disabled={busy || uploading} onChange={(e) => pickSession(e.target.value)}>
+              <option value="">选择已有任务…</option>
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+            <select className="grow" aria-label="选择 CSV 数据" value={sourceId} onChange={(e) => { setSourceId(e.target.value); setProfile(null); setTestResult(null); setError(""); }} disabled={busy || uploading || filesLoading || !files.length}>
+              <option value="">{filesLoading ? "正在读取材料…" : !sessionId ? "请上传 CSV 或选择任务" : files.length ? "选择 CSV 数据…" : "该会话没有 CSV 材料"}</option>
+              {files.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </section>
 
-        <section className="followups-section">
-          <h3>
-            <Sigma size={14} /> 描述统计
-          </h3>
-          <button className="secondary" onClick={runProfile} disabled={busy || uploading || !sourceId}>
-            {busy ? <Loader2 className="spin" size={14} /> : null}
-            分析数据集
-          </button>
-          {profile && (
-            <table className="research-table">
+        <section className="tool-section">
+          <div className="tool-section-head">
+            <div>
+              <h2><Sigma size={16} /> 描述统计</h2>
+              <p>逐列给出类型、例数与均值/中位数或分类计数。</p>
+            </div>
+            <button className="secondary" onClick={runProfile} disabled={busy || uploading || !sourceId}>
+              {busy ? <Loader2 className="spin" size={14} /> : null}
+              分析数据集
+            </button>
+          </div>
+          {profile ? (
+            <table className="om-table research-table">
               <thead>
                 <tr>
                   <th>列</th>
                   <th>类型</th>
-                  <th>n</th>
+                  <th className="num">n</th>
                   <th>统计</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(profile.columns).map(([column, stat]) => (
                   <tr key={column}>
-                    <td>{column}</td>
+                    <td><b>{column}</b></td>
                     <td>{stat.type === "numeric" ? "数值" : "分类"}</td>
-                    <td>{stat.n}</td>
+                    <td className="num">{stat.n}</td>
                     <td>
                       {stat.type === "numeric"
                         ? `均值 ${fmt(stat.mean)} · SD ${fmt(stat.sd)} · 中位 ${fmt(stat.median)} [${fmt(stat.min)}–${fmt(stat.max)}]`
@@ -228,22 +273,30 @@ export function ResearchView() {
                 ))}
               </tbody>
             </table>
-          )}
+          ) : <p className="tool-list-empty">{sourceId ? "点击「分析数据集」查看各列概况；列名会用于下方组间比较。" : "先选择数据。"}</p>}
         </section>
 
-        <section className="followups-section">
-          <h3>组间比较</h3>
-          <div className="followup-apply">
-            <input disabled={busy || uploading}
+        <section className="tool-section">
+          <div className="tool-section-head">
+            <div>
+              <h2>组间比较</h2>
+              <p>选择结局变量与分组变量；「自动选择」按数据类型选用检验方法。</p>
+            </div>
+          </div>
+          <div className="tool-row">
+            <input className="grow" disabled={busy || uploading}
               value={test.outcome}
+              list={columns.length ? "research-columns" : undefined}
               aria-label="结局变量列名" placeholder="结局变量列名"
               onChange={(e) => setTest({ ...test, outcome: e.target.value })}
             />
-            <input disabled={busy || uploading}
+            <input className="grow" disabled={busy || uploading}
               value={test.group}
+              list={columns.length ? "research-columns" : undefined}
               aria-label="分组变量列名" placeholder="分组变量列名"
               onChange={(e) => setTest({ ...test, group: e.target.value })}
             />
+            {columns.length > 0 && <datalist id="research-columns">{columns.map((c) => <option key={c} value={c} />)}</datalist>}
             <select aria-label="统计检验方法" disabled={busy || uploading} value={test.method} onChange={(e) => setTest({ ...test, method: e.target.value })}>
               <option value="auto">自动选择</option>
               <option value="welch-t">Welch t 检验</option>
@@ -252,86 +305,92 @@ export function ResearchView() {
               <option value="fisher">Fisher 精确检验</option>
             </select>
             <button
+              className="primary"
               onClick={runTest}
               disabled={busy || uploading || !sourceId || !test.outcome.trim() || !test.group.trim()}
             >
               运行检验
             </button>
           </div>
-          {testResult && (
-            <pre className="doctor-digest">
-              {JSON.stringify(
-                Object.fromEntries(
-                  Object.entries(testResult).filter(([key]) => key !== "note"),
-                ),
-                null,
-                1,
+          {testResult && <TestResult result={testResult} />}
+        </section>
+
+        <div className="research-pair">
+          <section className="tool-section">
+            <div className="tool-section-head">
+              <div>
+                <h2>样本量估算（两独立组）</h2>
+                <p>α = 0.05，power = 0.8，两组等量。</p>
+              </div>
+            </div>
+            <div className="tool-row">
+              <select aria-label="样本量研究设计" disabled={busy || uploading} value={size.design} onChange={(e) => setSize({ ...size, design: e.target.value })}>
+                <option value="means">均值比较</option>
+                <option value="proportions">比例比较</option>
+              </select>
+              {size.design === "means" ? (
+                <>
+                  <input className="grow" disabled={busy || uploading}
+                    value={size.delta}
+                    aria-label="预期差值 Δ" placeholder="预期差值 Δ"
+                    onChange={(e) => setSize({ ...size, delta: e.target.value })}
+                  />
+                  <input className="grow" disabled={busy || uploading}
+                    value={size.sd}
+                    aria-label="标准差 σ" placeholder="标准差 σ"
+                    onChange={(e) => setSize({ ...size, sd: e.target.value })}
+                  />
+                </>
+              ) : (
+                <>
+                  <input className="grow" disabled={busy || uploading}
+                    value={size.p1}
+                    aria-label="对照组率 p1" placeholder="对照组率 p1"
+                    onChange={(e) => setSize({ ...size, p1: e.target.value })}
+                  />
+                  <input className="grow" disabled={busy || uploading}
+                    value={size.p2}
+                    aria-label="试验组率 p2" placeholder="试验组率 p2"
+                    onChange={(e) => setSize({ ...size, p2: e.target.value })}
+                  />
+                </>
               )}
-            </pre>
-          )}
-          {testResult?.note && <p className="module-note">{testResult.note}</p>}
-        </section>
-
-        <section className="followups-section">
-          <h3>样本量估算（两独立组）</h3>
-          <div className="followup-apply">
-            <select aria-label="样本量研究设计" disabled={busy || uploading} value={size.design} onChange={(e) => setSize({ ...size, design: e.target.value })}>
-              <option value="means">均值比较</option>
-              <option value="proportions">比例比较</option>
-            </select>
-            {size.design === "means" ? (
-              <>
-                <input disabled={busy || uploading}
-                  value={size.delta}
-                  aria-label="预期差值 Δ" placeholder="预期差值 Δ"
-                  onChange={(e) => setSize({ ...size, delta: e.target.value })}
-                />
-                <input disabled={busy || uploading}
-                  value={size.sd}
-                  aria-label="标准差 σ" placeholder="标准差 σ"
-                  onChange={(e) => setSize({ ...size, sd: e.target.value })}
-                />
-              </>
-            ) : (
-              <>
-                <input disabled={busy || uploading}
-                  value={size.p1}
-                  aria-label="对照组率 p1" placeholder="对照组率 p1"
-                  onChange={(e) => setSize({ ...size, p1: e.target.value })}
-                />
-                <input disabled={busy || uploading}
-                  value={size.p2}
-                  aria-label="试验组率 p2" placeholder="试验组率 p2"
-                  onChange={(e) => setSize({ ...size, p2: e.target.value })}
-                />
-              </>
+              <button className="primary" onClick={runSize} disabled={busy || uploading}>
+                计算
+              </button>
+            </div>
+            {sizeResult && (
+              <div className="tool-result" role="status">
+                <div className="tool-result-headline">
+                  <span className="tool-result-value">每组 {sizeResult.n1} 例</span>
+                  <span className="tool-result-label">共 {sizeResult.total} 例 · α={sizeResult.alpha} · power={sizeResult.power}</span>
+                </div>
+                <p className="om-source">{sizeResult.note}</p>
+              </div>
             )}
-            <button onClick={runSize} disabled={busy || uploading}>
-              计算
-            </button>
-          </div>
-          {sizeResult && (
-            <p className="literature-authors">
-              每组 <b>{sizeResult.n1}</b> 例，共 {sizeResult.total} 例（α={sizeResult.alpha},
-              power={sizeResult.power}）。{sizeResult.note}
-            </p>
-          )}
-        </section>
+          </section>
 
-        <section className="followups-section">
-          <h3>数据脱敏导出</h3>
-          <div className="followup-apply">
-            <input disabled={busy || uploading}
-              value={deidColumns}
-              aria-label="需要脱敏的列名" placeholder="需要脱敏的列名，逗号分隔（如 姓名,住院号）"
-              onChange={(e) => setDeidColumns(e.target.value)}
-            />
-            <button className="secondary" onClick={runDeidentify} disabled={busy || uploading || !sourceId || !deidColumns.trim()}>
-              <Download size={14} /> 生成脱敏 CSV
-            </button>
-          </div>
-        </section>
-        <p className="module-note">
+          <section className="tool-section">
+            <div className="tool-section-head">
+              <div>
+                <h2>数据脱敏导出</h2>
+                <p>把指定列替换为不可逆的伪标识后下载 CSV。</p>
+              </div>
+            </div>
+            <div className="tool-row">
+              <input className="grow" disabled={busy || uploading}
+                value={deidColumns}
+                list={columns.length ? "research-columns" : undefined}
+                aria-label="需要脱敏的列名" placeholder="需要脱敏的列名，逗号分隔（如 姓名,住院号）"
+                onChange={(e) => setDeidColumns(e.target.value)}
+              />
+              <button className="secondary" onClick={runDeidentify} disabled={busy || uploading || !sourceId || !deidColumns.trim()}>
+                <Download size={14} /> 生成脱敏 CSV
+              </button>
+            </div>
+          </section>
+        </div>
+        <p className="tool-footnote">
           统计在本地确定性完成（Welch t / Mann-Whitney / 卡方 / Fisher 精确检验，均给出 p
           值与方法学提示）。结果为待复核草稿，请在解读前核对数据质量与假设。
         </p>

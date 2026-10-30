@@ -70,7 +70,7 @@ export function CareTasksPanel({ patient, files = [], onChanged, onNavigate, onS
     setData(result); setDraft(current => current?.requestId === requestId ? null : current); setEditing(false); setRefresh(n => n + 1); setNotice("跟进记录已保存");
   };
   return <section className="detail-panel care-tracking" aria-label="检查与转诊跟进">
-    <header className="care-tracking-header"><div><h3>检查与转诊跟进</h3><p className="muted">记下何时跟进，收到结果后核对，再登记告知情况。这里记录实际处理，不会自动发送消息。</p></div>
+    <header className="care-tracking-header"><div><h3>检查与转诊跟进</h3><p className="muted">记录待回收的检查结果与转诊反馈，收到后核对并登记告知；不会自动发送消息。</p></div>
       <button className="primary" disabled={patient.archived || Boolean(draft)} onClick={() => begin({ action: "create" })}><Plus size={14} /> 新增待跟进</button></header>
     {draft && !editing && <div className="notice" role="status"><p>{patient.name} · {draft.task?.title || draft.form.title || "新增跟进事项"}：{draft.committed ? "已保存，等待刷新列表确认。" : "有待处理的跟进草稿，仅保留在当前窗口；退出或刷新前请保存。"}</p><button className="secondary" disabled={patient.archived} onClick={() => setEditing(true)}>{draft.committed ? "查看已保存记录" : "继续编辑跟进"}</button><button className="text-button" onClick={() => { if (window.confirm(draft.committed ? "移除这份本地草稿？已保存的跟进记录会保留。" : "放弃这份未保存的跟进草稿？")) { setDraft(null); setRefresh(n => n + 1); } }}>放弃跟进草稿</button></div>}
     <div className="toolbar-actions"><button className={`chip ${status === "active" ? "active" : ""}`} onClick={() => { setStatus("active"); setOffset(0); }}>进行中</button><button className={`chip ${status === "closed" ? "active" : ""}`} onClick={() => { setStatus("closed"); setOffset(0); }}>已结束</button><button className="text-button" onClick={() => setRefresh((n) => n + 1)} aria-label="刷新跟进事项"><RotateCw size={14} /></button></div>

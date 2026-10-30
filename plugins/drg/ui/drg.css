@@ -1,0 +1,49 @@
+/* DRG estimator. Layout comes from src/tools-clarity.css. */
+.tool-page .drg-view .drg-form {
+  display: grid;
+  margin: 0;
+}
+.tool-page .drg-view .drg-form input {
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+}
+.tool-page .drg-view .drg-csv {
+  width: 100%;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.tool-page .drg-view .drg-over {
+  color: var(--high);
+}
+.tool-page .drg-settings-panel > summary {
+  font-weight: 500;
+}
+.tool-page .drg-settings-panel > summary svg {
+  color: var(--accent);
+}
+.tool-page .drg-view .drg-settings {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.tool-page .drg-view .drg-settings input {
+  width: 160px;
+  padding: 8px 10px;
+  font-size: var(--meta-size, 14px);
+}
+.medical-shell .tool-page .drg-view .drg-import {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--accent-deep);
+  font-size: var(--meta-size, 14px);
+  cursor: pointer;
+}

@@ -40,9 +40,9 @@ test("新建任务首页", async ({ page }) => {
 test("患者列表", async ({ page }) => {
   await open(page, "/?view=patients");
   await expect(
-    page.getByRole("heading", { name: "患者管理", exact: true }),
+    page.getByRole("heading", { name: "患者", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("3 位在管患者", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^3 位在管/)).toBeVisible();
   await expect(page.locator(".patient-card")).toHaveCount(3);
   await expect(page.getByText(PATIENT_NAME, { exact: true })).toBeVisible();
 
@@ -59,7 +59,8 @@ test("示例·张沪生 概览", async ({ page }) => {
   await expect(page.locator(".detail-head b").first()).toContainText(
     PATIENT_NAME,
   );
-  await expect(page.getByText("诊断摘要", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "诊断摘要" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "临床要点" })).toBeVisible();
   await expect(page.locator(".patient-attention")).toHaveAttribute(
     "aria-busy",
     "false",

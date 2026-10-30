@@ -1,0 +1,138 @@
+/* Case library: find (keyword / similar) above, the doctor's own cases below. */
+.tool-page .caselib-find .tool-section-head {
+  margin-bottom: 12px;
+}
+.tool-page .caselib-similar {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.medical-shell .tool-page .caselib-subhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: var(--body-size, 16px);
+  font-weight: 620;
+}
+.tool-page .caselib-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.tool-page .caselib-add-fields {
+  margin-top: 10px;
+}
+.tool-page .caselib-add-fields textarea {
+  width: 100%;
+  margin: 0;
+}
+.medical-shell .tool-page .caselib-list-section .guidelines-list-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--h2-size, 17px);
+  font-weight: 620;
+  color: var(--ink);
+}
+.tool-page .caselib-list > li.caselib-row {
+  padding: 10px 0;
+}
+.tool-page .caselib-row.is-focused {
+  margin: 0 -12px;
+  padding-inline: 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.tool-page .caselib-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+.medical-shell .tool-page .caselib-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tool-page .caselib-toggle > svg {
+  color: var(--faint);
+  flex-shrink: 0;
+}
+.medical-shell .tool-page .caselib-title {
+  font-size: var(--body-size, 16px);
+  font-weight: 650;
+}
+.tool-page .caselib-toggle:hover .caselib-title {
+  color: var(--accent);
+}
+.medical-shell .tool-page .caselib-meta {
+  color: var(--muted);
+  font-size: var(--meta-size, 14px);
+}
+.tool-page .caselib-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.medical-shell .tool-page .caselib-actions .icon-button {
+  min-height: 36px;
+  min-width: 36px;
+  border: 0;
+  background: none;
+  color: var(--faint);
+}
+.medical-shell .tool-page .caselib-actions .icon-button[aria-pressed="true"] {
+  color: #b7791f;
+}
+.medical-shell .tool-page .caselib-actions .icon-button:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--ink);
+}
+.medical-shell .tool-page .caselib-actions .icon-button.danger:hover:not(:disabled) {
+  background: var(--high-soft);
+  color: var(--high);
+}
+.medical-shell .tool-page .tool-list p.caselib-preview {
+  margin: 2px 0 0 22px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tool-page .caselib-detail {
+  margin: 6px 0 0 22px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+.medical-shell .tool-page .caselib-detail p {
+  margin: 0 0 4px;
+}
+.tool-page .caselib-edit {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tool-page .caselib-edit textarea,
+.tool-page .caselib-edit input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.tool-page .caselib-list-section .om-count {
+  color: var(--faint);
+  font-size: var(--meta-size, 14px);
+  font-weight: 400;
+}

@@ -6,6 +6,7 @@ import { FollowupModal } from "./FollowupModal.jsx";
 import { FollowupRecords } from "./FollowupRecords.jsx";
 import { SurveyPanel } from "./FollowupSurveysPanel.jsx";
 import { followupDate } from "../../../shared/followup-display.mjs";
+import "./followup-clarity.css";
 
 const fmtDate = followupDate;
 
@@ -67,7 +68,7 @@ export default function PatientFollowupsTab({
   };
   return <>
             <div className="detail-panel patient-followup-workspace">
-              <div className="digest-row"><div><h2>随访计划</h2><p className="muted">先处理到期事项，再安排下一次联系。</p></div>
+              <div className="digest-row followup-tab-head"><div><h2>随访计划</h2><p className="muted">{(() => { const active = followups.filter(job => ["active", "running"].includes(job.status)); const next = active.map(job => job.nextDue).filter(Boolean).sort((a, b) => a - b)[0]; return active.length ? `${active.length} 个提醒计划进行中${next ? ` · 下次 ${fmtDate(next)}` : ""}` : "尚无进行中的提醒计划"; })()} · 先登记到期事项，再安排下一次联系。</p></div>
                 <button
                   className="primary"
                   onClick={() => { setSource(null); setEditingFollowup(null); setModalOpen(true); }}
@@ -99,8 +100,8 @@ export default function PatientFollowupsTab({
                 onChanged={refreshPatient}
               />
               </div>
-              <h3 className="followup-merged-title">提醒计划（{followups.length}）</h3>
-              <div><p className="muted">到期后在本机生成提醒；实际联系结果请在「随访待办与记录」登记。</p>
+              <h3 className="followup-merged-title">提醒计划 <small>{followups.length} 个 · 到期后在本机生成提醒，不会发送给患者</small></h3>
+              <div>
               {followups.map((job) => (
                 <div className="followup-card" role="article" aria-label={`提醒计划：${job.name}`} id={`followup-${job.id}`} tabIndex={-1} key={job.id}>
                   <div className="followup-head">
@@ -154,7 +155,7 @@ export default function PatientFollowupsTab({
                       </button>
                     )}
                     <button
-                      className="secondary"
+                      className="text-button followup-delete"
                       onClick={async () => {
                         if (!window.confirm(`删除 ${detail.name} 的「${job.name}」随访计划？`)) return;
                         try { setError(""); await api(
@@ -170,10 +171,10 @@ export default function PatientFollowupsTab({
                   </div>
                 </div>
               ))}
-              {!followups.length && <p className="muted">还没有本机提醒计划。</p>}
+              {!followups.length && <p className="muted">还没有本机提醒计划。点击右上角「新建随访计划」安排。</p>}
               </div>
               <details className="followup-auto-collapsed">
-                <summary>自动随访（企业微信发送并收集回复）—— 可选，默认收起</summary>
+                <summary>自动随访（企业微信发送并收集回复，可选）</summary>
                 <CampaignPanel key={`campaigns-${detail.id}`} patientId={detail.id} />
               </details>
             </div>

@@ -181,7 +181,7 @@ function PatientSurveys({ patientId, refreshKey = 0, onRefresh, onChanged, focus
   return (
     <section className="survey-panel" ref={panelRef} tabIndex={-1} aria-label="随访问卷">
       <div className="hub-section-head"><h3>随访问卷</h3><button className="text-button" disabled={busy || loading} onClick={refreshPanels}>刷新问卷</button></div>
-      <p className="muted">随访到期后生成问卷。发送和代填提交需确认；已接入聊天收到完整题号回复后会自动回收计分，触发阈值时进入今日待办。</p>
+      <p className="muted followup-help">到期后生成问卷；下发与代填需确认，收到完整回复后自动计分，超过阈值进入今日待办。</p>
       {focus?.patientId === patientId && <p className="muted">仅显示这次联系关联的问卷。<button className="text-button" onClick={onClearFocus}>查看全部问卷</button></p>}
       {loadError && <p role="alert" className="form-error">问卷读取失败：{loadError} <button className="text-button" disabled={busy || loading} onClick={refreshPanels}>重试读取问卷</button></p>}
       {actionError && <p role="alert" className="form-error">{actionError}</p>}

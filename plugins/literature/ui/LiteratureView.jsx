@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../src/agent-runtime";
+import "../../../src/tools-clarity.css";
 import "./literature.css";
 import { Search, Loader2, FilePlus, Copy, ExternalLink, Check } from "lucide-react";
 
@@ -148,7 +149,7 @@ export function LiteratureView({ onOpenTask }) {
       : `https://doi.org/${article.doi}`;
 
   return (
-    <div className="module-view">
+    <div className="module-view tool-page">
       <section className="module-card literature-view">
         <div className="module-head">
           <div>
@@ -156,56 +157,60 @@ export function LiteratureView({ onOpenTask }) {
             <p className="module-phase">围绕问题查找、阅读和比较证据，形成有来源的总结。</p>
           </div>
         </div>
-        <div className="literature-modes" role="group" aria-label="文献工作方式"><button className="secondary" aria-pressed={mode === 'research'} onClick={() => setMode('research')}>研究与综述</button><button className="secondary" aria-pressed={mode === 'search'} onClick={() => setMode('search')}>查找论文</button></div>
-        {specialty && (
-          <button
-            className="secondary"
-            style={{ marginBottom: 10 }}
-            onClick={(event) =>
-              runSearch(event, {
-                query: specialty,
-                source: "europepmc",
-                sort: "date",
-              })
-            }
-            disabled={busy}
-          >
-            {mode === 'research' ? '研究我关注的领域：' : '查找最新论文：'}{specialty}
-          </button>
-        )}
-        <form className="literature-form" onSubmit={runSearch}>
-          <textarea
-            rows={3}
-            className="literature-query"
-            value={query}
-            aria-label="文献检索主题" placeholder={mode === "research" ? "描述你要解决的问题，例如：比较两种治疗方案的证据、适用人群和局限" : "论文主题、标题、PMID 或英文关键词"}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <details className="literature-options"><summary>检索范围</summary><div>
-          <select aria-label="文献来源" value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="pubmed">PubMed</option>
-            <option value="europepmc">Europe PMC</option>
-          </select>
-          <input
-            className="literature-year"
-            value={yearFrom}
-            aria-label="检索起始年" placeholder="起始年"
-            inputMode="numeric"
-            onChange={(e) => setYearFrom(e.target.value.replace(/\D/g, ""))}
-          />
-          <input
-            className="literature-year"
-            value={yearTo}
-            aria-label="检索结束年" placeholder="结束年"
-            inputMode="numeric"
-            onChange={(e) => setYearTo(e.target.value.replace(/\D/g, ""))}
-          />
-          </div></details>
-          <button type="submit" disabled={busy || !query.trim()}>
-            {busy ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
-            {mode === "research" ? "开始研究" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
-          </button>
-        </form>
+        <section className="tool-section literature-search">
+          <div className="tool-section-head">
+            <div className="tool-segment" role="group" aria-label="文献工作方式"><button aria-pressed={mode === 'research'} onClick={() => setMode('research')}>研究与综述</button><button aria-pressed={mode === 'search'} onClick={() => setMode('search')}>查找论文</button></div>
+            {specialty && (
+              <button
+                className="om-link"
+                onClick={(event) =>
+                  runSearch(event, {
+                    query: specialty,
+                    source: "europepmc",
+                    sort: "date",
+                  })
+                }
+                disabled={busy}
+              >
+                {mode === 'research' ? '研究我关注的领域：' : '查找最新论文：'}{specialty} →
+              </button>
+            )}
+          </div>
+          <p className="om-meta literature-mode-hint">{mode === "research" ? "描述临床问题，助手检索并比较证据，生成带出处的总结。" : "按主题、标题、PMID 或英文关键词直接检索 PubMed / Europe PMC。"}</p>
+          <form className="literature-form" onSubmit={runSearch}>
+            <textarea
+              rows={3}
+              className="literature-query"
+              value={query}
+              aria-label="文献检索主题" placeholder={mode === "research" ? "描述你要解决的问题，例如：比较两种治疗方案的证据、适用人群和局限" : "论文主题、标题、PMID 或英文关键词"}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <details className="literature-options om-disclosure"><summary>检索范围：{source === "pubmed" ? "PubMed" : "Europe PMC"}{yearFrom || yearTo ? ` · ${yearFrom || "不限"}–${yearTo || "至今"}` : " · 不限年份"}</summary><div>
+            <select aria-label="文献来源" value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="pubmed">PubMed</option>
+              <option value="europepmc">Europe PMC</option>
+            </select>
+            <input
+              className="literature-year"
+              value={yearFrom}
+              aria-label="检索起始年" placeholder="起始年"
+              inputMode="numeric"
+              onChange={(e) => setYearFrom(e.target.value.replace(/\D/g, ""))}
+            />
+            <input
+              className="literature-year"
+              value={yearTo}
+              aria-label="检索结束年" placeholder="结束年"
+              inputMode="numeric"
+              onChange={(e) => setYearTo(e.target.value.replace(/\D/g, ""))}
+            />
+            </div></details>
+            <button className="primary" type="submit" disabled={busy || !query.trim()}>
+              {busy ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
+              {mode === "research" ? "开始研究" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
+            </button>
+          </form>
+        </section>
 
         {error && (
           <p className="form-error" role="alert">
@@ -213,18 +218,18 @@ export function LiteratureView({ onOpenTask }) {
           </p>
         )}
         {results && (
-          <p className="muted literature-meta">
+          <p className="om-meta literature-meta">
             {results.cached ? "（本地缓存结果）" : ""}
             共 {results.count} 条 · 来源：{results.source === "pubmed" ? "PubMed" : "Europe PMC"}
             {results.fallback && <span role="status"> · {results.note}</span>}
           </p>
         )}
-        <ul className="literature-results">
+        {results && <ul className="literature-results tool-section tool-list">
           {(results?.articles || []).map((article) => {
             const key = article.pmid || article.doi;
             return (
               <li className="literature-item" key={key}>
-                <div className="literature-title-row">
+                <div className="literature-title-row tool-list-title">
                   <button aria-expanded={Boolean(expanded[key])} className="literature-title" onClick={() => toggleExpand(article)}>
                     {article.title}
                   </button>
@@ -240,11 +245,11 @@ export function LiteratureView({ onOpenTask }) {
                 {(article.hints || []).length > 0 && (
                   <div className="literature-hints">
                     {article.hints.map((hint) => (
-                      <span className="hint-tag" key={hint}>
+                      <span className="om-chip" key={hint}>
                         {hint}
                       </span>
                     ))}
-                    {article.isOpenAccess && <span className="hint-tag oa">开放获取</span>}
+                    {article.isOpenAccess && <span className="om-chip is-info">开放获取</span>}
                   </div>
                 )}
                 {expanded[key] && (
@@ -287,10 +292,10 @@ export function LiteratureView({ onOpenTask }) {
             );
           })}
           {results && !results.count && (
-            <li className="memory-empty">没有检索到结果，可尝试更换检索词或文献源。</li>
+            <li className="tool-list-empty">没有检索到结果，可尝试更换检索词或文献源。</li>
           )}
-        </ul>
-        <p className="module-note">
+        </ul>}
+        <p className="tool-footnote">
           证据类型标签由出版类型映射而来，仅为提示，不构成质量结论；全文导入仅限摘要与开放获取许可范围。
         </p>
       </section>

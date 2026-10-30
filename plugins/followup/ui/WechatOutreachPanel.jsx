@@ -21,14 +21,14 @@ export function WechatOutreachPanel() {
   };
   return <section aria-label="微信自动随访">
     <div className="toolbar-actions">
-      <button disabled={busy !== '' || !data} onClick={act('bulk', bulk, (n) => setNotice(`已为 ${n} 个到期随访生成话术草稿`))}>为未生成的到期随访批量生成话术</button>
+      <button className="secondary" disabled={busy !== '' || !data} onClick={act('bulk', bulk, (n) => setNotice(`已为 ${n} 个到期随访生成话术草稿`))}>为未生成的到期随访批量生成话术</button>
       {notice && <span className="muted">{notice}</span>}
     </div>
     {error && <p className="form-error" role="alert">{error}</p>}
     {!data && !error && <p role="status">正在读取微信随访队列…</p>}
-    {data && !data.items.length && <p className="care-empty"><p>当前没有到期的微信随访任务。</p><p className="care-hint">在患者档案里应用随访模板后，到期任务会出现在这里；患者的微信会话需先在「聊天随访」中关联并校准。</p></p>}
+    {data && !data.items.length && <div className="care-empty"><p>当前没有到期的微信随访任务。</p><p className="care-hint">在患者档案里应用随访模板后，到期任务会出现在这里；患者的微信会话需先在「聊天随访」中关联并校准。</p></div>}
     <ul className="care-list">{(data?.items || []).map((it) => <OutreachItem key={`${it.jobId}:${it.outreach?.revision || 0}`} it={it} busy={busy} act={act} />)}</ul>
-    <nav className="toolbar-actions" aria-label="微信随访分页"><button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>上一页</button><span>第 {Math.floor(offset / 20) + 1} 页</span><button disabled={(data?.items?.length || 0) < 20} onClick={() => setOffset(offset + 20)}>下一页</button></nav>
+    {(offset > 0 || (data?.items?.length || 0) >= 20) && <nav className="toolbar-actions" aria-label="微信随访分页"><button className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>上一页</button><span>第 {Math.floor(offset / 20) + 1} 页</span><button className="secondary" disabled={(data?.items?.length || 0) < 20} onClick={() => setOffset(offset + 20)}>下一页</button></nav>}
   </section>;
 }
 
@@ -49,21 +49,21 @@ function OutreachItem({ it, busy, act }) {
     </header>
     {notice && <p className="muted" role="status">{notice}</p>}
     {!!it.checklist.length && <ol className="muted">{it.checklist.map((c) => <li key={c}>{c}</li>)}</ol>}
-    {(!o || !o.text) && <button disabled={busy !== '' || !wechatOk} onClick={act(`g-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/generate`, 'POST', {}))}>{busy === `g-${it.jobId}` ? '正在生成…' : '生成随访话术'}</button>}
+    {(!o || !o.text) && <button className="secondary" disabled={busy !== '' || !wechatOk} onClick={act(`g-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/generate`, 'POST', {}))}>{busy === `g-${it.jobId}` ? '正在生成…' : '生成随访话术'}</button>}
     {o?.text && o.status === 'draft' && <>
       {o.screen && !o.screen.ok && <p className="form-error" role="note">话术筛查提示：{o.screen.reasons.join('；')}。请人工核对后自行决定是否发送。</p>}
       <label>随访消息<textarea rows={3} maxLength={2000} value={text} onChange={(e) => { setText(e.target.value); setConsent(false); }} /></label>
       <label className="chat-check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />我已核对话术与该患者的对应关系，确认发送</label>
-      <button disabled={busy !== '' || !wechatOk || !consent || !text.trim()} onClick={act(`s-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/send`, 'POST', { text, consent: true }), () => setNotice('已发送并在微信窗口内核验'))}>{busy === `s-${it.jobId}` ? '正在核验发送…' : '发送到微信'}</button>
+      <button className="primary" disabled={busy !== '' || !wechatOk || !consent || !text.trim()} onClick={act(`s-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/send`, 'POST', { text, consent: true }), () => setNotice('已发送并在微信窗口内核验'))}>{busy === `s-${it.jobId}` ? '正在核验发送…' : '发送到微信'}</button>
     </>}
     {o?.status === 'sent' && <p className="muted">已发送{when(o.sentAt)}；监听模式读到患者回复后，这里会提示整理。</p>}
     {(o?.status === 'replied' || o?.record) && <>
-      {o.replyText && <p>患者回复：{o.replyText.length > 300 ? `${o.replyText.slice(0, 300)}…` : o.replyText} <button disabled={busy !== ''} onClick={act(`r-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/record`, 'POST', {}))}>{busy === `r-${it.jobId}` ? '正在整理…' : '按条目整理为随访记录'}</button></p>}
+      {o.replyText && <p>患者回复：{o.replyText.length > 300 ? `${o.replyText.slice(0, 300)}…` : o.replyText} <button className="secondary" disabled={busy !== ''} onClick={act(`r-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/record`, 'POST', {}))}>{busy === `r-${it.jobId}` ? '正在整理…' : '按条目整理为随访记录'}</button></p>}
       {o.record && <>
         <p>{o.record.needsDoctor ? '⚠ 模型提示需要医生关注：' : ''}{o.record.summary}</p>
         <label>随访记录<textarea rows={3} maxLength={4500} value={note} onChange={(e) => { setNote(e.target.value); setConfirmed(false); }} /></label>
         <label className="chat-check"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />已核对记录内容，确认归档到随访记录（一次性任务将同步完成）</label>
-        <button disabled={busy !== '' || !confirmed || !note.trim()} onClick={act(`a-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/archive`, 'POST', { note, contactedAt: o.repliedAt, confirmed: true }), () => setNotice('已归档到随访记录'))}>归档到随访记录</button>
+        <button className="primary" disabled={busy !== '' || !confirmed || !note.trim()} onClick={act(`a-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/archive`, 'POST', { note, contactedAt: o.repliedAt, confirmed: true }), () => setNotice('已归档到随访记录'))}>归档到随访记录</button>
       </>}
     </>}
     {o?.status === 'recorded' && <p className="muted">已归档 ✓ {when(o.recordedAt)}</p>}

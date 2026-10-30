@@ -15,6 +15,7 @@ import { api, medicalEnabled } from "./agent-runtime";
 import { SlotItem, useActiveSlot } from "./plugin-slots";
 import { taskPatientContext, taskUpdatedLabel } from "../shared/task-display.mjs";
 import "./task-context.css";
+import "./tools-clarity.css";
 
 const date = taskUpdatedLabel;
 export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
@@ -49,12 +50,11 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
     }
   }
   return (
-    <main id="main" className="work-directory" aria-label="项目目录">
+    <main id="main" className="work-directory tool-directory-page" aria-label="项目目录">
       <header className="directory-heading">
         <div>
           <h1>项目</h1>
-          {purpose && <p>选择项目，{{ documents: "在任务中处理文档与表格", browser: "预览网页", terminal: "配置隔离终端", extensions: "管理技能与连接" }[purpose]}。</p>}
-          <p>项目用于授权本地文件夹，以及浏览器、终端等工具任务。患者记录与问诊可直接使用。</p>
+          <p>{purpose ? `选择项目，${{ documents: "在任务中处理文档与表格", browser: "预览网页", terminal: "配置隔离终端", extensions: "管理技能与连接" }[purpose]}。` : ""}项目用于授权本地文件夹，供浏览器、终端等工具任务使用；患者记录与问诊无需项目。</p>
         </div>
         <button className="primary" onClick={() => onOpen({ create: true, purpose, returnTo: "projects" })}>
           <Plus size={17} />
@@ -220,14 +220,42 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       })
       .map((tool) => ({ kind: "plugin", id: `plugin:${tool.pluginId}:${tool.id}`, order: tool.order ?? 100, tool })),
   ].sort((left, right) => left.order - right.order);
+  const groupNames = [...new Set([...GROUP_ORDER, ...rows.map(entryCategory)])];
+  const groups = (filter === "全部" ? groupNames : [filter])
+    .map(category => ({ category, rows: rows.filter(entry => entryCategory(entry) === category) }))
+    .filter(group => group.rows.length);
+  const renderEntry = (entry) => {
+    if (entry.kind === "plugin")
+      return <SlotItem key={entry.id} contribution={entry.tool} onNavigate={onNavigate} config={config} />;
+    const [id, name, desc, _category, Icon, status] = entry.row;
+    const state = availability(id);
+    return (
+      <article key={id}>
+        <a className="tool-card-link" href={`?view=${["documents", "browser", "terminal"].includes(id) ? "projects" : id}`} onClick={event => {
+          event.preventDefault();
+          if (state.model) onModelSettings();
+          else if (["documents", "browser", "terminal"].includes(id)) onProjects(id);
+          else onNavigate(id);
+        }}>
+          <Icon size={24} />
+          <h2>{name}</h2>
+          <p>{desc}</p>
+          <footer>
+            {(state.label || status) && <small>{state.label || status}</small>}
+            <span className="tool-card-action">{state.action} →</span>
+          </footer>
+        </a>
+      </article>
+    );
+  };
   return (
-    <main id="main" className="work-directory" aria-label="工具目录">
+    <main id="main" className="work-directory tool-directory-page tools-directory" aria-label="工具目录">
       <header className="directory-heading">
         <div>
           <h1>资料与工具</h1>
-          {medical && <p><button className="text-button" onClick={() => onNavigate("examples")}>查看示例资料与任务</button></p>}
-
+          <p>{medical ? "临床速查、文献、病例与科研统计；也可以直接在任务里让助手调用这些工具。" : "文档、检索与项目工具；也可以直接在任务里让助手调用。"}</p>
         </div>
+        {medical && <div className="om-page-actions"><button className="om-link" onClick={() => onNavigate("examples")}>查看示例资料与任务 →</button></div>}
       </header>
       <div className="directory-toolbar">
         <div className="directory-filters">
@@ -251,39 +279,27 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
           />
         </label>
       </div>
-      <div className="directory-tools">
-        {rows.map((entry) => {
-          if (entry.kind === "plugin")
-            return <SlotItem key={entry.id} contribution={entry.tool} onNavigate={onNavigate} config={config} />;
-          const [id, name, desc, _category, Icon, status] = entry.row;
-          const state = availability(id);
-          return (
-          <article key={id}>
-            <a className="tool-card-link" href={`?view=${["documents", "browser", "terminal"].includes(id) ? "projects" : id}`} onClick={event => {
-              event.preventDefault();
-                      if (state.model) onModelSettings();
-              else if (["documents", "browser", "terminal"].includes(id)) onProjects(id);
-              else onNavigate(id);
-            }}>
-            <Icon size={24} />
-            <h2>{name}</h2>
-            <p>{desc}</p>
-            <footer>
-              {(state.label || status) && <small>{state.label || status}</small>}
-              <span className="tool-card-action">
-                {state.action}{" "}
-                →
-              </span>
-            </footer>
-            </a>
-          </article>
-        );})}
-      </div>
+      {groups.map(group => (
+        <section className="tool-group" key={group.category} aria-label={group.category}>
+          {filter === "全部" && <h2>{group.category}<small>{GROUP_HINT[group.category]}</small></h2>}
+          <div className="directory-tools">{group.rows.map(renderEntry)}</div>
+        </section>
+      ))}
       {!rows.length && <p className="directory-empty">没有找到匹配工具。</p>}
-
     </main>
   );
 }
+// Doctors look for clinical tools first; project tools (browser, terminal)
+// are for technical tasks and come last.
+const GROUP_ORDER = ["医疗工具", "科研工具", "信息查找", "内容处理", "项目工具"];
+const GROUP_HINT = {
+  医疗工具: "量表、检验、编码与病例",
+  科研工具: "试验初筛与统计分析",
+  信息查找: "文献与证据",
+  内容处理: "文档与表格",
+  项目工具: "需先连接项目文件夹",
+};
+const entryCategory = (entry) => entry.kind === "plugin" ? entry.tool.meta?.category || "内容处理" : entry.row[3];
 export function TaskDirectory({
   sessions,
   workspaces,
@@ -318,11 +334,11 @@ export function TaskDirectory({
     )
     .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
   return (
-    <main id="main" className="work-directory" aria-label="任务记录">
+    <main id="main" className="work-directory tool-directory-page" aria-label="任务记录">
       <header className="directory-heading">
         <div>
           <h1>任务记录</h1>
-
+          <p>共 {rows.length} 条{filter !== "全部" || query ? "（已筛选）" : ""} · 最近更新在前</p>
         </div>
       </header>
       <div className="directory-toolbar">
@@ -367,13 +383,15 @@ export function TaskDirectory({
                 · {date(x.updatedAt)}
               </small>
             </span>
-            <em>
-              {x.running
+            {(() => {
+              const label = x.running
                 ? "执行中"
                 : x.pending
                     ? `${x.pending} 项待审批`
-                    : ({ failed: "执行失败", cancelled: "已停止", interrupted: "已中断", completed: "已完成" }[x.lastRunStatus || x.status] || "")}
-            </em>
+                    : ({ failed: "执行失败", cancelled: "已停止", interrupted: "已中断", completed: "已完成" }[x.lastRunStatus || x.status] || "");
+              const tone = x.running ? "is-info" : x.pending ? "is-caution" : (x.lastRunStatus || x.status) === "failed" ? "is-danger" : "";
+              return label ? <em className={`om-chip ${tone}`}>{label}</em> : <em />;
+            })()}
           </button>
         ))}
       </div>

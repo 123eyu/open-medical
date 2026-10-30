@@ -1,24 +1,54 @@
-.demo-experience { max-width: 1120px; margin: 0 auto; }
-.demo-experience .directory-heading p { color: var(--muted, #68756f); margin-top: 10px; }
-.demo-welcome { display: flex; gap: 16px; align-items: center; padding: 22px; border: 1px solid #cdded4; background: #f3f8f4; border-radius: 12px; margin: 20px 0; }
-.demo-welcome > div { flex: 1; }
-.demo-welcome p, .demo-welcome small { color: #52635a; line-height: 1.7; }
-.demo-scenarios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 20px 0; }
-.demo-scenario { padding: 22px; border: 1px solid var(--border, #dfe5e1); border-radius: 10px; display: flex; flex-direction: column; gap: 12px; background: var(--panel, #fff); }
-.demo-scenario-title { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
-.demo-scenario-title h2 { font-size: 17px; margin: 0; }
-.demo-scenario-title small { color: #587163; white-space: nowrap; }
-.demo-scenario p { margin: 0; font-size: 14px; line-height: 1.7; }
-.demo-scenario .demo-next { color: var(--muted, #68756f); font-size: 13px; }
-.demo-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; }
-.demo-actions button { display: inline-flex; align-items: center; gap: 8px; }
-.demo-boundaries, .demo-cleanup { border-top: 1px solid var(--border, #dfe5e1); padding: 20px 0; font-size: 13px; line-height: 1.8; }
-.demo-boundaries button, .demo-cleanup button { margin-right: 12px; }
+/* Examples: status band → category tabs → one numbered list of scenarios. */
+.demo-experience { max-width: 1080px; margin: 0 auto; }
+.demo-experience .demo-head { margin-bottom: 18px; }
+.demo-experience .demo-note { margin: 0 0 12px; color: var(--muted); font-size: var(--meta-size, 14px); }
+.demo-welcome { display: flex; gap: 14px; align-items: center; padding: 14px 18px; border: 1px solid var(--caution-line, #ecd7ae); background: var(--caution-soft, #fdf6e9); border-radius: var(--card-radius, 10px); margin: 0 0 20px; }
+.demo-welcome.is-ready { border-color: #cfe3d7; background: var(--ok-soft, #edf5f0); }
+.demo-welcome > svg { color: var(--accent); flex-shrink: 0; }
+.demo-welcome > div { flex: 1; min-width: 0; }
+.demo-welcome p { margin: 0; color: var(--muted); font-size: var(--meta-size, 14px); line-height: 1.6; }
+.demo-welcome .demo-welcome-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 2px; color: var(--ink); }
+.demo-welcome .demo-welcome-title b { font-size: var(--body-size, 16px); font-weight: 600; }
+.demo-welcome small { display: block; color: var(--faint); font-size: var(--small-size, 13px); line-height: 1.6; }
+.demo-welcome > button { flex-shrink: 0; }
+
+.demo-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.v6-shell .demo-experience button.demo-tab { min-height: 36px; padding: 6px 14px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--muted); font-size: var(--meta-size, 14px); }
+.v6-shell .demo-experience button.demo-tab:hover { background: var(--soft, #f0f4f2); color: var(--ink); }
+.v6-shell .demo-experience button.demo-tab.active { background: #fff; border-color: var(--accent-line, #c8d8ce); color: var(--accent-deep); font-weight: 600; }
+
+.demo-scenarios { list-style: none; margin: 0 0 24px; padding: 0; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); overflow: hidden; }
+.demo-scenario { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 16px 18px; border-top: 1px solid var(--line); }
+.demo-scenario:first-child { border-top: 0; }
+.demo-step { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-top: 1px; border-radius: 50%; background: var(--soft, #f0f4f2); color: var(--muted); font-size: var(--small-size, 13px); font-weight: 650; font-variant-numeric: tabular-nums; }
+.demo-scenario.is-visited .demo-step { background: var(--ok-soft, #edf5f0); color: var(--ok); }
+.demo-scenario-body { min-width: 0; display: grid; gap: 3px; }
+.demo-scenario-title { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.medical-shell .demo-scenario-title h2, .demo-scenario-title h2 { font-size: var(--body-size, 16px); font-weight: 620; margin: 0; line-height: 1.5; }
+.medical-shell .demo-scenario p, .demo-scenario p { margin: 0; color: var(--ink); font-size: var(--meta-size, 14px); line-height: 1.65; }
+.medical-shell .demo-scenario .demo-next, .demo-scenario .demo-next { color: var(--faint); font-size: var(--small-size, 13px); }
+.demo-scenario .demo-next span { color: var(--muted); font-weight: 600; }
+.demo-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; padding-top: 2px; }
+.demo-actions button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+.demo-footer { display: grid; gap: 4px; }
+.demo-boundaries, .demo-cleanup { border-top: 1px solid var(--line); padding: 16px 0; font-size: var(--small-size, 13px); line-height: 1.7; color: var(--muted); }
+.demo-boundaries b { color: var(--ink); font-size: var(--meta-size, 14px); }
+.demo-boundaries p { margin: 4px 0 6px; max-width: 80ch; }
+.demo-boundaries > div { display: flex; gap: 18px; flex-wrap: wrap; }
+.demo-cleanup .text-button.danger { color: var(--high); }
+.demo-confirm { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--high-line); border-radius: 8px; background: var(--high-soft); }
+.demo-confirm p { margin: 0 0 10px; color: var(--ink); }
+.demo-confirm > div { display: flex; gap: 8px; }
+
 .hub-demo-entry { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 18px 20px; border: 1px solid #cdded4; border-radius: 12px; background: #f3f8f4; margin: 18px 0; }
 .hub-demo-entry p { margin: 5px 0 0; color: #52635a; font-size: 13px; }
-@media (max-width: 680px) { .demo-scenarios { grid-template-columns: 1fr; } .demo-welcome, .hub-demo-entry { align-items: flex-start; flex-direction: column; } .demo-experience .doctor-tabs { overflow-x: auto; } }
+@media (max-width: 760px) {
+  .demo-scenario { grid-template-columns: 28px minmax(0, 1fr); }
+  .demo-actions { grid-column: 2; justify-content: flex-start; }
+  .demo-welcome, .hub-demo-entry { align-items: flex-start; flex-direction: column; }
+  .demo-tabs { overflow-x: auto; flex-wrap: nowrap; }
+}
 
 .medical-shell .demo-nav-entry { grid-template-columns: minmax(0, 1fr) 36px; align-items: center; margin-bottom: 8px; }
 .medical-shell .demo-nav-entry .demo-nav-hide { justify-content: center; padding: 8px; min-height: 36px; color: var(--muted, #68756f); }
-.demo-experience .directory-heading { align-items: flex-start; gap: 16px; }
-.demo-experience .directory-heading > button { flex-shrink: 0; }

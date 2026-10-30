@@ -131,6 +131,7 @@ export function FeishuBinding({
           )}
           <button
             type="button"
+            className="primary"
             disabled={busy}
             onClick={() =>
               run(() =>

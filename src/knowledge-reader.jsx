@@ -142,7 +142,7 @@ export function KnowledgeReader({
               </button>
             )}
             <button className="secondary" onClick={onClose}>
-              <ChevronLeft size={15} /> 返回工作区
+              <ChevronLeft size={15} /> 返回资料列表
             </button>
             <span>{reader.doc.title}</span>
           </div>

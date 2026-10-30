@@ -1,4 +1,5 @@
-.wecom-panel { border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:24px; }
+.wecom-panel { border:1px solid var(--line); border-radius:12px; padding:4px 18px; margin-bottom:24px; }
+.wecom-panel > details > summary { color:var(--muted); font-size:var(--meta-size, 14px); padding:8px 0; }
 .wecom-heading,.wecom-fields,.wecom-binding { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .wecom-heading h3 { margin:0; }
 .wecom-panel details { margin:12px 0; }

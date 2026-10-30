@@ -236,6 +236,29 @@ export function KnowledgeMap({ collection, onRead, onAsk, refreshKey }) {
             {collection || "全部知识库"} · {graph.nodes.length} 个知识点 ·{" "}
             {graph.edges.length} 条有据关系
           </p>
+          <div className="kg-status" role="status">
+            <span>
+              {graph.completedDocuments || 0}/{graph.documentCount || 0}{" "}
+              份资料已完成
+            </span>
+            {graph.pendingDocuments > 0 ? (
+              <span>{graph.pendingDocuments} 份待生成或更新</span>
+            ) : (
+              graph.documentCount > 0 && <span>已是最新</span>
+            )}
+            {graph.activeDocuments > 0 && (
+              <span>
+                处理中 {graph.activeDocuments} 份 · 已保存{" "}
+                {graph.progress?.done || 0}/{graph.progress?.total || 0}{" "}
+                个分段，可离开后返回
+              </span>
+            )}
+            {graph.updatedAt && (
+              <span>
+                更新于 {new Date(graph.updatedAt).toLocaleString("zh-CN")}
+              </span>
+            )}
+          </div>
         </div>
         <button
           className="primary"
@@ -250,29 +273,6 @@ export function KnowledgeMap({ collection, onRead, onAsk, refreshKey }) {
         >
           {graph.activeDocuments ? "图谱生成中…" : buttonLabel}
         </button>
-      </div>
-      <div className="kg-status" role="status">
-        <span>
-          {graph.completedDocuments || 0}/{graph.documentCount || 0}{" "}
-          份资料已完成
-        </span>
-        {graph.pendingDocuments > 0 ? (
-          <span>{graph.pendingDocuments} 份待生成或更新</span>
-        ) : (
-          graph.documentCount > 0 && <span>已是最新</span>
-        )}
-        {graph.activeDocuments > 0 && (
-          <span>
-            处理中 {graph.activeDocuments} 份 · 已保存{" "}
-            {graph.progress?.done || 0}/{graph.progress?.total || 0}{" "}
-            个分段，可离开后返回
-          </span>
-        )}
-        {graph.updatedAt && (
-          <span>
-            更新于 {new Date(graph.updatedAt).toLocaleString("zh-CN")}
-          </span>
-        )}
       </div>
       {error && (
         <p role="alert" className="form-error">

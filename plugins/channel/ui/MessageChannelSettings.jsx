@@ -44,7 +44,7 @@ function Channel({ channel, model, action, refresh }) {
       <header>
         <div>
           <h3>{channel.name}</h3>
-          <p role="status">{states[channel.state] || "尚未连接"}</p>
+          <p role="status"><span className={`om-chip ${channel.state === "connected" ? "is-ok" : ["failed", "conflict"].includes(channel.state) ? "is-danger" : channel.state === "disabled" ? "" : "is-caution"}`}>{states[channel.state] || "尚未连接"}</span></p>
         </div>
         <span>{channel.platform === "feishu" ? "飞书" : "微信"}</span>
       </header>
@@ -341,7 +341,7 @@ export function MessageChannelSettings() {
           ))}
           {!data.channels.some((c) => c.platform === "feishu") && (
             <section className="notification-channel">
-              <h3>飞书医生助手</h3>
+              <h3>飞书医生助手 <span className="om-chip is-caution">未连接</span></h3>
               <FeishuBinding
                 binding={data.feishuBinding}
                 model={data.model}
@@ -353,12 +353,13 @@ export function MessageChannelSettings() {
           )}
           {!data.channels.some((c) => c.platform === "wechat") && (
             <section className="notification-channel">
-              <h3>连接微信医生助手</h3>
+              <h3>微信医生助手 <span className="om-chip is-caution">未连接</span></h3>
               <p>
                 使用 iLink
                 机器人私聊，扫码不读取个人微信历史或普通群聊。当前支持文字任务，图片和文件请在工作台添加。
               </p>
               <button
+                className="primary"
                 disabled={!!qr}
                 onClick={() =>
                   action(async () => {

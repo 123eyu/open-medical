@@ -189,3 +189,11 @@
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
+/* Visit timeline: date column + content card. */
+.visit-timeline .visit-list { list-style: none; margin: 0; padding: 0; background: var(--card, #fff); border: 1px solid var(--border); border-radius: var(--card-radius, 10px); }
+.visit-timeline .visit-list > li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; padding: 14px 18px; border-top: 1px solid var(--line); }
+.visit-timeline .visit-list > li:first-child { border-top: 0; }
+.visit-timeline .visit-list time { color: var(--muted); font-size: var(--meta-size, 14px); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.medical-shell .visit-timeline .visit-list h4 { margin: 0 0 4px; font-size: var(--body-size, 16px); font-weight: 600; }
+.medical-shell .visit-timeline .visit-list p { margin: 0 0 4px; line-height: 1.7; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .visit-timeline .visit-list > li { grid-template-columns: 1fr; gap: 4px; } }

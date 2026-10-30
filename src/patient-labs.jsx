@@ -3,6 +3,8 @@ import { dashboardLabGroups, dashboardLabLayout, dashboardLabComparison } from '
 import { diagnosisSources } from '../shared/diagnoses.mjs';
 import { api } from './agent-runtime';
 import { usePluginActive } from './plugin-slots';
+import { FLAG_ARROW, FLAG_LABEL, labFlag } from '../shared/lab-flags.mjs';
+import { LabSparkline } from './lab-sparkline';
 import './patient-labs.css';
 
 export function PatientLabs({ patient, session, focusLab, onChanged, onError, onClinical, onOpenWorkspace, onEdit, Plot, citedFileName }) {
@@ -100,10 +102,16 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
     } catch (error) { onError?.(error.message); }
   };
 
-  const matchingLabs = visibleLabs.filter(group => group.key === focusKey || `${group.item} ${group.unit}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const flagOf = summary => summary.date && summary.values.length === 1 && summary.latestRecords.length ? labFlag(summary.latestRecords[0], { gender: patient.gender || '' }) : { flag: '', range: [...new Set(summary.latestRecords.map(record => record.referenceRange).filter(Boolean))].join(' / '), source: summary.latestRecords.some(record => record.referenceRange) ? 'report' : '' };
+  const flags = new Map(visibleLabs.map(group => [group.key, flagOf(dashboardLabComparison(group))]));
+  const isAbnormal = key => ['high', 'low'].includes(flags.get(key)?.flag);
+  // Without a saved order, abnormal results lead; a doctor's own order always wins.
+  const ordered = display.order?.length ? visibleLabs : visibleLabs.map((group, index) => ({ group, index })).sort((a, b) => Number(isAbnormal(b.group.key)) - Number(isAbnormal(a.group.key)) || a.index - b.index).map(entry => entry.group);
+  const abnormalGroups = ordered.filter(group => isAbnormal(group.key));
+  const matchingLabs = ordered.filter(group => group.key === focusKey || `${group.item} ${group.unit}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   return <section className="patient-labs" aria-label="检验结果">
     <header className="labs-heading">
-      <div><h2>检验结果</h2><span className="muted">{groups.length} 项指标 · {patient.labs?.length || 0} 条记录</span></div>
+      <div><h2>检验结果</h2><span className="muted">{groups.length} 项指标 · {patient.labs?.length || 0} 条记录{abnormalGroups.length ? '' : groups.length ? ' · 最新结果未见超出参考范围' : ''}</span></div>
       <div className="labs-header-actions">
         <button className="secondary" disabled={patient.archived} onClick={onEdit}>添加检验</button>
         <details className="labs-menu"><summary>更多</summary><div className="labs-menu-content">
@@ -114,20 +122,24 @@ export function PatientLabs({ patient, session, focusLab, onChanged, onError, on
         </div></details>
       </div>
     </header>
+    {abnormalGroups.length > 0 && <p className="labs-abnormal-summary" role="note"><b>{abnormalGroups.length} 项最新结果超出参考范围</b>{abnormalGroups.map(group => { const summary = dashboardLabComparison(group); const flag = flags.get(group.key); return <span key={group.key} className={`om-chip ${flag.flag === 'high' ? 'is-danger' : 'is-info'}`}>{group.item} {summary.values[0]}{group.unit ? ` ${group.unit}` : ''} {FLAG_ARROW[flag.flag]}</span>; })}</p>}
     {groups.length > 5 && <input className="labs-search" type="search" aria-label="查找检验项目" placeholder="查找检验项目" value={query} onChange={event=>setQuery(event.target.value)}/>}
-    {!!visibleLabs.length && <div className="labs-column-head" aria-hidden="true"><span>检验项目 / 单位</span><span>最新结果</span><span>上次结果</span><span>较上次</span><span/></div>}
+    {!!visibleLabs.length && <div className="labs-column-head" aria-hidden="true"><span>检验项目 / 单位</span><span>最新结果</span><span>参考范围</span><span>趋势 / 较上次</span><span>上次结果</span><span/></div>}
     <div className="labs-list">{matchingLabs.map(group=>{
       const summary = dashboardLabComparison(group);
       const focused = group.key === focusKey;
       const expanded = selectedKey === group.key;
       const collapsed = layout.collapsed.has(group.key) && !focused;
       const ranges = [...new Set(summary.latestRecords.map(record=>record.referenceRange).filter(Boolean))];
-      return <article className={`lab-result${focused ? ' is-focused' : ''}`} key={group.key} ref={focused ? focusedLab : undefined} tabIndex={-1} aria-label={`${group.item} ${group.unit || '单位未记录'}`}>
+      const flag = flags.get(group.key) || { flag: '' };
+      const abnormal = flag.flag === 'high' || flag.flag === 'low';
+      return <article className={`lab-result${focused ? ' is-focused' : ''}${abnormal ? ` is-abnormal ${flag.flag}` : ''}`} key={group.key} ref={focused ? focusedLab : undefined} tabIndex={-1} aria-label={`${group.item} ${group.unit || '单位未记录'}${abnormal ? `，${FLAG_LABEL[flag.flag]}` : ''}`}>
         <div className="lab-result-row">
           <div className="lab-result-name"><h3>{group.item}</h3><small>{group.unit || '单位未记录'}</small>{summary.undatedCount > 0 && <small className="lab-data-note">{summary.date ? '另有 ' : ''}{summary.undatedCount} 条日期未明确</small>}</div>
-          <div className="lab-result-value" role="group" aria-label="最新结果"><span className="lab-mobile-label">最新结果</span><strong>{summary.values.join(' / ')}</strong><time>{summary.date || '日期未明确'}</time>{summary.values.length > 1 && <small className="lab-data-note">{summary.date ? '同日不同结果' : '多条结果，无法排序'}</small>}{!!ranges.length && <small>参考：{ranges.join(' / ')}</small>}</div>
+          <div className="lab-result-value" role="group" aria-label="最新结果"><span className="lab-mobile-label">最新结果</span><strong className={`om-value ${abnormal ? flag.flag : ''}`}>{summary.values.join(' / ')}{abnormal && <span className="om-flag">{FLAG_ARROW[flag.flag]}</span>}</strong>{abnormal && <span className={`lab-flag-text ${flag.flag}`}>{FLAG_LABEL[flag.flag]}</span>}<time>{summary.date || '日期未明确'}</time>{summary.values.length > 1 && <small className="lab-data-note">{summary.date ? '同日不同结果' : '多条结果，无法排序'}</small>}</div>
+          <div className="lab-result-range" role="group" aria-label="参考范围"><span className="lab-mobile-label">参考范围</span>{flag.range ? <b>{flag.range}</b> : <b className="lab-range-missing">报告未注明</b>}{flag.source === 'generic' && <small>通用成人参考，以报告为准</small>}{flag.source === 'report' && ranges.length > 0 && <small>来自报告</small>}</div>
+          <div className="lab-result-change" role="group" aria-label="较上次变化"><span className="lab-mobile-label">较上次</span><LabSparkline group={group} flag={flag.flag}/><b>{summary.delta === null ? '—' : summary.delta === 0 ? '持平' : `${summary.delta > 0 ? '↑' : '↓'} ${Math.abs(summary.delta)}`}</b>{summary.deltaReason && <small>{summary.deltaReason}</small>}</div>
           <div className="lab-result-previous" role="group" aria-label="上次结果"><span className="lab-mobile-label">上次结果</span><b>{summary.previousValues.length ? summary.previousValues.join(' / ') : '—'}</b><time>{summary.previousDate || '暂无更早记录'}</time>{summary.previousValues.length > 1 && <small className="lab-data-note">同日不同结果</small>}</div>
-          <div className="lab-result-change" role="group" aria-label="较上次变化"><span className="lab-mobile-label">较上次</span><b>{summary.delta === null ? '—' : summary.delta === 0 ? '持平' : `${summary.delta > 0 ? '↑' : '↓'} ${Math.abs(summary.delta)}`}</b>{summary.deltaReason && <small>{summary.deltaReason}</small>}</div>
           <button className="text-button lab-result-toggle" aria-expanded={expanded} onClick={()=>{setExpandedKey(expanded ? '' : group.key);}}>{expanded ? '收起详情' : '查看详情'}</button>
         </div>
         {expanded && <div className="lab-result-detail">

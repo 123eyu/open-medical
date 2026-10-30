@@ -1949,6 +1949,7 @@ export function createServer(options = {}) {
             group: url.searchParams.get("group") || undefined,
             includeArchived: url.searchParams.get("archived") === "1",
             summary: url.searchParams.get("summary") === "1",
+            brief: url.searchParams.get("brief") === "1",
           }),
         });
       if (path === "/api/patients" && req.method === "POST") {

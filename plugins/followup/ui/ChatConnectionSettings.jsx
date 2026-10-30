@@ -33,6 +33,7 @@ export function ChatConnectionSettings() {
  // 静态两组之外(第三方插件装的渠道)兜底收进"已安装的连接插件",保证任何渠道都有 tab。
  const groups=connections?(()=>{const known=new Set(CHANNEL_GROUPS.flatMap(g=>g.channels));const extra=connections.filter(c=>!known.has(c.channel));return extra.length?[...CHANNEL_GROUPS,{label:'已安装的连接插件',hint:'管理已安装的连接，或使用聊天记录导入向导。',channels:extra.map(c=>c.channel)}]:CHANNEL_GROUPS;})():CHANNEL_GROUPS;
  return <section className="chat-settings"><h2>患者随访</h2>
+  <p>连接患者或家属所在的聊天渠道后，新消息进入随访并由你核对归档。带绿点的渠道已连接。</p>
   {error&&<p role="alert">{error}<button onClick={()=>setVersion(v=>v+1)}>重新加载连接</button></p>}
   {!connections&&!error&&<p role="status">正在读取连接配置…</p>}
   {connections&&groups.map(group=>{
@@ -155,7 +156,7 @@ function PatientChats({patientId}) {
    {!!replies.length&&<AibotReplies replies={replies} onChanged={refresh}/>}
    {!!state.inbox.length&&<section className="chat-inbox"><h3>待分配消息</h3><p>群聊或共享会话需要核对归属。只选择属于当前患者的消息。每个会话显示最近 100 条，分配后可继续查看。</p>{state.inbox.map(m=><label className="chat-check" key={m.id}><input type="checkbox" checked={selected.includes(m.id)} onChange={e=>setSelected(old=>e.target.checked?[...old,m.id]:old.filter(id=>id!==m.id))}/><span>{m.text||`[${m.type}]`}<small>{when(m.sentAt||m.observedAt)}</small></span></label>)}<button disabled={busy||!selected.length} onClick={()=>act(async()=>{const groups=new Map();for(const m of state.inbox.filter(m=>selected.includes(m.id))){const ids=groups.get(m.bindingId)||[];ids.push(m.id);groups.set(m.bindingId,ids);}for(const [bindingId,messageIds] of groups)await api('/api/chat-followups/assign','POST',{bindingId,messageIds,confirmed:true});setSelected([]);return '已归入当前患者的待复核草稿';})}>确认选中消息属于当前患者</button></section>}
    <h3>随访草稿与记录</h3>{!state.drafts.length&&<p className="muted">同步后在这里查看原文、填写或生成摘要。</p>}
-   <nav className="toolbar-actions" aria-label="聊天记录分页"><button disabled={busy||offset===0} onClick={()=>setOffset(Math.max(0,offset-20))}>上一页</button><span>共 {state.total} 份 · 第 {Math.floor(offset/20)+1} 页</span><button disabled={busy||offset+20>=state.total} onClick={()=>setOffset(offset+20)}>下一页</button></nav>
+   {state.total>20&&<nav className="toolbar-actions" aria-label="聊天记录分页"><button disabled={busy||offset===0} onClick={()=>setOffset(Math.max(0,offset-20))}>上一页</button><span>共 {state.total} 份 · 第 {Math.floor(offset/20)+1} 页</span><button disabled={busy||offset+20>=state.total} onClick={()=>setOffset(offset+20)}>下一页</button></nav>}
    {state.drafts.map(d=><DraftCard key={`${d.id}:${d.revision}`} draft={d} onChanged={refresh}/>)}
   </>}
  </>;

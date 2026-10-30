@@ -1156,7 +1156,7 @@ export function LearningMonth() {
     </section>
   ) : null;
 }
-export function LearningChanges() {
+export function LearningChanges({ emptyText = "" } = {}) {
   const mutate = useHabitMutation();
   const [changes, setChanges] = useState([]),
     [error, setError] = useState("");
@@ -1171,6 +1171,7 @@ export function LearningChanges() {
   }, []);
   return (
     <section aria-label="习惯启停记录">
+      {!changes.length && !error && emptyText && <p className="muted">{emptyText}</p>}
       {changes.map((c) => (
         <p key={c.id}>
           <a href={`/?view=settings&doctor=1#habit-${c.habit_id}`}>这条习惯</a>{" "}

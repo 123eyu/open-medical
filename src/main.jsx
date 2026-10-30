@@ -1,6 +1,7 @@
 import "./medical-modules.css";
 import "./learning-loop.css";
 import { PatientQuestionStarters } from "./patient-question-starters";
+import { PatientSuggestionList } from "./clinical-assistance";
 import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
 // 路由懒加载后仍由固定入口提供这些页面的样式，保持原 CSS 顺序与层叠。
 import "./backup-panel.css";
@@ -80,6 +81,7 @@ import { blockedText, runDerivedStatus } from "./workbench/run-status";
 import { DoctorProfilePanel } from "./doctor-profile";
 import "./knowledge-map.css";
 import "./knowledge-workspace.css";
+import "./clarity.css";
 import { KnowledgeSourcePanel } from "./knowledge-source-panel";
 import { IconButton, Badge, Modal, STATUS } from "./components";
 import { ResultCard, SlotItem, registerUiPlugins, usePluginActive, usePluginEnabled, useSlot } from "./plugin-slots";
@@ -1626,11 +1628,6 @@ function App() {
           />
         )}
         <aside className={`app-navigation ${sidebar ? "open" : ""}`}>
-          {medical && !config?.demoEntryHidden && <nav className="medical-quick demo-nav-entry" aria-label="示例体验">
-            <button aria-current={view === "examples" ? "page" : undefined} className={view === "examples" ? "active" : ""} onClick={() => navigate("examples")}><BookOpen size={17}/><span>示例体验</span></button>
-            <button className="demo-nav-hide" aria-label="隐藏示例体验入口" title="隐藏入口，可在设置中恢复" disabled={demoPreferenceBusy} onClick={() => setDemoEntryHidden(true)}><X size={15}/></button>
-          </nav>}
-          {demoPreferenceError && <p role="alert" className="error-text">{demoPreferenceError}</p>}
           <button className="new-session agent-new-task" aria-label="新建任务" aria-current={view === "home" ? "page" : undefined} onClick={startNewTask}>
             <Plus size={20}/><span>新建任务</span>
           </button>
@@ -1651,10 +1648,10 @@ function App() {
                 const label = [item.title, context, updated].filter(Boolean).join(" · ");
                 return <button key={item.id} aria-label={`继续对话：${label}`} title={label} className={`recent-task${view === "workbench" && activeId === item.id ? " active" : ""}`} onClick={() => openTask(item.id)}><span className="recent-task-copy"><span className="recent-task-title">{item.title}</span>{context && <small>{context}</small>}<small>{item.running ? "进行中 · " : ""}{updated}</small></span></button>;
               })}
-              {!recentConversations.length && <p className="sidebar-empty">发送第一条消息后，对话会保存在这里。</p>}
+              {!recentConversations.length && <p className="sidebar-empty">暂无对话。发送任务后会出现在这里。</p>}
               <div className="agent-recents-tail">
-                <button onClick={() => navigate("tasks")}>查看全部任务记录（可搜索）</button>
-                <button onClick={() => navigate("projects")}>查看全部项目文件</button>
+                <button onClick={() => navigate("tasks")}>全部任务记录</button>
+                <button onClick={() => navigate("projects")}>项目文件</button>
               </div>
             </nav>
           </div>}
@@ -1665,6 +1662,11 @@ function App() {
             <button aria-current={TOOL_VIEWS.includes(view) ? "page" : undefined} className={TOOL_VIEWS.includes(view) ? "active" : ""} onClick={() => navigate("tools")}><Search size={18}/>资料与工具</button>
           </nav>}
           {wsList.some(w=>w.pinned&&!w.archived)&&<nav className="pinned-projects" aria-label="固定项目"><p className="business-nav-label">固定项目</p>{wsList.filter(w=>w.pinned&&!w.archived).slice(0,3).map(w=><button key={w.id} onClick={()=>openWorkspaces({id:w.id})}><FolderOpen size={16}/><span>{w.title}</span></button>)}</nav>}
+          {medical && !config?.demoEntryHidden && <nav className="medical-quick demo-nav-entry demo-nav-bottom" aria-label="示例体验">
+            <button aria-current={view === "examples" ? "page" : undefined} className={view === "examples" ? "active" : ""} onClick={() => navigate("examples")}><BookOpen size={17}/><span>示例体验</span></button>
+            <button className="demo-nav-hide" aria-label="隐藏示例体验入口" title="隐藏入口，可在设置中恢复" disabled={demoPreferenceBusy} onClick={() => setDemoEntryHidden(true)}><X size={15}/></button>
+          </nav>}
+          {demoPreferenceError && <p role="alert" className="error-text">{demoPreferenceError}</p>}
           <div className="business-preferences"><button onClick={() => navigate("settings")}><Settings2 size={16}/>设置与连接</button></div>
         </aside>
         <div className="product-content" id="main-content" tabIndex={-1}>
@@ -1963,6 +1965,12 @@ function App() {
                             ? `查看已添加的 ${session.files.length} 份资料`
                             : "添加任务材料"}
                         </button>}
+                        {!draft.trim() && session?.patientId && patientDetail?.id === session.patientId && <div className="workbench-suggestions"><PatientSuggestionList patient={patientDetail} onChoose={(prompt) => {
+                          setDraft(prompt);
+                          pendingWorkflowRef.current = '';
+                          draftWorkflows.current.set(draftContext.current.key, '');
+                          inputRef.current?.focus();
+                        }}/></div>}
                         {!draft.trim() && (session?.patientId ? <PatientQuestionStarters onChoose={({ prompt, workflow = '' }) => {
                           setDraft(prompt);
                           pendingWorkflowRef.current = workflow;

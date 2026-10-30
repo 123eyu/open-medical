@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "../../../src/agent-runtime";
 import { FollowupRecords } from "./FollowupRecords.jsx";
+import "./followup-clarity.css";
 
 const fmtDue = (value) => {
   const diff = value - Date.now();
@@ -173,10 +174,10 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
         <div className="toolbar-actions"><button className="secondary" disabled={busy} onClick={() => setDeleting(null)}>取消</button><button className="danger" disabled={busy} onClick={() => deleting.type === "job" ? deleteJob(deleting.item) : removePlan(deleting.item.id)}>{busy ? "正在删除…" : "确认删除"}</button></div>
       </Modal>}
       <section className="module-card followups-view">
-        <div className="module-head">
+        <div className="module-head om-page-head">
           <div>
             <h1>随访管理</h1>
-
+            <span className="om-page-meta">{loading && !jobs.length ? "正在读取…" : [dueJobs.length ? `${dueJobs.length} 个计划今日到期或已逾期` : "今日无到期计划", `${jobs.filter((job) => job.status === "active").length} 个计划进行中`, upcoming.filter((job) => job.status === "paused").length ? `${upcoming.filter((job) => job.status === "paused").length} 个已暂停` : ""].filter(Boolean).join(" · ")}</span>
           </div>
         </div>
         {error && (
@@ -204,7 +205,7 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
           <button className={section === "auto" ? "active" : ""} onClick={() => setSection("auto")}>自动随访</button>
           <button className={section === "chats" ? "active" : ""} onClick={() => setSection("chats")}>聊天随访</button>
         </nav>
-        {section === "auto" && <section className="followups-section"><p className="muted">企业微信按计划自动收集；个人微信（桌面版）的到期随访在下方：AI 起草话术、医生确认发送、回复自动按条目整理、确认后归档。红旗命中会置顶提醒，不进入自动流程。</p><CampaignPanel onOpenPatient={onOpenPatient} /><WechatOutreachPanel /></section>}
+        {section === "auto" && <section className="followups-section"><p className="muted followup-help">企业微信按计划自动发送并收集回复；个人微信（桌面版）的到期随访在下方：AI 起草、医生确认发送，回复按条目整理后确认归档。命中红旗会置顶提醒，不进入自动流程。</p><CampaignPanel onOpenPatient={onOpenPatient} /><WechatOutreachPanel /></section>}
         {section === "chats" && <ChatFollowupsPanel patients={patients} onSettings={onSettings} />}
         <div hidden={section !== "queue"}>
           <FollowupRecords
@@ -214,6 +215,102 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
           />
         </div>
         <div hidden={section !== "plans"}>
+          <section className="followups-section">
+            <h3>
+              今日与逾期 <em className="count-chip">{dueJobs.length}</em>
+            </h3>
+            <ul className="job-list">
+              {dueJobs.map((job) => (
+                <li key={job.id}>
+                  <div className="job-main">
+                    <b>{job.patientName}</b> · {job.name}
+                    <small>
+                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)} ·{" "}
+                      {job.once ? "单次" : `每 ${job.intervalDays} 天`}
+                      {job.hasSurvey ? " · 含问卷" : ""}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
+                      {job.checklist?.length
+                        ? ` · ${job.checklist.join("、")}`
+                        : ""}
+                    </small>
+                  </div>
+                  <div className="job-actions">
+                    <button
+                      className="icon-button"
+                      title="打开患者"
+                      onClick={() => onOpenPatient?.(job.patientId)}
+                    >
+                      <Stethoscope size={14} />
+                    </button>
+                    <button
+                      className="icon-button"
+                      title="暂停"
+                      onClick={() => toggleJob(job)}
+                      disabled={busy}
+                    >
+                      <Pause size={14} />
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      title="删除"
+                      onClick={() => setDeleting({ type: "job", item: job })}
+                      disabled={busy}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {!loading && !loadFailed && !dueJobs.length && (
+                <li className="memory-empty">没有到期随访。</li>
+              )}
+            </ul>
+          </section>
+
+          <section className="followups-section">
+            <h3>
+              未来与暂停 <em className="count-chip muted">{upcoming.length}</em>
+            </h3>
+            <ul className="job-list">
+              {upcoming.slice(0, visibleUpcoming).map((job) => (
+                <li key={job.id}>
+                  <div className="job-main">
+                    <b>{job.patientName}</b> · {job.name}
+                    <small>
+                      {job.status === "paused" ? "已暂停 · " : ""}
+                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
+                    </small>
+                  </div>
+                  <div className="job-actions">
+                    <button className="icon-button" title="打开患者" onClick={() => onOpenPatient?.(job.patientId)}><Stethoscope size={14} /></button>
+                    <button
+                      className="icon-button"
+                      title={job.status === "paused" ? "恢复" : "暂停"}
+                      onClick={() => toggleJob(job)}
+                      disabled={busy || job.status === "running"}
+                    >
+                      {job.status === "paused" ? (
+                        <Play size={14} />
+                      ) : (
+                        <Pause size={14} />
+                      )}
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      title="删除"
+                      onClick={() => setDeleting({ type: "job", item: job })}
+                      disabled={busy}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {!loading && !loadFailed && !upcoming.length && (
+                <li className="memory-empty">没有未来计划。</li>
+              )}
+            </ul>
+            {upcoming.length > visibleUpcoming && <button className="secondary" onClick={() => setVisibleUpcoming(count => count + 20)}>显示更多计划（还有 {upcoming.length - visibleUpcoming} 项）</button>}
+          </section>
           <section className="followups-section">
             <h3>应用随访模板</h3>
             <div className="followup-apply">
@@ -268,6 +365,7 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
                 }
               />
               <button
+                className="primary"
                 onClick={applyPlan}
                 disabled={busy || !apply.planId || !apply.patientId}
               >
@@ -462,6 +560,7 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
                     <Plus size={13} /> 添加节点
                   </button>
                   <button
+                    className="primary"
                     onClick={createPlan}
                     disabled={busy || !form.name.trim()}
                   >
@@ -482,102 +581,6 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
             )}
           </section>
 
-          <section className="followups-section">
-            <h3>
-              今日与逾期 <em className="count-chip">{dueJobs.length}</em>
-            </h3>
-            <ul className="job-list">
-              {dueJobs.map((job) => (
-                <li key={job.id}>
-                  <div className="job-main">
-                    <b>{job.patientName}</b> · {job.name}
-                    <small>
-                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)} ·{" "}
-                      {job.once ? "单次" : `每 ${job.intervalDays} 天`}
-                      {job.hasSurvey ? " · 含问卷" : ""}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
-                      {job.checklist?.length
-                        ? ` · ${job.checklist.join("、")}`
-                        : ""}
-                    </small>
-                  </div>
-                  <div className="job-actions">
-                    <button
-                      className="icon-button"
-                      title="打开患者"
-                      onClick={() => onOpenPatient?.(job.patientId)}
-                    >
-                      <Stethoscope size={14} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      title="暂停"
-                      onClick={() => toggleJob(job)}
-                      disabled={busy}
-                    >
-                      <Pause size={14} />
-                    </button>
-                    <button
-                      className="icon-button danger"
-                      title="删除"
-                      onClick={() => setDeleting({ type: "job", item: job })}
-                      disabled={busy}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-              {!loading && !loadFailed && !dueJobs.length && (
-                <li className="memory-empty">没有到期随访。</li>
-              )}
-            </ul>
-          </section>
-
-          <section className="followups-section">
-            <h3>
-              未来与暂停 <em className="count-chip muted">{upcoming.length}</em>
-            </h3>
-            <ul className="job-list">
-              {upcoming.slice(0, visibleUpcoming).map((job) => (
-                <li key={job.id}>
-                  <div className="job-main">
-                    <b>{job.patientName}</b> · {job.name}
-                    <small>
-                      {job.status === "paused" ? "已暂停 · " : ""}
-                      {followupDate(job.nextDue)} · {fmtDue(job.nextDue)}{job.source?.kind === "treatment-review" ? ` · 来自复评日期 ${job.source.reviewDate}` : ""}
-                    </small>
-                  </div>
-                  <div className="job-actions">
-                    <button className="icon-button" title="打开患者" onClick={() => onOpenPatient?.(job.patientId)}><Stethoscope size={14} /></button>
-                    <button
-                      className="icon-button"
-                      title={job.status === "paused" ? "恢复" : "暂停"}
-                      onClick={() => toggleJob(job)}
-                      disabled={busy || job.status === "running"}
-                    >
-                      {job.status === "paused" ? (
-                        <Play size={14} />
-                      ) : (
-                        <Pause size={14} />
-                      )}
-                    </button>
-                    <button
-                      className="icon-button danger"
-                      title="删除"
-                      onClick={() => setDeleting({ type: "job", item: job })}
-                      disabled={busy}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-              {!loading && !loadFailed && !upcoming.length && (
-                <li className="memory-empty">没有未来计划。</li>
-              )}
-            </ul>
-            {upcoming.length > visibleUpcoming && <button className="secondary" onClick={() => setVisibleUpcoming(count => count + 20)}>显示更多计划（还有 {upcoming.length - visibleUpcoming} 项）</button>}
-          </section>
         </div>
       </section>
     </div>

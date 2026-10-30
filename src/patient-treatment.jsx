@@ -66,7 +66,7 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
   };
   const field = key => ({ value: editor[key], onChange: event => setEditor({ ...editor, [key]: event.target.value }) });
   return <div className="treatment-workspace">
-    <div className={`treatment-allergy ${allergies.length ? 'has-allergy' : ''}`}>
+    <div className={`treatment-allergy ${allergies.length ? 'has-allergy' : patient.allergyStatus === 'none_known' ? '' : 'is-unknown'}`}>
       {!!allergies.length && <ShieldAlert size={19}/>}<div><b>过敏史</b><span>{allergies.length ? allergies.map(a => typeof a === 'string' ? a : [a.substance, a.reaction].filter(Boolean).join('：')).join('；') : patient.allergyStatus === 'none_known' ? '无已知过敏' : '未记录'}</span></div>
       <button className="text-button" onClick={onEditMedications}>{allergies.length || patient.allergyStatus === 'none_known' ? '编辑过敏史' : '补充过敏史'} <ArrowUpRight size={14}/></button>
     </div>
@@ -101,15 +101,15 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
     </form>}
     <div className="treatment-grid">
       <div className="treatment-main">
-        <section className="treatment-plan treatment-card" aria-label="当前治疗方案">
-          <header><div><h3>当前治疗方案</h3></div><button className="text-button" disabled={patient.archived || busy} onClick={openEditor}>{plan ? '编辑方案' : '建立方案'} <Plus size={15}/></button></header>
-          {plan ? <><div className="treatment-plan-title"><h4>{plan.title}</h4><span className="treatment-badge">{planStates[plan.status]}</span></div><div className="treatment-goal"><span>治疗目标</span><p>{plan.goal || '尚未填写治疗目标'}</p></div><h5>治疗与干预</h5>{interventions.length ? <ul className="treatment-interventions">{interventions.map((line,i)=><li key={i}>{line}</li>)}</ul> : <p className="treatment-muted">尚未记录干预措施</p>}{plan.source && <p className="treatment-provenance">记录来源 · {plan.source}</p>}</> : <div className="treatment-empty"><ClipboardList size={28}/><h4>尚未建立治疗方案</h4><p>可记录治疗目标、干预措施与复评日期。</p><button className="secondary" disabled={patient.archived || busy} onClick={openEditor}><Plus size={15}/> 建立治疗方案</button></div>}
-        </section>
         <section className="treatment-card" aria-label="用药管理">
           <header><div><h3>用药管理 <small>{meds.length} 种记录</small></h3></div><button className="text-button" onClick={onEditMedications}>管理用药 <ArrowUpRight size={15}/></button></header>
           <div className="treatment-filters" aria-label="筛选用药状态">{[['active',`正在使用 ${counts.active}`],['unknown',`未记录状态 ${counts.unknown}`],['stopped',`已停用 ${counts.stopped}`],['all','全部']].map(([id,label])=><button key={id} aria-pressed={filter===id} className={filter===id?'selected':''} onClick={()=>setFilter(id)}>{label}</button>)}</div>
-          {visibleMeds.length ? <ul className="treatment-medications">{visibleMeds.map((med,i)=><li key={i}><div className="treatment-pill-icon"><Pill size={19}/></div><div className="treatment-med-content"><div className="treatment-med-name"><h4>{med.name}</h4><span className={`treatment-med-state ${med.status || 'unknown'}`}>{medicationStates[med.status] || medicationStates.unknown}</span></div><dl><div><dt>剂量</dt><dd>{med.dose || '未记录'}</dd></div><div><dt>频次 / 用法</dt><dd>{med.frequency || '未记录'}</dd></div></dl>{med.note && <p>{med.note}</p>}{diagnosisSources(med).length ? <details className="treatment-provenance"><summary>资料来源</summary>{diagnosisSources(med).map(source=><p key={source}>{source}{sourceFiles(source).length === 1 && <button className="text-button" onClick={()=>onNavigate('library', {focusFile:sourceFiles(source)[0].id})}>查看原始资料</button>}{sourceFiles(source).length > 1 && <button className="text-button" onClick={()=>onNavigate('library')}>同名资料有多份，到资料库核对</button>}</p>)}</details> : <p className="treatment-muted">用药来源未记录</p>}</div></li>)}</ul> : <div className="treatment-empty compact"><Pill size={25}/><p>{meds.length ? `暂无「${medicationStates[filter] || '全部'}」用药记录` : '尚无用药记录。'}</p><button className="text-button" onClick={onEditMedications}>添加用药</button></div>}
+          {visibleMeds.length ? <ul className="treatment-medications">{visibleMeds.map((med,i)=><li key={i}><div className="treatment-pill-icon"><Pill size={19}/></div><div className="treatment-med-content"><div className="treatment-med-name"><h4>{med.name}</h4><span className={`treatment-med-state ${med.status || 'unknown'}`}>{medicationStates[med.status] || medicationStates.unknown}</span></div><p className="treatment-med-dose">{med.dose || '剂量未记录'}<span aria-hidden="true"> · </span>{med.frequency || '频次未记录'}</p>{med.note && <p>{med.note}</p>}{diagnosisSources(med).length ? <details className="treatment-provenance"><summary>资料来源</summary>{diagnosisSources(med).map(source=><p key={source}>{source}{sourceFiles(source).length === 1 && <button className="text-button" onClick={()=>onNavigate('library', {focusFile:sourceFiles(source)[0].id})}>查看原始资料</button>}{sourceFiles(source).length > 1 && <button className="text-button" onClick={()=>onNavigate('library')}>同名资料有多份，到资料库核对</button>}</p>)}</details> : <p className="treatment-muted">用药来源未记录</p>}</div></li>)}</ul> : <div className="treatment-empty compact"><Pill size={25}/><p>{meds.length ? `暂无「${medicationStates[filter] || '全部'}」用药记录` : '尚无用药记录。'}</p><button className="text-button" onClick={onEditMedications}>添加用药</button></div>}
           {followupActive && <footer className="treatment-med-footer"><span>服药执行情况需通过随访核对</span><button className="text-button" onClick={()=>onNavigate('followups')}>安排用药随访 <ArrowUpRight size={14}/></button></footer>}
+        </section>
+        <section className="treatment-plan treatment-card" aria-label="当前治疗方案">
+          <header><div><h3>当前治疗方案</h3></div>{plan && <button className="text-button" disabled={patient.archived || busy} onClick={openEditor}>编辑方案 <Plus size={15}/></button>}</header>
+          {plan ? <><div className="treatment-plan-title"><h4>{plan.title}</h4><span className="treatment-badge">{planStates[plan.status]}</span></div><div className="treatment-goal"><span>治疗目标</span><p>{plan.goal || '尚未填写治疗目标'}</p></div><h5>治疗与干预</h5>{interventions.length ? <ul className="treatment-interventions">{interventions.map((line,i)=><li key={i}>{line}</li>)}</ul> : <p className="treatment-muted">尚未记录干预措施</p>}{plan.source && <p className="treatment-provenance">记录来源 · {plan.source}</p>}</> : <div className="treatment-empty compact inline"><ClipboardList size={20}/><p>尚未建立治疗方案。可记录治疗目标、干预措施与复评日期。</p><button className="secondary" disabled={patient.archived || busy} onClick={openEditor}><Plus size={15}/> 建立治疗方案</button></div>}
         </section>
       </div>
       <aside className="treatment-aside">
@@ -118,18 +118,18 @@ export function TreatmentPanel({ patient, groups, Plot, onEditMedications, onNav
           {group ? <><label className="treatment-metric-label">观察指标<select aria-label="选择观察指标" value={group.key} onChange={event=>setMetric(event.target.value)}>{plottedGroups.map(g=><option key={g.key} value={g.key}>{g.item} · {g.unit || '单位未记录'}</option>)}</select></label><div className="treatment-latest"><strong>{group.latestConflict ? '同日多值' : latest.value}</strong><span>{group.unit || '单位未记录'}<small>{latest.date}</small></span></div><Plot group={group} compact/><p className="treatment-muted">{group.conflict ? `${group.conflictDates.join('、')} 存在同日不同数值，散点展示，需核对原始记录。` : group.distinctDates < 2 ? '目前仅一个日期的记录，补充复查后可查看趋势。' : `${group.distinctDates} 个日期的记录 · 数值变化需结合临床评估`}</p></> : <div className="treatment-empty compact"><Activity size={26}/><p>补充检验记录后，在这里查看指标变化。</p></div>}
           <button className="text-button" onClick={()=>onNavigate('labs')}>查看全部检验 <ArrowUpRight size={14}/></button>
         </section>
-        <section className="treatment-card treatment-outcome" aria-label="预后与疗效评估">
+        {plan && <section className="treatment-card treatment-outcome" aria-label="预后与疗效评估">
           <header><div><h3>预后与疗效评估</h3></div></header>
           {plan?.prognosis ? <><span className="treatment-review-date">{plan.assessmentDate} · 评估记录</span><p className="treatment-prognosis">{plan.prognosis}</p></> : <p className="treatment-muted">尚未记录评估。结合症状、检验与耐受情况，记录本阶段的疗效和预后判断。</p>}
           <button className="text-button" disabled={patient.archived || busy} onClick={openEditor}>{plan?.prognosis ? '更新评估' : '记录评估'} <ArrowUpRight size={14}/></button>
-        </section>
-        <section className="treatment-card treatment-review" aria-label="治疗与复评时间线">
+        </section>}
+        {plan && <section className="treatment-card treatment-review" aria-label="治疗与复评时间线">
           <header><h3>治疗与复评</h3><CalendarDays size={18}/></header>
           <ol><li><span>方案开始</span><time>{plan?.startDate || '尚未记录'}</time></li><li><span>最近评估</span><time>{plan?.assessmentDate || '尚未记录'}</time></li><li className={due?'is-due':''}><span>下次复评{due && ' · 已到期'}</span><time>{plan?.reviewDate || '尚未安排'}</time></li></ol>
           {followupActive && (reviewReminder ? <p className="treatment-muted">复评日期 {plan.reviewDate} 已安排提醒{reviewReminder.status === 'completed' ? '，提醒已触发' : ''}。<button className="text-button" onClick={()=>onNavigate('followups', {focusFollowupId:reviewReminder.id})}>查看现有计划</button></p> : plan?.status === 'active' && !patient.archived && isCalendarDate(plan?.reviewDate) ? <button className="text-button" onClick={()=>onNavigate('followups', {patientId:patient.id,reviewDate:plan.reviewDate,title:plan.title})}>按复评日期安排随访 <ArrowUpRight size={14}/></button> : !plan?.reviewDate && !patient.archived ? <button className="text-button" onClick={openEditor}>填写复评日期</button> : null)}
           {!followupActive && !plan?.reviewDate && !patient.archived && <button className="text-button" onClick={openEditor}>填写复评日期</button>}
           {followupActive && <button className="text-button" onClick={()=>onNavigate('followups')}>管理随访提醒 <ArrowUpRight size={14}/></button>}
-        </section>
+        </section>}
       </aside>
     </div>
   </div>;

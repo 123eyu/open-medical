@@ -20,10 +20,15 @@ export function FeishuKnowledgeBotSettings() {
     <h2>飞书知识库机器人</h2>
     <p>在授权群里 @ 机器人，或在授权单聊里直接提问。从你开放的允许对外引用的资料中查找依据，支持连续追问，并附上资料出处。</p>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-    {!form ? <button disabled={busy} onClick={() => action(async () => accept(await api('/api/knowledge-bot')))}>重新加载</button> : <>
-      <p role="status">{states[config.state] || config.state}{config.message ? ` · ${config.message}` : ''}</p>
+    {!form ? <button className="secondary" disabled={busy} onClick={() => action(async () => accept(await api('/api/knowledge-bot')))}>重新加载</button> : <>
+      <div className="notification-channel">
+      <h3>飞书连接 <span role="status" className={`om-chip ${config.state === 'connected' ? 'is-ok' : config.state === 'failed' ? 'is-danger' : config.state === 'disabled' ? '' : 'is-caution'}`}>{states[config.state] || config.state}</span></h3>
+      {config.message && <p className="muted">{config.message}</p>}
       {!config.hasSecret ? <FeishuBinding endpoint="/api/knowledge-bot/feishu-binding" binding={config.feishuBinding} modelConsent={false} onUpdated={async () => accept(await api('/api/knowledge-bot'))} /> : <>
       <a className="chat-next-link" href={`https://applink.feishu.cn/client/bot/open?appId=${encodeURIComponent(config.appId)}`} target="_blank" rel="noreferrer">打开知识库机器人 ↗</a>
+      </>}
+      </div>
+      {config.hasSecret && <>
       <p>选择允许分享的知识库并开启后，就可以在飞书提问。扫码账号会自动识别；群聊和其他账号需要你在下面授权。</p>
       <form onSubmit={e => { e.preventDefault(); action(async () => { accept(await api('/api/knowledge-bot', 'PUT', { ...form, expectedRevision: form.revision })); setNotice('设置已保存，可以打开飞书提问。'); }); }}>
         <fieldset disabled={busy} className="notification-fields">
@@ -44,12 +49,13 @@ export function FeishuKnowledgeBotSettings() {
           {form.answerMode === 'assistant' && <p>启用并保存后，问题、当前会话最近 4 轮上下文和命中的知识库片段会发送给当前配置的模型。可在「模型与运行」选择本地模型。</p>}
           <details><summary>连续追问与新话题</summary><p>群聊上下文按提问人及话题分开，单聊互不混用。上下文仅在本次运行中保留，30 分钟无新消息后过期；发送 /new 或「新话题」可重新开始。</p></details>
           <label className="notification-checkbox"><input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} />启用飞书知识库机器人</label>
-          <button type="submit">保存使用范围</button>
+          <button type="submit" className="primary">保存使用范围</button>
         </fieldset>
       </form>
-      <button disabled={busy} onClick={() => { if (window.confirm('断开知识库机器人？已导入资料会保留。')) action(async () => accept(await api('/api/knowledge-bot', 'DELETE', { expectedRevision: config.revision }))); }}>断开连接</button>
-      <button disabled={busy} onClick={() => action(async () => { const result = await api("/api/knowledge-bot/reset-context", "POST", { expectedRevision: config.revision }); setNotice(result.message); })}>清空所有对话上下文</button>
-      <button disabled={busy} onClick={() => action(async () => { accept(await api('/api/knowledge-bot')); setNotice('会话列表与设置已刷新。'); })}>刷新群与连接状态</button>
+      <div className="settings-bot-actions"><button className="secondary" disabled={busy} onClick={() => action(async () => { accept(await api('/api/knowledge-bot')); setNotice('会话列表与设置已刷新。'); })}>刷新群与连接状态</button>
+      <button className="secondary" disabled={busy} onClick={() => action(async () => { const result = await api("/api/knowledge-bot/reset-context", "POST", { expectedRevision: config.revision }); setNotice(result.message); })}>清空所有对话上下文</button>
+      <button className="text-button danger" disabled={busy} onClick={() => { if (window.confirm('断开知识库机器人？已导入资料会保留。')) action(async () => accept(await api('/api/knowledge-bot', 'DELETE', { expectedRevision: config.revision }))); }}>断开连接</button>
+</div>
     </>}
     </>}
   </section>;

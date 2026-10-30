@@ -3,7 +3,6 @@ import { ArrowUpRight } from "lucide-react";
 import { api } from "./agent-runtime";
 import { requestPluginIntent } from "./plugin-navigation";
 import { requestSettingsTab } from "./extension-center";
-import { usePluginActive } from "./plugin-slots";
 import "./patient-attention.css";
 
 export function PatientAttention(props) {
@@ -13,7 +12,6 @@ export function PatientAttention(props) {
 }
 
 function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
-  const followupActive = usePluginActive("followup");
   const [data, setData] = useState(null);
   const [pages, setPages] = useState(1);
   const [refresh, setRefresh] = useState(0);
@@ -81,7 +79,6 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
 
   const critical = data?.items.filter(item => item.severity === "critical") || [];
   const routine = data?.items.filter(item => item.severity !== "critical") || [];
-  const routineCount = data ? data.total - data.criticalCount : 0;
   const row = item => <button
     type="button"
     className={`agenda-item${item.severity === "critical" ? " attention-critical" : ""}`}
@@ -97,13 +94,22 @@ function AttentionQueue({ patient, onNavigate, onOpenWorkspace, onView }) {
   </button>;
   const more = data?.hasMore && <button type="button" className="text-button" disabled={loading} onClick={() => setPages(value => value + 1)}>加载更多事项 · 已显示 {data.items.length} / {data.total}</button>;
 
-  return <section className="overview-card patient-attention" aria-label="待处理事项" aria-busy={loading}>
+  const items = [...critical, ...routine];
+  const empty = Boolean(data) && !loading && !error && !actionError && data.total === 0;
+  return <section className="patient-attention" aria-label="待处理事项" aria-busy={loading} hidden={empty || (!data && !error)}>
     {error && <p role="alert" className="form-error">待处理事项读取失败：{error}{data && <span>仍显示上次读取的内容，可能不是最新状态。</span>}<button type="button" className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>重试</button></p>}
     {actionError && <p role="alert" className="form-error">{actionError}，可重新打开。</p>}
-    {loading && <p role="status">{data ? "正在刷新…" : "正在读取患者事项…"}</p>}
-    {data?.criticalCount > 0 && <div className="attention-urgent"><h3>优先查看 · {data.criticalCount} 项</h3><div className="agenda-items">{critical.map(row)}</div>{data.criticalCount > critical.length && more}</div>}
-    {routineCount > 0 && <details className="attention-routine"><summary>后续事项 <span>{routineCount}</span><small>{followupActive ? "随访、检验与消息" : "检验与复诊"}</small></summary><div className="agenda-items">{routine.map(row)}</div>{more}</details>}
-    {!loading && !error && data?.total === 0 && <span className="overview-meta">暂无后续事项</span>}
-    {data && <div className="attention-refresh"><span className="overview-meta">更新于 <time dateTime={new Date(data.receivedAt).toISOString()}>{new Date(data.receivedAt).toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})}</time></span><button type="button" className="text-button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新</button></div>}
+    {data?.total > 0 && <>
+      <header className="attention-head">
+        <h3>待处理<span>{data.total}</span>{data.criticalCount > 0 && <em className="om-chip is-danger" style={{ marginLeft: 10 }}>{data.criticalCount} 项需优先查看</em>}</h3>
+        <span className="attention-refresh">
+          {loading ? <span role="status">正在刷新…</span> : <span>更新于 <time dateTime={new Date(data.receivedAt).toISOString()}>{new Date(data.receivedAt).toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"})}</time></span>}
+          <button type="button" className="om-link" disabled={loading} onClick={() => setRefresh(value => value + 1)}>刷新</button>
+        </span>
+      </header>
+      <div className="agenda-items">{items.map(row)}</div>
+      {more}
+    </>}
+    {!data && loading && <p role="status" className="om-meta">正在读取患者事项…</p>}
   </section>;
 }

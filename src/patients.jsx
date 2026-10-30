@@ -5,9 +5,15 @@ import { messageChannelLabel } from "../shared/message-provenance.mjs";
 import { PatientDashboard } from "./patient-dashboard";
 import { loadPatientCore, loadPatientOptional } from "./patient-detail-data";
 import { resolveCommunicationTab } from "./patient-tabs";
-import { patientAgeLabel, patientIdentityLabel, patientOptionLabel } from "./patient-labels";
+import { patientAgeLabel, patientOptionLabel } from "./patient-labels";
+import { allergyState } from "../shared/patient-list-brief.mjs";
+import { FLAG_ARROW } from "../shared/lab-flags.mjs";
+import { localCalendarDate } from "../shared/calendar-date.mjs";
+import { relativeDay } from "./patient-overview";
+import "./patient-list.css";
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Bell,
   FolderOpen,
   Inbox,
@@ -28,6 +34,15 @@ import { LabImportModal } from "./lab-import";
 import { AppointmentsPanel, NewLabsNotice } from "./appointments";
 import { SlotItem, findPatientTab, mergePatientTabs, patientTabLabel, useActiveSlot, usePluginActive, useSlot } from "./plugin-slots";
 
+// Rough triage order for the list: today's visit, abnormal results, overdue
+// follow-ups, unread messages. Only used when the doctor picks that sort.
+function attentionScore(p, today) {
+  const brief = p.brief || {};
+  return (brief.nextAppointment === today ? 8 : 0) +
+    Math.min(brief.abnormalLabCount || 0, 3) * 2 +
+    (p.counts?.dueFollowups ? 3 : 0) +
+    (p.counts?.unprocessedMessages ? 2 : 0);
+}
 const RECORD_TABS = [["overview", "概览"], ["diagnoses", "诊断与病史"], ["medications", "治疗与预后"], ["labs", "检验结果"], ["visits", "就诊经过"], ["library", "资料库"]];
 const isRecordTab = tab => RECORD_TABS.some(([id]) => id === tab) || tab === "clinical";
 
@@ -190,13 +205,22 @@ export function PatientsView({
     .filter((p) => !group || p.groups?.includes(group))
     .filter((p) => [p.name, p.patientNumber, p.id, p.phone, ...(p.tags || []), p.diagnosisSummary]
       .some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase())));
+  const today = localCalendarDate();
   const sortedFiltered = [...filtered].sort((a, b) => {
     if (sortBy === "name") return String(a.name).localeCompare(String(b.name), "zh-Hans-CN");
     if (sortBy === "visit") return String(b.lastVisitAt || "").localeCompare(String(a.lastVisitAt || ""));
     if (sortBy === "followup")
       return (b.counts.dueFollowups || 0) - (a.counts.dueFollowups || 0);
+    if (sortBy === "attention")
+      return attentionScore(b, today) - attentionScore(a, today) || String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
     return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
   });
+  const activePatients = patients.filter((p) => !p.archived);
+  const listSummary = [
+    `${activePatients.length} 位在管`,
+    activePatients.filter((p) => p.brief?.abnormalLabCount > 0).length && `${activePatients.filter((p) => p.brief?.abnormalLabCount > 0).length} 位有异常检验`,
+    activePatients.filter((p) => p.brief?.nextAppointment === today).length && `${activePatients.filter((p) => p.brief?.nextAppointment === today).length} 位今日复诊`,
+  ].filter(Boolean).join(" · ");
   const pageCount = Math.max(1, Math.ceil(filtered.length / 24));
   const visiblePage = Math.min(patientPage, pageCount - 1);
   const refresh = async () => {
@@ -212,7 +236,7 @@ export function PatientsView({
         ? optional(api("/api/inbox"), { messages: [] })
         : Promise.resolve({ messages: [] });
       const [list, todo, box, pending] = await Promise.all([
-        api("/api/patients?summary=1&archived=1"),
+        api("/api/patients?summary=1&archived=1&brief=1"),
         todoRequest,
         inboxRequest,
         api("/api/pending-actions?status=pending").catch(() => ({ actions: [] })),
@@ -425,58 +449,54 @@ export function PatientsView({
     }
   };
   const patientCards = (
-    <div className="patient-grid">
-      {sortedFiltered.slice(visiblePage * 24, (visiblePage + 1) * 24).map((p) => (
+    <div className="patient-grid patient-table" role="list">
+      {filtered.length > 0 && <div className="patient-table-head" aria-hidden="true"><span>患者</span><span>主要诊断</span><span>需关注</span><span>在用药物</span><span>复诊 / 就诊</span></div>}
+      {sortedFiltered.slice(visiblePage * 24, (visiblePage + 1) * 24).map((p) => {
+        const brief = p.brief || {};
+        const next = brief.nextAppointment || "";
+        const nextRel = next ? relativeDay(next, today) : "";
+        const flags = [
+          ...(brief.abnormalLabs || []).slice(0, 2).map((lab) => ({ key: `lab-${lab.item}`, tone: lab.flag === "low" ? "is-info" : "is-danger", text: `${lab.item} ${lab.value}${lab.unit ? ` ${lab.unit}` : ""} ${FLAG_ARROW[lab.flag]}` })),
+          ...((brief.abnormalLabCount || 0) > 2 ? [{ key: "lab-more", tone: "is-danger", text: `另 ${brief.abnormalLabCount - 2} 项异常` }] : []),
+          ...(followupActive && p.counts.dueFollowups > 0 ? [{ key: "due", tone: "is-caution", text: `${p.counts.dueFollowups} 项随访到期` }] : []),
+          ...(followupActive && p.counts.unprocessedMessages > 0 ? [{ key: "msg", tone: "is-caution", text: `${p.counts.unprocessedMessages} 条新消息` }] : []),
+          ...(followupActive && p.counts.pendingReminders > 0 ? [{ key: "rem", tone: "", text: `${p.counts.pendingReminders} 条提醒` }] : []),
+        ];
+        return (
         <button
           className="patient-card"
+          role="listitem"
           disabled={patientLoading}
           key={p.id}
           onClick={() => {
             openPatient(p.id).catch((err) => setError(err.message));
           }}
         >
-          <span className="patient-avatar">
-            <Stethoscope size={17} />
-          </span>
           <span className="patient-line">
             <b>{p.name}</b>
             <small>
-              {[GENDER[p.gender], patientIdentityLabel(p)]
-                .filter(Boolean)
-                .join(" · ") || "未补充基础信息"}
+              {[GENDER[p.gender], patientAgeLabel(p).split(" · ")[0], p.patientNumber].filter(Boolean).join(" · ") || "未补充基础信息"}
             </small>
-            {(p.diagnosisSummary || p.lastVisitAt) && (
-              <small className="patient-card-brief">
-                {p.diagnosisSummary && <span>诊断：{p.diagnosisSummary}</span>}
-                {p.lastVisitAt && (
-                  <span>末次就诊 {p.lastVisitAt}</span>
-                )}
-              </small>
-            )}
+            {brief.allergyStatus === "recorded" && <em className="om-chip is-danger patient-row-allergy">过敏：{brief.allergies.join("、")}</em>}
+            {Boolean(p.archived) && <em className="om-chip">已归档</em>}
           </span>
-          <span className="patient-counts">
-            {followupActive && p.counts.dueFollowups > 0 && (
-              <em className="pill warn">{p.counts.dueFollowups} 项随访到期</em>
-            )}
-            {followupActive && p.counts.unprocessedMessages > 0 && (
-              <em className="pill warn">
-                {p.counts.unprocessedMessages} 条新消息
-              </em>
-            )}
-            {followupActive && p.counts.pendingReminders > 0 && (
-              <em className="pill">{p.counts.pendingReminders} 条提醒</em>
-            )}
-            {Boolean(p.archived) && <em className="pill">已归档</em>}
+          <span className="patient-col patient-dx">
+            {p.diagnosisSummary || <span className="om-meta">未登记诊断</span>}
+            {(p.groups || []).length > 0 && <small>{p.groups.slice(0, 2).join(" · ")}</small>}
           </span>
-          {(p.tags || []).length > 0 && (
-            <span className="patient-tags">
-              {p.tags.slice(0, 4).map((t) => (
-                <em key={t}>{t}</em>
-              ))}
-            </span>
-          )}
+          <span className="patient-col patient-flags">
+            {flags.length ? flags.map((flag) => <em key={flag.key} className={`om-chip ${flag.tone}`}>{flag.text}</em>) : <span className="om-meta">—</span>}
+          </span>
+          <span className="patient-col patient-meds">
+            {brief.activeMedications ? <><b>{brief.activeMedications} 种</b><small>{brief.activeMedicationNames.slice(0, 2).join("、")}{brief.activeMedications > 2 ? " 等" : ""}</small></> : <span className="om-meta">—</span>}
+          </span>
+          <span className="patient-col patient-dates">
+            {next ? <b className={nextRel === "今天" ? "is-today" : ""}>复诊 {next.slice(5)}{nextRel && <small> · {nextRel}</small>}</b> : brief.reviewDate ? <b>复评 {brief.reviewDate.slice(5)}</b> : <span className="om-meta">未约复诊</span>}
+            <small>{p.lastVisitAt ? `末次就诊 ${p.lastVisitAt}` : "无就诊记录"}</small>
+          </span>
         </button>
-      ))}
+        );
+      })}
       {!filtered.length && !listLoading && !listFailed && (
         <div className="patient-empty-state">
           <Stethoscope size={28} />
@@ -500,13 +520,15 @@ export function PatientsView({
     activeArea === "communication" ? communicationTabs : recordTabs;
   return (
     <section ref={panelRoot} onScroll={rememberListScroll} id="main" className={`patients-view ${detail ? "has-patient" : ""}`} aria-label="患者档案">
-      {!detail && <div className="patients-toolbar">
-        <div><h2>患者管理</h2><span className="muted">{patients.filter(p => !p.archived).length} 位在管患者</span></div>
+      {!detail && <div className="patients-toolbar om-page-head">
+        <div><h2>患者</h2><span className="om-page-meta">{listSummary}</span></div>
         <div className="toolbar-actions">
-          <button className="secondary" onClick={() => setModal("import-labs")}>导入检验结果</button>
-          <button className="secondary" onClick={() => setModal("group-suggest")}>生成分组建议</button>
+          <details className="patient-more patients-batch"><summary>批量与导入</summary><div>
+            <button className="text-button" onClick={(e) => { e.currentTarget.closest("details").open = false; setModal("import-patients"); }}>导入患者表格</button>
+            <button className="text-button" onClick={(e) => { e.currentTarget.closest("details").open = false; setModal("import-labs"); }}>导入检验结果</button>
+            <button className="text-button" onClick={(e) => { e.currentTarget.closest("details").open = false; setModal("group-suggest"); }}>生成分组建议</button>
+          </div></details>
           <button className="secondary" onClick={() => setModal("manual-patient")}>手动建档</button>
-          <button className="secondary" onClick={() => setModal("import-patients")}>导入患者表格</button>
           <button className="primary" onClick={() => setModal("new-patient")}><UserPlus size={15}/> 上传资料建档</button>
         </div>
       </div>}
@@ -597,13 +619,6 @@ export function PatientsView({
             </details>
           )}
           <div className="patients-filter">
-            <select aria-label="患者档案状态" title="切换显示在管患者或已归档患者" value={archiveFilter} onChange={(e) => { setArchiveFilter(e.target.value); setPatientPage(0); }}><option value="active">在管患者</option><option value="archived">已归档患者</option></select>
-            <select aria-label="排序方式" title="患者列表排序" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPatientPage(0); }}>
-              <option value="updated">最近更新</option>
-              <option value="visit">最近就诊</option>
-              {followupActive && <option value="followup">随访到期优先</option>}
-              <option value="name">按姓名</option>
-            </select>
             <label className="search">
               <Search size={14} />
               <input
@@ -613,6 +628,14 @@ export function PatientsView({
                 onChange={(e) => { setQuery(e.target.value); setPatientPage(0); }}
               />
             </label>
+            <select aria-label="患者档案状态" title="切换显示在管患者或已归档患者" value={archiveFilter} onChange={(e) => { setArchiveFilter(e.target.value); setPatientPage(0); }}><option value="active">在管患者</option><option value="archived">已归档患者</option></select>
+            <select aria-label="排序方式" title="患者列表排序" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPatientPage(0); }}>
+              <option value="updated">最近更新</option>
+              <option value="attention">需关注优先</option>
+              <option value="visit">最近就诊</option>
+              {followupActive && <option value="followup">随访到期优先</option>}
+              <option value="name">按姓名</option>
+            </select>
             <button
               className={`chip ${group === "" ? "active" : ""}`}
               onClick={() => { setGroup(""); setPatientPage(0); }}
@@ -641,35 +664,23 @@ export function PatientsView({
         <>
           <div className="patient-mobile-identity" aria-label="当前患者身份"><b>{detail.name}</b><span>{detail.patientNumber || '未编号'}{detail.archived ? ' · 已归档' : ''}</span></div>
           <div className="detail-head">
-            <div className="patient-line"><button className="text-button patient-back" onClick={()=>{patientGeneration.current++;setPatientLoading(false);onLocationChange?.();setDetail(null);setSession(null);}}>← 返回列表</button>
-              <b>
-                {detail.name}
-                {detail.archived && "（已归档）"}
-              </b>
+            <div className="patient-line"><button className="text-button patient-back" onClick={()=>{patientGeneration.current++;setPatientLoading(false);onLocationChange?.();setDetail(null);setSession(null);}}>← 患者列表</button>
+              <div className="patient-title-row">
+                <b>{detail.name}</b>
+                {detail.archived && <span className="om-chip">已归档</span>}
+                {(() => { const allergy = allergyState(detail); return <span className={`om-chip ${allergy.status === "recorded" ? "is-danger" : allergy.status === "unknown" ? "is-caution" : "is-ok"} patient-allergy`} title={allergy.status === "unknown" ? "过敏史尚未核对，用药前请确认" : undefined}>{allergy.status === "recorded" && <AlertTriangle size={13} aria-hidden="true" />}{allergy.label}</span>; })()}
+              </div>
               <small>
                 {[
-                  detail.patientNumber || "未编号",
                   GENDER[detail.gender],
                   patientAgeLabel(detail),
+                  detail.patientNumber ? `编号 ${detail.patientNumber}` : "",
                   detail.phone,
                   ...(detail.groups || []),
                 ]
                   .filter(Boolean)
                   .join(" · ") || "未补充基础信息"}
               </small>
-              {(detail.allergies || []).length > 0 && (
-                <em className="pill warn">
-                  过敏：
-                  {detail.allergies
-                    .map((a) =>
-                      typeof a === "string"
-                        ? a
-                        : [a.substance, a.reaction].filter(Boolean).join("（") +
-                          (a.reaction ? "）" : ""),
-                    )
-                    .join("、")}
-                </em>
-              )}
             </div>
             <div className="toolbar-actions">
               <button

@@ -2,8 +2,10 @@
 .treatment-workspace button { transition:background .18s ease,color .18s ease; }
 .treatment-workspace button:focus-visible,.treatment-workspace input:focus-visible,.treatment-workspace select:focus-visible,.treatment-workspace textarea:focus-visible { outline:2px solid var(--treatment-green); outline-offset:3px; }
 .treatment-workspace .text-button { color:var(--treatment-green); display:inline-flex; align-items:center; gap:5px; font-size:13px; white-space:nowrap; }
-.treatment-allergy { display:flex; gap:12px; align-items:center; padding:15px 19px; background:#eef2ed; border:1px solid #dce5dc; border-radius:8px; margin-bottom:16px; }
-.treatment-allergy.has-allergy { background:#fbf2e6; border-color:#edddc6; color:#77552d; }
+.treatment-allergy { display:flex; gap:12px; align-items:center; padding:10px 16px; background:#eef2ed; border:1px solid #dce5dc; border-radius:8px; margin-bottom:16px; }
+.treatment-allergy.has-allergy { background:var(--high-soft); border-color:var(--high-line); color:var(--high); }
+.treatment-allergy>div b, .treatment-allergy>div span { font-size:var(--meta-size, 14px); }
+.treatment-allergy.has-allergy span { font-weight:600; }
 .treatment-allergy>svg { flex-shrink:0; }
 .treatment-allergy>div { flex:1; display:flex; align-items:baseline; gap:16px; font-size:13px; min-width:0; }
 .treatment-allergy span { overflow-wrap:anywhere; }
@@ -94,3 +96,10 @@
 @media (prefers-reduced-motion:reduce) { .treatment-workspace button { transition:none; } }
 
 .treatment-allergy:not(.has-allergy) { padding:8px 0 14px; background:transparent; border:0; border-bottom:1px solid var(--border); border-radius:0; color:var(--muted); }
+/* Clarity: one-line empty prompts, compact medication rows. */
+.treatment-empty.compact.inline { display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px; padding:6px 0 2px; }
+.treatment-empty.compact.inline > svg { margin:0; }
+.treatment-empty.compact.inline p { margin:0; max-width:none; flex:1 1 240px; color:var(--muted); }
+.treatment-med-dose { margin:4px 0 0; color:var(--ink); font-size:var(--meta-size, 14px); font-variant-numeric:tabular-nums; }
+.treatment-medications .treatment-provenance { margin-top:6px; }
+.treatment-allergy.is-unknown { background:var(--caution-soft); border-color:var(--caution-line); color:var(--caution); }
