@@ -7,7 +7,7 @@
 - 文档：PDF（含扫描件）、Word DOCX、Excel XLSX、TXT、Markdown、CSV、TSV、JSON。
 - 图片：PNG、JPG、JPEG、WebP，使用本机文字识别。
 - 音频：MP3、M4A、WAV；视频：MP4、MOV；字幕：SRT、VTT。
-- 文档/图片每份 20 MB，音视频每份 250 MB、最长 2 小时；PDF 最多 300 页。全文最多 48 万字符，更大资料按章节拆分。
+- 文档/图片每份 20 MB，音视频每份 250 MB、最长 2 小时；PDF 最多 300 页。全文最多 200 万字符，更大资料请按章节拆分后分别上传。
 
 本机音视频处理目前面向 macOS，使用 AVFoundation 分段/抽帧，PDFKit 和 Vision 读取扫描件。其他平台没有原生媒体处理器时会明确提示，保留资料等待处理，不虚构转写。
 

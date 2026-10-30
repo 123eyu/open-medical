@@ -160,9 +160,9 @@ const catalog = [
     "cases",
     "病例库",
     "整理已保存的病例，查找相似病例。",
-    "医疗工具",
+    "临床",
     BookOpen,
-    "本地病例",
+    "本地",
   ],
 ];
 // The fixed catalog keeps its order while plugin cards slot in at the same
@@ -172,8 +172,6 @@ const CATALOG_ORDER = {
   terminal: 20,
   documents: 30,
   literature: 40,
-  care: 50,
-  followups: 55,
   "clinical-ref": 70,
   cases: 80,
   "data-analysis": 90,
@@ -187,13 +185,10 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
     ? config?.modelConfigured ? { action: "打开" } : { label: "需要配置模型", action: "配置模型", model: true }
     : { action: "打开" };
   const medical = medicalEnabled(config),
-    categories = [
-      "全部",
-      "内容处理",
-      "信息查找",
-      "项目工具",
-      ...(medical ? ["医疗工具", "科研工具"] : []),
-    ];
+    // Medical mode shows only the doctor's standalone tools in two groups, so
+    // the category tabs would just repeat the headings.
+    categories = medical ? [] : ["全部", "内容处理", "信息查找", "项目工具"],
+    groupOrder = medical ? MEDICAL_GROUPS : GROUP_ORDER;
   const matches = (id, name, desc, category, keywords = "") =>
     (filter === "全部" || category === filter) &&
     `${name} ${desc} ${keywords}`.toLowerCase().includes(query.trim().toLowerCase());
@@ -201,8 +196,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
     ...catalog
       .filter(
         (x) =>
-          (medical ||
-            x[0] !== "cases") &&
+          (medical ? MEDICAL_GROUPS.includes(x[3]) : x[0] !== "cases") &&
           matches(
             x[0],
             x[1],
@@ -216,11 +210,12 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       .filter((tool) => {
         const meta = tool.meta || {};
         if (!medical && meta.medical) return false;
+        if (medical && !MEDICAL_GROUPS.includes(meta.category)) return false;
         return matches(tool.id, meta.name || tool.label, meta.description || "", meta.category, meta.keywords);
       })
       .map((tool) => ({ kind: "plugin", id: `plugin:${tool.pluginId}:${tool.id}`, order: tool.order ?? 100, tool })),
   ].sort((left, right) => left.order - right.order);
-  const groupNames = [...new Set([...GROUP_ORDER, ...rows.map(entryCategory)])];
+  const groupNames = [...new Set([...groupOrder, ...rows.map(entryCategory)])];
   const groups = (filter === "全部" ? groupNames : [filter])
     .map(category => ({ category, rows: rows.filter(entry => entryCategory(entry) === category) }))
     .filter(group => group.rows.length);
@@ -242,7 +237,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
           <p>{desc}</p>
           <footer>
             {(state.label || status) && <small>{state.label || status}</small>}
-            <span className="tool-card-action">{state.action} →</span>
+            {state.action !== "打开" && <span className="tool-card-action">{state.action} →</span>}
           </footer>
         </a>
       </article>
@@ -253,13 +248,13 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
       <header className="directory-heading">
         <div>
           <h1>资料与工具</h1>
-          <p>{medical ? "临床速查、文献、病例与科研统计；也可以直接在任务里让助手调用这些工具。" : "文档、检索与项目工具；也可以直接在任务里让助手调用。"}</p>
+          <p>{medical ? "不针对某位患者、需要时随手打开的查询与科研工具；也可以直接在任务里让助手调用。" : "文档、检索与项目工具；也可以直接在任务里让助手调用。"}</p>
         </div>
         {medical && <div className="om-page-actions"><button className="om-link" onClick={() => onNavigate("examples")}>查看示例资料与任务 →</button></div>}
       </header>
       <div className="directory-toolbar">
         <div className="directory-filters">
-          {categories.map((c) => (
+          {categories.length > 0 && categories.map((c) => (
             <button
               key={c}
               aria-pressed={filter === c}
@@ -273,7 +268,7 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
           <Search size={17} />
           <input
             aria-label="搜索工具"
-            placeholder="搜索功能，如文献、量表、统计"
+            placeholder={medical ? "搜索，如量表、文献、统计" : "搜索功能，如文档、检索"}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -289,12 +284,14 @@ export function ToolDirectory({ config, onNavigate, onProjects, onModelSettings 
     </main>
   );
 }
-// Doctors look for clinical tools first; project tools (browser, terminal)
-// are for technical tasks and come last.
-const GROUP_ORDER = ["医疗工具", "科研工具", "信息查找", "内容处理", "项目工具"];
+// Medical mode: only tools a doctor opens on their own, outside any one
+// patient. Follow-ups live in 今日待办; project and document tools stay in the
+// general (non-medical) mode.
+const MEDICAL_GROUPS = ["临床", "科研"];
+const GROUP_ORDER = ["信息查找", "内容处理", "项目工具"];
 const GROUP_HINT = {
-  医疗工具: "量表、检验、编码与病例",
-  科研工具: "试验初筛与统计分析",
+  临床: "量表、检验、编码与病例",
+  科研: "文献、试验与统计",
   信息查找: "文献与证据",
   内容处理: "文档与表格",
   项目工具: "需先连接项目文件夹",

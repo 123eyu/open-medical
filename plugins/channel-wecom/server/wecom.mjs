@@ -147,7 +147,7 @@ export class WeComConnector {
     this.db.prepare('INSERT INTO wecom_bindings VALUES (?,?,?,?,?,?,?)').run(id, this.corpId, member, external, input.patientId, input.relationship, now());
     return this.bindings(input.patientId).find(b => b.id === id);
   }
-  unbind(id) { this.db.prepare('DELETE FROM wecom_bindings WHERE id=? AND corp=?').run(identifier(id), this.corpId); return { removed: true }; }
+  unbind(id) { const { changes } = this.db.prepare('DELETE FROM wecom_bindings WHERE id=? AND corp=?').run(identifier(id), this.corpId); return { removed: changes > 0 }; }
   tasks(patientId) { this.patients.row(identifier(patientId)); return this.db.prepare('SELECT data FROM wecom_tasks WHERE corp=? AND patient_id=? ORDER BY rowid DESC').all(this.corpId, patientId).map(r => JSON.parse(r.data)); }
   task(id) {
     const row = this.db.prepare('SELECT data FROM wecom_tasks WHERE id=? AND corp=?').get(identifier(id), this.corpId);

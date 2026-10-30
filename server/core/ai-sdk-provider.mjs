@@ -3,6 +3,9 @@ import { idleSignal, requestProvider } from "./provider-request.mjs";
 import { providerConfigured } from "./provider-status.mjs";
 import { AppError, check } from "../errors.mjs";
 
+export const MAX_STREAM_TOOL_CALLS = 128;
+export const MAX_TOOL_ARGUMENT_CHARS = 200_000;
+
 // AI SDK 只负责协议适配：直接调用各厂商 LanguageModel 的 doStream()，
 // 不经过 streamText，因此没有 SDK 层的重试、工具参数校验或多步循环；
 // 工具执行、审批、截断续写仍由 agent-runtime 负责。
@@ -296,7 +299,21 @@ export class AiSdkProvider {
 
   async collect(stream, { kind, idle, onDelta }) {
     const responses = kind === "openai-responses";
-    const maxCalls = responses ? 8 : 12;
+    // Batches above the runtime's per-round budget are rejected by the runtime
+    // as tool results, so the model can split them. Only absurd counts fail here.
+    const maxCalls = MAX_STREAM_TOOL_CALLS;
+    // Oversized arguments are not kept: the call is replaced by "{}" and marked,
+    // and the runtime answers it with a tool error instead of ending the run.
+    const appendArgs = (call, text) => {
+      if (call.argumentsTooLarge) call.argumentsTooLarge += text.length;
+      else {
+        call.args += text;
+        if (call.args.length > MAX_TOOL_ARGUMENT_CHARS) {
+          call.argumentsTooLarge = call.args.length;
+          call.args = "{}";
+        }
+      }
+    };
     let content = "",
       reasoning = "",
       finish = null;
@@ -368,16 +385,16 @@ export class AiSdkProvider {
             break;
           case "tool-input-delta": {
             const call = calls.get(part.id);
-            if (call) call.args += part.delta || "";
-            check(!call || call.args.length < 30000, "TOOL_LIMIT", "工具参数过大", 502);
+            if (call) appendArgs(call, part.delta || "");
             break;
           }
           case "tool-call": {
             const call = calls.get(part.toolCallId) || { id: part.toolCallId };
             call.name = part.toolName;
-            call.args = String(part.input ?? "");
+            call.args = "";
+            delete call.argumentsTooLarge;
+            appendArgs(call, String(part.input ?? ""));
             calls.set(call.id, call);
-            check(call.args.length < 30000, "TOOL_LIMIT", "工具参数过大", 502);
             check(calls.size <= maxCalls, "TOOL_LIMIT", "工具调用数量或索引无效", 502);
             if (responses)
               items.push({
@@ -426,6 +443,7 @@ export class AiSdkProvider {
       id: call.id,
       type: "function",
       function: { name: call.name, arguments: call.args },
+      ...(call.argumentsTooLarge ? { argumentsTooLarge: call.argumentsTooLarge } : {}),
     }));
     check(new Set(toolCalls.map((c) => c.id)).size === toolCalls.length, "PROVIDER_PROTOCOL", "模型工具标识重复", 502);
     // 截断流里的工具参数可能是半截 JSON：无法解析的调用丢弃，完整的照常执行。
@@ -475,10 +493,15 @@ export class AiSdkProvider {
     if (fetchError) return fetchError;
     const responses = this.provider === "openai-responses";
     const cause = error instanceof StreamFailure ? error.cause : error;
-    if (!(error instanceof StreamFailure) && Number.isInteger(cause?.statusCode))
-      return responses
+    if (!(error instanceof StreamFailure) && Number.isInteger(cause?.statusCode)) {
+      const mapped = responses
         ? new AppError("PROVIDER_RESPONSE", `Responses 服务返回无效响应（${cause.statusCode}）`, 502)
         : new AppError("PROVIDER_ERROR", `模型服务返回 ${cause.statusCode}，请检查服务配置或稍后重试`, 502);
+      // Auth, quota and bad-request errors will not fix themselves on retry.
+      if (cause.statusCode >= 400 && cause.statusCode < 500 && ![408, 409, 429].includes(cause.statusCode))
+        mapped.retryable = false;
+      return mapped;
+    }
     // Responses 的一切非终态失败都按“执行未完成”处理。
     if (responses) return new AppError("PROVIDER_INCOMPLETE", "模型响应失败或被中止，执行未完成", 502);
     const name = String(cause?.name || "");

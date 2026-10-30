@@ -1,7 +1,7 @@
 import { definePlugin } from "../../server/plugin-host/define.mjs";
 import { createWecomService } from "./service.mjs";
 import { createWecomApi, WECOM_LEGACY_API_PATHS } from "./api.mjs";
-import { registerWecomTools } from "./tools.mjs";
+import { registerWecomTools, wecomContactConfigured } from "./tools.mjs";
 
 export default definePlugin({
   id: "channel-wecom",
@@ -23,6 +23,7 @@ export default definePlugin({
   migrations: "./migrations",
   tablePrefix: "wecom_",
   prompt: "./prompt.md",
+  promptWhen: wecomContactConfigured,
   legacyApiPaths: WECOM_LEGACY_API_PATHS,
   setup(ctx) {
     const host = ctx.services.channelWecomHost || {};

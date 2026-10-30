@@ -1,8 +1,19 @@
-import { check } from "../errors.mjs";
+import { AppError, check } from "../errors.mjs";
 import { contextBudget, assertContextBudget, calibrateInput, estimateTokens } from "./context-budget.mjs";
 import { normalizeDelivery } from "./delivery.mjs";
 import { RunProgress, OBSERVATIONS_MESSAGE, TASK_INPUT_MESSAGE } from "./run-progress.mjs";
 import { checkToolAvailability } from "./tool-registry.mjs";
+import { setTimeout as sleep } from "node:timers/promises";
+
+// Transient provider failures that are retried within the same round.
+const RETRYABLE_ROUND_ERRORS = new Set([
+  "INCOMPLETE_STREAM",
+  "EMPTY_OUTPUT",
+  "PROVIDER_INCOMPLETE",
+  "PROVIDER_ERROR",
+  "PROVIDER_NETWORK",
+]);
+const ROUND_RETRY_DELAYS_MS = [1000, 4000];
 
 // Provider + authorized tools + context in, events and complete context out.
 // No medical policy, persistence implementation or transport is imported here.
@@ -24,7 +35,8 @@ export class AgentRuntime {
   }
   // 批次开头连续的无副作用调用提前并发启动；检查点、领域钩子、记录与结果顺序
   // 仍由逐个处理的主循环负责。遇到第一个非 parallel 调用即停止，避免读到其后写入前的旧状态。
-  #prefetch(calls, { registry, permissions, context, budgetLeft }) {
+  // 预取同样先过可用性检查和领域/扩展钩子（beforeTool），钩子拦截时调用不会执行。
+  #prefetch(calls, { registry, permissions, context, budgetLeft, domain, roundContext, signal }) {
     const leading = [];
     for (const call of calls.slice(0, Math.max(0, budgetLeft))) {
       if (registry.get?.(call.function.name)?.parallel !== true) break;
@@ -33,14 +45,23 @@ export class AgentRuntime {
     const started = new Map();
     if (leading.length < 2) return started;
     for (const call of leading) {
+      if (call.argumentsTooLarge) continue;
       let args;
       try {
         args = JSON.parse(call.function.arguments);
       } catch {
         continue;
       }
-      const pending = Promise.resolve().then(() =>
-        registry.execute(call.function.name, args, context, permissions));
+      const pending = Promise.resolve().then(async () => {
+        checkToolAvailability(call.function.name, roundContext);
+        await domain?.beforeTool?.({
+          name: call.function.name,
+          args: structuredClone(args),
+          signal,
+          context: roundContext,
+        });
+        return registry.execute(call.function.name, args, context, permissions);
+      });
       pending.catch(() => {});
       started.set(call.id, pending);
     }
@@ -102,6 +123,9 @@ export class AgentRuntime {
         `运行时重新规划阶段：${pausedTools.join(", ")} 仅在本轮暂缓执行，下一轮自动恢复。请利用已经实际读取的证据和可读取原文的归档推进剩余工作，或规划下一步。这不是任务完成证明；仍需遵守原有审批和交付要求。` });
     };
     let text = "";
+    // The final answer is the last model turn's text (plus its output-limit
+    // continuations). Earlier turns are progress notes returned separately.
+    let answerStart = 0, continuation = false;
     // 单轮输出被长度截断时的自动续写次数：超过后交付部分内容并提示。
     let truncatedRounds = 0;
     let calibration = 1;
@@ -209,6 +233,15 @@ export class AgentRuntime {
       // still passes beforeComplete, late-input handling and delivery checks.
       const preparedResponse = await domain?.preparedResponse?.({signal,context});
       emit("status.update", { status: preparedResponse ? "finalizing" : "model_running", round: round + 1 });
+      if (!continuation) {
+        if (text && !text.endsWith("\n")) {
+          // Keep turns apart in the live stream and the progress notes.
+          text += "\n\n";
+          emit("message.delta", { text: "\n\n" });
+        }
+        answerStart = text.length;
+      }
+      continuation = false;
       let streamed = "";
       const delta = (chunk) => {
         signal.throwIfAborted();
@@ -225,21 +258,30 @@ export class AgentRuntime {
       });
       const modelStarted = Date.now();
       let result;
-      try { result = preparedResponse || await this.provider.complete(
-        messages,
-        tools,
-        {
-          model,
-          thinking,
-          budget,
-          signal,
-          onDelta: delta,
-          onStatus: (status) => emit("status.update", status),
-        },
-      ); } catch (error) {
-        await onTrace({ type: "model.error", round: round + 1, durationMs: Date.now() - modelStarted,
-          code: error.code || "PROVIDER_ERROR", error: error.code ? error.message : "模型请求失败或中断" });
-        throw error;
+      for (let attempt = 0; ; attempt++) {
+        try { result = preparedResponse || await this.provider.complete(
+          messages,
+          tools,
+          {
+            model,
+            thinking,
+            budget,
+            signal,
+            onDelta: delta,
+            onStatus: (status) => emit("status.update", status),
+          },
+        ); break; } catch (error) {
+          await onTrace({ type: "model.error", round: round + 1, durationMs: Date.now() - modelStarted,
+            code: error.code || "PROVIDER_ERROR", error: error.code ? error.message : "模型请求失败或中断" });
+          // A stream that broke mid-way leaves no side effects (tools only run
+          // after a complete response), so the round can be asked again.
+          if (preparedResponse || signal.aborted || attempt >= ROUND_RETRY_DELAYS_MS.length ||
+              !RETRYABLE_ROUND_ERRORS.has(error.code) || error.retryable === false) throw error;
+          text = text.slice(0, text.length - streamed.length);
+          streamed = "";
+          emit("status.update", { status: "retrying", attempt: attempt + 1, reason: "stream", round: round + 1 });
+          await sleep(ROUND_RETRY_DELAYS_MS[attempt], undefined, { signal });
+        }
       }
       signal.throwIfAborted();
       check(
@@ -281,6 +323,7 @@ export class AgentRuntime {
           emit("message.delta", {
             text: "\n\n（单轮输出达到上限，自动继续生成……）\n\n",
           });
+          continuation = true;
           continue;
         }
         check(!emptyTruncation, "OUTPUT_LIMIT", "模型连续达到单轮输出上限，尚未生成可用结果；资料和已保存批次笔记仍在，可重试或调整模型输出设置", 502);
@@ -428,9 +471,14 @@ export class AgentRuntime {
           });
           continue;
         }
+        const answer = text.slice(answerStart);
+        const progressText = answer.trim() ? text.slice(0, answerStart).trim() : "";
         return {
           messages,
-          text,
+          // A last turn without text (e.g. it only saved a result) keeps the
+          // full text so nothing the model said is lost.
+          text: answer.trim() ? answer : text,
+          ...(progressText ? { progressText } : {}),
           rounds: round + 1,
           ...(delivery ? { delivery } : {}),
         };
@@ -483,6 +531,9 @@ export class AgentRuntime {
         permissions,
         context: { ...roundContext, signal },
         budgetLeft: this.maxTotalToolCalls - executedToolCalls,
+        domain,
+        roundContext,
+        signal,
       });
       for (const call of calls) {
         signal.throwIfAborted();
@@ -522,14 +573,23 @@ export class AgentRuntime {
         const toolStarted = Date.now();
         let output, toolEvent;
         try {
+          if (call.argumentsTooLarge)
+            throw new AppError(
+              "TOOL_ARGS_TOO_LARGE",
+              `工具参数过大（约 ${call.argumentsTooLarge} 字），本次未执行。请把内容拆成多次较小的调用（例如分段写入、先写骨架再逐节补充），不要一次提交整份长文。`,
+              413,
+            );
           const args = JSON.parse(call.function.arguments);
-          checkToolAvailability(call.function.name, roundContext);
-          await domain?.beforeTool?.({
-            name: call.function.name,
-            args: structuredClone(args),
-            signal,
-            context: roundContext,
-          });
+          // Prefetched calls already passed these gates inside #prefetch.
+          if (!prefetched.has(call.id)) {
+            checkToolAvailability(call.function.name, roundContext);
+            await domain?.beforeTool?.({
+              name: call.function.name,
+              args: structuredClone(args),
+              signal,
+              context: roundContext,
+            });
+          }
           output = await (prefetched.get(call.id) ??
             registry.execute(
               call.function.name,

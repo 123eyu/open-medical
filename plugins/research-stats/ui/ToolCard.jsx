@@ -10,8 +10,7 @@ export default function ResearchStatsToolCard({ onNavigate }) {
       <h2>科研统计</h2>
       <p>上传 CSV，进行描述统计、组间比较、样本量估算与脱敏导出。</p>
       <footer>
-        <small>本地计算</small>
-        <span className="tool-card-action">打开 →</span>
+        <small>本地</small>
       </footer>
     </a>
   </article>;

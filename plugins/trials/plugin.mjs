@@ -88,12 +88,15 @@ function createTrialApi(ctx) {
       return REPLY(io.send, 200, candidates.cancelBatch(batch.id));
     }
     if (parts.length === 5 && parts[3] === "enrollments") {
-      if (req.method === "GET")
+      if (req.method === "GET") {
+        // Unknown trials are a 404, not an empty enrollment.
+        candidates.trials.get(identifier(parts[2]));
         return REPLY(
           io.send,
           200,
           candidates.enrollment(identifier(parts[2]), identifier(parts[4])),
         );
+      }
       if (req.method === "PUT")
         return REPLY(
           io.send,

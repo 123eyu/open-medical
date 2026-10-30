@@ -15,6 +15,13 @@ export function verifyKnowledgeAnswer({messages = [], text = '', evidence = {}})
     for (const call of message.tool_calls || []) calls.set(call.id, call.function?.name);
     if (message.role !== 'tool') continue;
     const name = calls.get(message.tool_call_id);
+    // A saved treatment review validates its own knowledge ranges and its
+    // rendered answer replaces the model text, so no second link check applies.
+    if (name === 'draft_treatment_review') {
+      let value; try { value = JSON.parse(message.content); } catch { value = null; }
+      if (value ? !value.error && Array.isArray(value.matches) && value.matches.length
+        : typeof message.content === 'string' && message.content.includes('"matches":[{') && !message.content.includes('"error"')) return;
+    }
     if (!['knowledge_read','guideline_read','knowledge_cite','guideline_cite'].includes(name)) continue;
     let value;try {value=JSON.parse(message.content);}catch{continue;}
     if (value?.error) continue;

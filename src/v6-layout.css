@@ -10,6 +10,16 @@
   --meta-size: 18px;
   --reading-size: 22px;
 }
+.v6-shell.xlarge-text {
+  --body-size: 23px;
+  --meta-size: 20px;
+  --reading-size: 25px;
+}
+/* Fixed pixel font sizes multiply by this, so every page follows the Aa
+   button. It matches the --body-size steps (16 → 20 → 23). */
+.agent-app { --text-scale: 1; }
+.agent-app.large-text { --text-scale: 1.25; }
+.agent-app.xlarge-text { --text-scale: 1.4375; }
 .v6-shell .topbar {
   height: 68px;
   flex-shrink: 0;
@@ -21,14 +31,14 @@
   background: #f1f5f3;
 }
 .v6-shell .app-navigation > .new-session {
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
   min-height: 44px;
   margin: 0 0 10px;
   flex-shrink: 0;
 }
 .v6-shell .business-nav-label {
   margin: 20px 12px 9px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   letter-spacing: 0.04em;
   color: #67766d;
 }
@@ -38,7 +48,7 @@
 .v6-shell .business-nav button {
   width: 100%;
   min-height: 45px;
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale, 1));
   padding: 10px 12px;
   gap: 12px;
 }
@@ -54,7 +64,7 @@
 }
 .v6-shell .advanced-nav > summary {
   display: list-item !important;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   padding: 14px 5px;
 }
 .v6-shell .advanced-nav .sessions {
@@ -75,7 +85,7 @@
   border: 0;
   background: none;
   color: var(--ink);
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .v6-shell .pinned-projects span {
   overflow: hidden;
@@ -99,7 +109,7 @@
   background: transparent;
   color: var(--muted);
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   min-height: 36px;
   border-radius: 5px;
 }
@@ -123,13 +133,13 @@
   gap: 10px;
 }
 .v6-shell .brand-caption {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .v6-shell .workbench-hub {
   padding-top: 30px;
 }
 .v6-shell .hub-intro h1 {
-  font-size: 30px;
+  font-size: calc(30px * var(--text-scale, 1));
   font-weight: 600;
   letter-spacing: -0.025em;
 }
@@ -144,7 +154,7 @@
   font-size: var(--body-size);
 }
 .v6-shell .hub-start-nav button {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   min-height: 40px;
 }
 .v6-shell .product-content > .shell {
@@ -168,11 +178,11 @@
   line-height: 1.8;
 }
 .v6-shell .conversation-head h1 {
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
   font-weight: 600;
 }
 .v6-shell .panel-tabs button {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .v6-shell.mode-chat .conversation > .message-list,
 .v6-shell.mode-chat .composer-wrap {
@@ -197,7 +207,7 @@
   margin-bottom: 22px;
 }
 .directory-heading h1 {
-  font-size: 30px;
+  font-size: calc(30px * var(--text-scale, 1));
   font-weight: 600;
   letter-spacing: -0.025em;
   margin: 0 0 10px;
@@ -229,7 +239,7 @@
   gap: 6px;
 }
 .directory-filters button {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   padding: 9px 13px;
   min-height: 40px;
   background: transparent;
@@ -256,7 +266,7 @@
   min-height: 42px;
   border: 0;
   background: none;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   max-width: 230px;
 }
 .directory-rows {
@@ -342,7 +352,7 @@
 .directory-tools .tool-card-link:hover { background: var(--surface); }
 .directory-tools .tool-card-link[aria-disabled="true"] { cursor: not-allowed; opacity: .7; }
 .directory-tools h2 {
-  font-size: 20px;
+  font-size: calc(20px * var(--text-scale, 1));
   font-weight: 600;
   margin: 18px 0 8px;
 }
@@ -367,7 +377,7 @@
   border-radius: 5px;
   padding: 9px 12px;
   min-height: 42px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .directory-empty {
   padding: 70px 20px;
@@ -375,7 +385,7 @@
   color: var(--muted);
 }
 .directory-empty h2 {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
   color: var(--ink);
 }
 .directory-empty p {
@@ -403,7 +413,7 @@
   box-shadow: none;
 }
 .v6-shell .hub-composer-caption {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   line-height: 1.5;
 }
 .v6-shell button {
@@ -455,7 +465,7 @@
     display: none;
   }
   .display-modes button {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
     padding: 7px;
   }
   .text-size-control {
@@ -468,7 +478,7 @@
     width: 238px;
   }
   .v6-shell .business-nav button {
-    font-size: 16px;
+    font-size: calc(16px * var(--text-scale, 1));
   }
   .work-directory {
     padding: 25px 18px;
@@ -478,7 +488,7 @@
     flex-wrap: wrap;
   }
   .directory-heading h1 {
-    font-size: 28px;
+    font-size: calc(28px * var(--text-scale, 1));
   }
   .directory-tools {
     grid-template-columns: 1fr;
@@ -505,7 +515,7 @@
     padding-inline: 18px;
   }
   .v6-shell .hub-intro h1 {
-    font-size: 26px;
+    font-size: calc(26px * var(--text-scale, 1));
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -556,9 +566,9 @@
 }
 .v6-shell .product-content > .shell > .inspector:not(.open) { display: none; }
 .v6-shell .inspector-head .icon-button { display: flex; }
-.v6-shell .inspector-head b { font-size: 16px; }
+.v6-shell .inspector-head b { font-size: calc(16px * var(--text-scale, 1)); }
 .v6-shell .inspector-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.inspector-more { padding: 14px 18px; border-top: 1px solid var(--border); font-size: 14px; }
+.inspector-more { padding: 14px 18px; border-top: 1px solid var(--border); font-size: calc(14px * var(--text-scale, 1)); }
 .inspector-more summary { cursor: pointer; color: #637563; }
 .inspector-more button { display: block; padding: 10px 0; }
 @media (max-width: 1180px) {
@@ -590,7 +600,7 @@
 .app-settings-layout > nav button { text-align: left; padding: 12px 16px; border: 0; background: transparent; }
 .app-settings-layout > nav button[aria-pressed="true"] { background: #e6eee3; color: var(--accent-deep, #28674f); }
 .app-settings-content { min-width: 0; }
-.app-settings-content h2 { margin: 0 0 16px; font-size: 22px; }
+.app-settings-content h2 { margin: 0 0 16px; font-size: calc(22px * var(--text-scale, 1)); }
 .app-settings-content p { line-height: 1.7; }
 .settings-project-picker { display: flex; flex-direction: column; gap: 8px; margin: 24px 0; max-width: 480px; }
 .settings-project-picker select { width: 100%; }
@@ -619,13 +629,50 @@ html.desktop-overlay-titlebar .topbar :is(button, a, input, select, textarea, la
   .topbar :is(button, a, input, select, textarea, label, [role="status"]) { -webkit-app-region: no-drag; }
 }
 .settings-login-item { display: flex; align-items: center; gap: 8px; margin: 0; }
-.settings-desktop-note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+.settings-desktop-note { color: var(--muted); font-size: calc(14px * var(--text-scale, 1)); margin: 8px 0 0; }
 
 /* Native preferences also render before any patient/task stylesheet loads. */
 .desktop-preferences .toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
 .desktop-preferences > details { margin-top: 28px; border-top: 1px solid var(--line, #dfe5de); padding-top: 20px; }
-.desktop-preferences > details > summary { cursor: pointer; font-size: 15px; margin-bottom: 16px; }
+.desktop-preferences > details > summary { cursor: pointer; font-size: calc(15px * var(--text-scale, 1)); margin-bottom: 16px; }
 .desktop-preferences button { appearance: none; border: 1px solid var(--line, #dfe5de); border-radius: 8px; padding: 10px 16px; background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; }
 .desktop-preferences button:hover { background: #eef3ec; }
 .desktop-preferences button:focus-visible { outline: 2px solid #28735b; outline-offset: 3px; }
 .desktop-preferences input[type="checkbox"] { accent-color: #28735b; width: 16px; height: 16px; }
+
+/* An opened result sits beside the conversation instead of replacing it, so
+   the doctor can read it and keep following the AI reply. */
+@media (min-width: 1181px) {
+  .v6-shell .product-content > .shell.with-reader {
+    grid-template-columns: minmax(360px, 1fr) minmax(440px, 1.15fr);
+  }
+}
+@media (max-width: 1180px) {
+  .v6-shell .inspector.open.result-reader { width: min(720px, 100vw); }
+}
+.v6-shell .inspector.result-reader { padding: 0; }
+.v6-shell .inspector.result-reader > .acceptance {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+.v6-shell .inspector.result-reader .case-reader-body { padding: 20px 24px; }
+.v6-shell .inspector.result-reader .accept-bar { position: sticky; top: 0; z-index: 1; }
+/* Result cards were laid out for a full-width page; in the side panel the
+   score reads better as one line under the case than as a floating column. */
+.v6-shell .inspector.result-reader .case-row { flex-wrap: wrap; align-items: flex-start; }
+.v6-shell .inspector.result-reader .case-row-body { flex: 1 1 0; min-width: 0; }
+.v6-shell .inspector.result-reader .case-row > .case-score,
+.v6-shell .inspector.result-reader .case-detail-head > .case-score {
+  flex: 1 0 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  min-width: 0;
+  max-width: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.v6-shell .inspector.result-reader .case-row > .case-score { padding-left: var(--case-rank-offset, 44px); }
+.v6-shell .inspector.result-reader .case-detail-head { flex-direction: column; gap: 4px; }

@@ -37,38 +37,11 @@ export default defineUiPlugin({
         component: () => import("./ChatConnectionSettings.jsx"),
       },
     ],
+    // The cross-patient follow-up and message lists open from 今日待办,
+    // not from 资料与工具: they are daily patient work, not standalone tools.
     legacyViews: {
       followups: () => import("./LegacyFollowupsView.jsx"),
       care: () => import("./LegacyCareInbox.jsx"),
     },
-    "tools.directory": [
-      {
-        id: "care",
-        label: "患者消息",
-        order: 50,
-        requiresConnection: true,
-        meta: {
-          name: "患者消息",
-          description: "查看患者消息，处理回复草稿与客户联系。",
-          category: "医疗工具",
-          keywords: "消息 回复 客户 企业微信",
-          medical: true,
-        },
-        component: () => import("./ToolCards.jsx").then(module => ({ default: module.CareToolCard })),
-      },
-      {
-        id: "followups",
-        label: "随访",
-        order: 55,
-        meta: {
-          name: "随访",
-          description: "管理随访计划、待办和患者反馈。",
-          category: "医疗工具",
-          keywords: "随访 计划 反馈",
-          medical: true,
-        },
-        component: () => import("./ToolCards.jsx").then(module => ({ default: module.FollowupsToolCard })),
-      },
-    ],
   },
 });

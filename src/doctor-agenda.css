@@ -2,6 +2,7 @@
 .doctor-agenda .agenda-heading { align-items: flex-end; margin-bottom: 8px; }
 .doctor-agenda .agenda-heading h1 { font-size: var(--title-size, 24px); font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 .doctor-agenda .agenda-heading h1 span { font-size: var(--title-size, 24px); color: var(--accent); font-weight: 650; margin-left: 6px; }
+.doctor-agenda .agenda-heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
 .doctor-agenda .agenda-context { margin: 4px 0 0; }
 .doctor-agenda .agenda-context .om-chip { vertical-align: 1px; }
 .doctor-agenda .agenda-toolbar { margin: 16px 0 14px; gap: 10px 12px; }

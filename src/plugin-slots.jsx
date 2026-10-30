@@ -43,6 +43,21 @@ function isComponentType(value) {
   return COMPONENT_TYPES.has(value.$$typeof);
 }
 
+// React.lazy needs a module whose default export is a component. A loader that
+// points at a named export makes React fail with an opaque error (#306), so
+// check it here and name the plugin and slot instead.
+function lazyComponent(loader, where) {
+  return lazy(() =>
+    Promise.resolve(loader()).then((module) => {
+      if (!isComponentType(module?.default))
+        throw new Error(
+          `${where} 的加载函数没有返回默认导出的组件，请用 .then((m) => ({ default: m.组件名 })) 包装`,
+        );
+      return module;
+    }),
+  );
+}
+
 const registrations = new Map();
 const listeners = new Set();
 const EMPTY = Object.freeze([]);
@@ -230,7 +245,7 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
             : 100,
           label:
             typeof contribution === "function" ? undefined : contribution.label,
-          component: lazy(loader),
+          component: lazyComponent(loader, `插件 ${id} 的插槽 ${name}.${type}`),
         });
       }
       normalized[name] = Object.freeze(keyed);
@@ -334,7 +349,7 @@ export function defineUiPlugin({ id, slots = {} } = {}) {
                   availableWhenDormant: item.availableWhenDormant === true,
                 }
               : {}),
-          component: lazy(item.component),
+          component: lazyComponent(item.component, `插件 ${id} 的插槽 ${name}.${item.id}`),
         });
       }),
     );

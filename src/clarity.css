@@ -410,3 +410,46 @@ button.om-chip {
 .medical-shell .agent-recents-tail button:hover {
   color: var(--accent);
 }
+
+/* ---------- Chat box: model and thinking menu ---------- */
+.composer-model { position: relative; display: inline-flex; }
+.composer-model-button {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 4px 10px; border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--muted); font-size: var(--small-size, 13px); cursor: pointer;
+}
+.composer-model-button:hover,
+.composer-model-button[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--border); color: var(--ink); }
+.composer-model-button b { font-weight: 600; color: var(--ink); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-model-tag { padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-deep); font-size: calc(var(--small-size, 13px) - 1px); white-space: nowrap; }
+.composer-model-menu {
+  position: fixed; z-index: 40;
+  width: min(320px, 85vw); padding: 6px; display: grid; gap: 2px;
+  background: var(--card, #fff); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 10px 30px #203b2522;
+}
+.composer-model-current { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px 10px; border-bottom: 1px solid var(--border); margin-bottom: 4px; font-size: var(--small-size, 13px); color: var(--muted); }
+.composer-model-current b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-model-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent;
+  text-align: left; color: var(--ink); font-size: var(--meta-size, 14px); cursor: pointer;
+}
+.composer-model-row:hover { background: var(--soft); }
+.composer-model-row > span { display: grid; gap: 2px; min-width: 0; }
+.composer-model-row b { font-weight: 600; }
+.composer-model-row small { color: var(--muted); font-size: var(--small-size, 13px); line-height: 1.45; }
+.composer-model-row.disabled { cursor: default; opacity: 0.7; }
+.composer-model-row.disabled:hover { background: transparent; }
+.composer-model-row input[role="switch"] {
+  appearance: none; flex-shrink: 0; width: 36px; height: 20px; margin: 0; border-radius: 999px;
+  background: #cfd8cf; position: relative; cursor: pointer; transition: background-color .16s;
+}
+.composer-model-row input[role="switch"]::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px #0003; transition: transform .16s;
+}
+.composer-model-row input[role="switch"]:checked { background: var(--accent, #2f7353); }
+.composer-model-row input[role="switch"]:checked::after { transform: translateX(16px); }
+.composer-model-row input[role="switch"]:disabled { cursor: default; }
+.composer-model-row input[role="switch"]:focus-visible { outline: 2px solid var(--accent, #2f7353); outline-offset: 2px; }

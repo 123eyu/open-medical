@@ -26,6 +26,7 @@ export function definePlugin(spec = {}) {
     setup,
     tools,
     prompt,
+    promptWhen,
     skills,
     proposals = {},
     legacyProposalTypes = {},
@@ -134,6 +135,7 @@ export function definePlugin(spec = {}) {
     ["tools", tools],
     ["api", api],
     ["status", status],
+    ["promptWhen", promptWhen],
     ["patientSummary", patientSummary],
     ["patientBrief", patientBrief],
   ]) {
@@ -502,6 +504,7 @@ export function definePlugin(spec = {}) {
     setup,
     tools,
     prompt,
+    promptWhen,
     skills,
     proposals: Object.freeze(normalizedProposals),
     legacyProposalTypes: Object.freeze(normalizedLegacyProposals),

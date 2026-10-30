@@ -120,7 +120,11 @@ export function DoctorAgenda({ onPatient, onOpenTask, onView }) {
       <div className="agenda-heading om-page-head">
         <div><h1>今日待办 <span>{data?.counts.all ?? "—"}</span></h1>
           <span className="om-page-meta agenda-context">{data?.criticalCount > 0 ? <><em className="om-chip is-danger">{data.criticalCount} 项高优先级</em> 已排在最前，</> : "按优先级排列，"}点击事项即可继续处理。</span></div>
+        <div className="agenda-heading-actions">
+          {followupActive && <button className="text-button" onClick={() => onView("followups")}>全部随访计划 <ArrowUpRight size={14} /></button>}
+          {messaging && <button className="text-button" onClick={() => onView("care")}>患者消息 <ArrowUpRight size={14} /></button>}
         <button className="icon-button" title="刷新今日待办" aria-label="刷新今日待办" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><RotateCw size={16} /></button>
+        </div>
       </div>
       <div className="agenda-toolbar">
         <div className="agenda-filters" aria-label="待办分类">{kindOptions.filter((item) => item.kind === "all" || item.kind === kind || !data || data.counts[item.kind] > 0).map((item) => <button key={item.kind} aria-pressed={kind === item.kind} data-zero={data && !data.counts[item.kind] ? "" : undefined} className={kind === item.kind ? "active" : ""} onClick={() => { setKind(item.kind); setOffset(0); }}>{item.label}<span>{data?.counts[item.kind] ?? "—"}</span></button>)}</div>

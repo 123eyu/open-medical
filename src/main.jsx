@@ -7,7 +7,7 @@ import { PendingTray, PENDING_REFRESH_EVENT } from "./pending-tray";
 import "./backup-panel.css";
 import "./doctor-notifications.css";
 import "./message-channels.css";
-import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS } from "./navigation";
+import { readLocation, writeLocation, VIEW_LABELS, TOOL_VIEWS, AGENDA_VIEWS } from "./navigation";
 import { DueNotifyWatcher } from "./due-notify";
 import { conversationRunIds } from "../shared/patient-conversations.mjs";
 import { PatientQuestionHistory } from "./patient-question-history";
@@ -75,6 +75,7 @@ import { WorkbenchHome, MEDICAL_WORKFLOWS } from "./workbench-home";
 import { TaskContextDetails, contextSummary } from "./task-context";
 import { CommandPalette, usePaletteHotkey } from "./command-palette";
 import { RichMessage } from "./workbench/message";
+import { ComposerModelMenu } from "./composer-model-menu.jsx";
 import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
 import { consultationLookupIssue } from "./workbench/run-status";
 import { blockedText, runDerivedStatus } from "./workbench/run-status";
@@ -618,6 +619,8 @@ function App() {
   );
   const [patientDetail, setPatientDetail] = useState(null);
   const [acceptId, setAcceptId] = useState("");
+  // Result to go back to after jumping from it to a cited source.
+  const [returnResultId, setReturnResultId] = useState("");
   const [doctorMemCount, setDoctorMemCount] = useState(0);
   const [referencedPatients, setReferencedPatients] = useState([]);
   const [kQuery, setKQuery] = useState("");
@@ -1319,6 +1322,12 @@ function App() {
     }
   };
   const openSource = (source) => {
+    // The result and the materials share the side panel; show the source and
+    // offer a way back to the result.
+    if (acceptId) {
+      setReturnResultId(acceptId);
+      setAcceptId("");
+    }
     setCitation(source);
     setTab("materials");
     setInspector(true);
@@ -1494,13 +1503,19 @@ function App() {
     overlay.addEventListener("geometrychange", apply);
     return () => overlay.removeEventListener("geometrychange", apply);
   }, []);
-  useEffect(() => { if(inspector) setDisplayMode(mode => mode === "chat" ? "work" : mode); }, [inspector]);
+  // A result opens beside the conversation, so it needs the side panel visible.
+  useEffect(() => { if(inspector || acceptId) setDisplayMode(mode => mode === "chat" ? "work" : mode); }, [inspector, acceptId]);
   useEffect(() => {
-    if (!inspector) return;
-    const close = (event) => { if (event.key === "Escape") setInspector(false); };
+    if (!inspector && !acceptId) return;
+    // Escape closes the open result first, then the materials panel.
+    const close = (event) => {
+      if (event.key !== "Escape") return;
+      if (acceptId) setAcceptId("");
+      else setInspector(false);
+    };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  }, [inspector]);
+  }, [inspector, acceptId]);
   const recentConversations = sessions.filter(item => item.userMessageCount > 0).slice(0, 15);
   const fileContent = citation
     ? citation.snapshot?.text || session?.files.find((f) => f.id === citation.sourceId)?.text ||
@@ -1635,10 +1650,10 @@ function App() {
           </button>
           {medical && <div className="medical-quick-wrap">
             <nav className="medical-quick" aria-label="主要业务">
-              {[["patients", "患者", Stethoscope], ["agenda", "今日待办", CalendarClock], ["knowledge", "知识库", BookOpen]].map(([id,label,Icon]) => <button key={id} aria-current={view === id ? "page" : undefined} className={view === id ? "active" : ""} onClick={() => id === "patients" ? openPatient({ navigationKey: Date.now() }) : navigate(id)}><Icon size={17}/><span>{label}</span></button>)}
+              {[["patients", "患者", Stethoscope], ["agenda", "今日待办", CalendarClock], ["knowledge", "知识库", BookOpen]].map(([id,label,Icon]) => { const current = view === id || (id === "agenda" && AGENDA_VIEWS.includes(view)); return <button key={id} aria-current={current ? "page" : undefined} className={current ? "active" : ""} onClick={() => id === "patients" ? openPatient({ navigationKey: Date.now() }) : navigate(id)}><Icon size={17}/><span>{label}</span></button>; })}
             </nav>
             <nav className="medical-quick" aria-label="资料与工具">
-              <button aria-current={TOOL_VIEWS.includes(view) ? "page" : undefined} className={TOOL_VIEWS.includes(view) ? "active" : ""} onClick={() => navigate("tools")}><Search size={17}/><span>资料与工具</span></button>
+              <button aria-current={TOOL_VIEWS.includes(view) && !AGENDA_VIEWS.includes(view) ? "page" : undefined} className={TOOL_VIEWS.includes(view) && !AGENDA_VIEWS.includes(view) ? "active" : ""} onClick={() => navigate("tools")}><Search size={17}/><span>资料与工具</span></button>
             </nav>
           </div>}
           {medical && <div className="agent-recents">
@@ -1672,7 +1687,7 @@ function App() {
           <div className="business-preferences"><button onClick={() => navigate("settings")}><Settings2 size={16}/>设置与连接</button></div>
         </aside>
         <div className="product-content" id="main-content" tabIndex={-1}>
-          {view !== "tools" && TOOL_VIEWS.includes(view) && <nav className="page-trail" aria-label="当前位置"><button onClick={() => navigate("tools")}>资料与工具</button><ChevronRight size={14}/><span>{VIEW_LABELS[view]}</span></nav>}
+          {view !== "tools" && TOOL_VIEWS.includes(view) && (() => { const parent = medical && AGENDA_VIEWS.includes(view) ? "agenda" : "tools"; return <nav className="page-trail" aria-label="当前位置"><button onClick={() => navigate(parent)}>{VIEW_LABELS[parent]}</button><ChevronRight size={14}/><span>{VIEW_LABELS[view]}</span></nav>; })()}
           {listError && <div className="navigation-notice" role="alert"><span>{listError}</span><button className="secondary" onClick={() => refreshList()}>重新加载列表</button></div>}
           {!config ? (<main id="main" className="workbench-hub">
                 {error ? <div className="connection-recovery" role="alert">
@@ -1764,7 +1779,7 @@ function App() {
               onFilesPicked={upload}
             />
           ) : (
-            <div className={`shell ${inspector ? "with-inspector" : ""}`}>
+            <div className={`shell ${inspector || acceptArtifact ? "with-inspector" : ""} ${acceptArtifact ? "with-reader" : ""}`}>
               <main id="main" className={`conversation ${session?.patientId ? "patient-conversation" : ""}`}>
                 <div className="conversation-head">
                   <IconButton
@@ -1779,21 +1794,32 @@ function App() {
                     <h1>{session?.patientId ? `${patientDetail?.name || taskPatientContext(session, patientsList) || session.title} · 问答` : session?.title || "今天，需要处理什么材料？"}</h1>
                   </div>
                   {session?.patientId && !!patientDetail?.allergies?.length && <span className="patient-chat-allergy" title={patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}>过敏：{patientDetail.allergies.map(a => typeof a === 'string' ? a : a.substance).join('、')}</span>}
-                  {session?.patientId && questionRunId && !loading && !acceptArtifact && <button type="button" className="text-button new-question-button" disabled={busy} onClick={() => chooseQuestion(null)}>＋ 新问题</button>}
+                  {session?.patientId && questionRunId && !loading && <button type="button" className="text-button new-question-button" disabled={busy} onClick={() => chooseQuestion(null)}>＋ 新问题</button>}
                   <button
                     className="secondary inspector-toggle"
-                    aria-expanded={inspector}
+                    aria-expanded={inspector && !acceptArtifact}
                     aria-controls="task-reference-panel"
-                    onClick={() => { if (!inspector && session?.patientId) setTab("materials"); setInspector(!inspector); }}
+                    onClick={() => {
+                      if (acceptArtifact) {
+                        setReturnResultId(acceptArtifact.id);
+                        setAcceptId("");
+                        setTab("materials");
+                        setInspector(true);
+                        return;
+                      }
+                      if (!inspector && session?.patientId) setTab("materials");
+                      if (inspector) setReturnResultId("");
+                      setInspector(!inspector);
+                    }}
                   >
                     <FolderOpen size={16} />
-                    {inspector ? "收起资料" : session?.patientId ? "患者资料" : "查看资料"}
+                    {inspector && !acceptArtifact ? "收起资料" : session?.patientId ? "患者资料" : "查看资料"}
                   </button>
                   {session && (
                     <details className="conversation-actions">
                       <summary aria-label="更多对话操作">更多</summary>
                       <div className="head-actions" onClick={event => { if (event.target.closest('button')) event.currentTarget.closest('details').open = false; }}>
-                      {session.patientId && !loading && !acceptArtifact && <PatientQuestionHistory session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
+                      {session.patientId && !loading && <PatientQuestionHistory session={session} runId={questionRunId} busy={busy} onSelect={chooseQuestion} />}
                       <button type="button" className="text-button"
                         title="重命名会话"
                         onClick={() => setModal("rename")}
@@ -1900,25 +1926,6 @@ function App() {
                     <Loader2 className="spin" />
                     正在载入工作会话…
                   </div>
-                ) : acceptArtifact ? (
-                  <AcceptanceView
-                    artifact={acceptArtifact}
-                    previous={acceptArtifact.history?.at(-1)}
-                    onReview={async review => {
-                      try {
-                        await api(`/api/sessions/${session.id}/artifacts/${acceptArtifact.id}/review`, "POST", review);
-                      } catch (err) {
-                        if (err.code === "REVISION_CONFLICT") await updateSession();
-                        throw err;
-                      }
-                      await updateSession();
-                    }}
-                    onSource={openSource}
-                    onClose={() => {
-                      setAcceptId("");
-                      updateSession();
-                    }}
-                  />
                 ) : (
                   <div className="message-list" tabIndex={0} role="region" aria-label="对话内容"
                     onWheel={(e) => { if (e.deltaY < 0) followOutput.current = false; }}
@@ -2027,9 +2034,10 @@ function App() {
                                   </span>
                                 )}
                               </>
-                            ) : (
-                              runOf(m.runId)?.artifacts?.find(a => cardForArtifact(a)) ? <><ResultCard key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => cardForArtifact(a)).id)} artifact={runOf(m.runId).artifacts.find(a => cardForArtifact(a))} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />
-                            )}
+                            ) : (<>
+                              {m.progress && <details className="task-result run-progress-note"><summary>执行过程说明</summary><RichMessage text={m.progress}/></details>}
+                              {runOf(m.runId)?.artifacts?.find(a => cardForArtifact(a)) ? <><ResultCard key={m.runId} variant="teaser" onOpen={() => setAcceptId(runOf(m.runId).artifacts.find(a => cardForArtifact(a)).id)} artifact={runOf(m.runId).artifacts.find(a => cardForArtifact(a))} onRefresh={busy ? undefined : () => send(null, {message:"请重新检索这个患者的相似病例，并逐项对照疾病、阶段、治疗、用药和年龄性别，保存有原文依据的相似度结果。"})} />{m.content ? <details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details> : null}</> : hasTaskResult(runOf(m.runId)) ? (runOf(m.runId)?.displayResults?.some(result => result.kind === "literature") && !runOf(m.runId)?.artifacts?.some(a => a.type === "treatment_review") ? <><RichMessage text={m.content}/><details className="task-result"><summary>查看文献与检索记录</summary><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/></details></> : <><TaskResult key={m.runId} run={runOf(m.runId)} files={session.files || []} sessionId={session.id}/><details className="task-result"><summary>查看文字说明</summary><RichMessage text={m.content}/></details></>) : <RichMessage text={m.content} />}
+                            </>)}
                           </div>
                           {m.role !== "user" && ["delivery_failed","unverified"].includes(m.outcome || runOf(m.runId)?.outcome) &&
                             (m.outcome || runOf(m.runId)?.outcome) && (
@@ -2116,7 +2124,6 @@ function App() {
                     <div ref={endRef} />
                   </div>
                 )}
-                {!acceptArtifact && (
                 <div className="composer-wrap">
                   {notice && <div className="composer-notice" role="status"><span>{notice}</span><IconButton title="关闭提示" onClick={() => setNotice("")}><X size={14}/></IconButton></div>}
                   {mention && (
@@ -2358,34 +2365,7 @@ function App() {
                       )}
                       <button type="button" className="attach-button" onClick={() => { setTab('materials'); setInspector(true); }}>资料{selectedFileIds.length ? ` · ${selectedFileIds.length}` : ''}</button>
                       <span className="tb-divider" />
-                      <button
-                        type="button"
-                        className="tb-item"
-                        title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
-                        onClick={() => setModal("model")}
-                      >
-                        模型 <b>{config?.model || "未配置"}</b>
-                      </button>
-                      <details className="composer-advanced"><summary>设置</summary>
-                        <div className="composer-advanced-fields">
-                      {config?.modelConfigured && (
-                        <label
-                          className="tb-item"
-                          title="深入：请求模型启用思考/推理通道（取决于供应商支持；标准=关闭）"
-                        >
-                          思考
-                          <select
-                            value={thinking}
-                            onChange={(e) => setThinking(e.target.value)}
-                            disabled={busy || loading}
-                          >
-                            <option value="disabled">标准（不启用推理）</option>
-                            <option value="enabled">深入（启用推理）</option>
-                          </select>
-                        </label>
-                      )}
-                        </div>
-                      </details>
+                      <ComposerModelMenu config={config} thinking={thinking} onThinkingChange={setThinking} onModelSettings={() => setModal("model")} disabled={busy || loading} />
                       <div className="composer-submit">
                       {busy && (
                         <button
@@ -2432,14 +2412,39 @@ function App() {
                     <span>Enter 发送 · Shift + Enter 换行</span>
                   </div>
                 </div>
-                )}
               </main>
-              <aside id="task-reference-panel" aria-label="资料与文件" className={`inspector ${inspector ? "open" : ""}`}>
+              <aside id="task-reference-panel" aria-label={acceptArtifact ? "查看结果" : "资料与文件"} className={`inspector ${inspector || acceptArtifact ? "open" : ""} ${acceptArtifact ? "result-reader" : ""}`}>
+                {acceptArtifact ? (
+                  <AcceptanceView
+                    key={acceptArtifact.id}
+                    artifact={acceptArtifact}
+                    previous={acceptArtifact.history?.at(-1)}
+                    onReview={async review => {
+                      try {
+                        await api(`/api/sessions/${session.id}/artifacts/${acceptArtifact.id}/review`, "POST", review);
+                      } catch (err) {
+                        if (err.code === "REVISION_CONFLICT") await updateSession();
+                        throw err;
+                      }
+                      await updateSession();
+                    }}
+                    onSource={openSource}
+                    onClose={() => {
+                      setAcceptId("");
+                      updateSession();
+                    }}
+                  />
+                ) : <>
                 <div className="inspector-head">
                   <b>资料与文件</b>
+                  {returnResultId && session?.artifacts?.some((a) => a.id === returnResultId) && (
+                    <button type="button" className="text-button" onClick={() => { setAcceptId(returnResultId); setReturnResultId(""); }}>
+                      <ArrowLeft size={14} /> 返回结果
+                    </button>
+                  )}
                   <IconButton
                     title="关闭材料面板"
-                    onClick={() => setInspector(false)}
+                    onClick={() => { setInspector(false); setReturnResultId(""); }}
                   >
                     <X size={16} />
                   </IconButton>
@@ -2852,6 +2857,7 @@ function App() {
                   <button className="text-button" aria-pressed={tab === "knowledge"} onClick={() => setTab("knowledge")}>查询知识库</button>
                   <button className="text-button" aria-pressed={tab === "events"} onClick={() => session && openAudit()}>运行记录与历史任务</button>
                 </details>
+                </>}
               </aside>
             </div>
           )}

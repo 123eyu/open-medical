@@ -10,8 +10,7 @@ export default function ClinicalRefToolCard({ onNavigate }) {
       <h2>临床速查</h2>
       <p>量表、检验、编码与 ADR 查询。</p>
       <footer>
-        <small>本地工具</small>
-        <span className="tool-card-action">打开 →</span>
+        <small>本地</small>
       </footer>
     </a>
   </article>;

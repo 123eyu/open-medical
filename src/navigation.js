@@ -1,4 +1,7 @@
 export const TOOL_VIEWS = ["tools", "care", "followups", "research", "literature", "cases", "clinical-ref", "data-analysis", "drg"];
+// Cross-patient follow-up and message lists are daily work: in medical mode
+// they sit under 今日待办, not 资料与工具.
+export const AGENDA_VIEWS = ["care", "followups"];
 
 // Only opaque record IDs belong in navigation; never put chart contents in URLs.
 export const VIEW_LABELS = {

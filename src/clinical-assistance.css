@@ -3,7 +3,7 @@
 .clinical-assistance .assistance-lead { margin:0 0 18px; color:var(--muted); font-size:var(--meta-size, 14px); }
 .clinical-assistance textarea { box-sizing:border-box; width:100%; min-height:132px; resize:vertical; padding:16px; line-height:1.8; font:inherit; border:1px solid var(--border); border-radius:10px; background:#fff; }
 .assistance-submit { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:12px; }
-.assistance-submit span { color:var(--muted); font-size:12px; }
+.assistance-submit span { color:var(--muted); font-size:calc(12px * var(--text-scale, 1)); }
 .assistance-suggestions { margin:28px 0 0; }
 .assistance-suggestions h2 { display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:var(--meta-size, 14px); font-weight:600; color:var(--muted); }
 .assistance-suggestions h2 svg { color:var(--accent); }
@@ -15,5 +15,5 @@
 .clinical-assistance .patient-question-starters p { display:block; margin:0 0 10px; color:var(--muted); font-size:var(--meta-size, 14px); font-weight:600; }
 .clinical-assistance .patient-question-starters > div { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; }
 .clinical-assistance :is(textarea,button):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-@media(max-width:600px) { .clinical-assistance { margin:20px auto; } .clinical-assistance h1 { font-size:21px; } }
+@media(max-width:600px) { .clinical-assistance { margin:20px auto; } .clinical-assistance h1 { font-size:calc(21px * var(--text-scale, 1)); } }
 .workbench-suggestions { width: 100%; max-width: 760px; margin: 28px auto 8px; text-align: left; }

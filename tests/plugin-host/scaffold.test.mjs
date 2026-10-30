@@ -72,7 +72,7 @@ test("plugin:new：从模板生成插件，宿主可加载、迁移、注册工�
 
   const listed = await app.request("/api/plugins");
   const plugin = listed.body.plugins.find((item) => item.id === id);
-  assert.equal(plugin.status, "ready");
+  assert.equal(plugin.status, "ready", plugin.reason);
   assert.equal(plugin.enabled, true);
   assert.equal(
     app.server.store.db

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { modelBoundary, testSummary } from "../shared/model-boundary.mjs";
 import { api } from "./agent-runtime";
 import { OcrSettingsSection } from "./ocr-settings";
+import { ResearchEnvSettings } from "./research-env-settings";
+import { PrivacySettings } from "./privacy-settings";
 import { PersonalRegressionSettings } from "./learning-loop";
 import { JevSettings } from "./jev-settings";
 import { ModelConnectionForm } from "./model-connection-form";
@@ -93,7 +95,7 @@ export function ModelSettings({ onClose, onSaved }) {
       <button disabled={Boolean(busy)} onClick={() => run('refresh', async signal => { const value = await api('/api/model-choices', { signal }); if (!signal.aborted) { accept(value); setSelected(value.choices.find(c => c.current && c.selectable !== false)?.id || value.choices.find(c => c.selectable !== false)?.id || ""); } })}>刷新模型列表</button>
       {error && <p role="alert">{error}</p>}{status && <p role="status">{status}</p>}
       <ModelConnectionForm busy={Boolean(busy)} onChange={clearFeedback} onTest={form => test('/api/model-settings/test', form)} onSave={(form, afterSave) => save('/api/model-settings', form, 'PUT', afterSave)}/>
-      <details><summary>文字识别</summary><OcrSettingsSection/></details><PersonalRegressionSettings/><JevSettings/>
+      <details><summary>文字识别</summary><OcrSettingsSection/></details><details><summary>患者资料脱敏</summary><PrivacySettings/></details><details><summary>科研计算环境</summary><ResearchEnvSettings/></details><PersonalRegressionSettings/><JevSettings/>
     </section></div>
   </dialog>;
 }

@@ -94,4 +94,29 @@ export class WorkspaceArtifacts {
     );
     return { item, data };
   }
+  // 删除成果（例如图片打码后不再保留原图）：先删记录再删文件，文件已
+  // 不存在时视为已删除。
+  remove(owner, id, runId = "privacy") {
+    let removed = null;
+    this.store.update(owner, (w) => {
+      removed = (w.artifacts || []).find((a) => a.id === id) || null;
+      w.artifacts = (w.artifacts || []).filter((a) => a.id !== id);
+    });
+    if (!removed) return false;
+    try {
+      unlinkSync(join(this.directory, owner, id));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    this.store.event(owner, runId, "artifact.removed", { id, name: removed.name });
+    return true;
+  }
+  // 标记成果属性（如 privacy: "masked" 表示已打码，可以交给视觉模型）。
+  mark(owner, id, fields) {
+    this.store.update(owner, (w) => {
+      const item = (w.artifacts || []).find((a) => a.id === id);
+      check(item, "NOT_FOUND", "成果不存在或不属于此工作区", 404);
+      Object.assign(item, fields);
+    });
+  }
 }

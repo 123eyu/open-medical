@@ -1,14 +1,14 @@
 .task-result {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale, 1));
   line-height: 1.8;
   color: #30483b;
 }
 .task-result h3 {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
   margin: 0 0 16px;
 }
 .task-result h4 {
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
   margin: 0 0 10px;
 }
 .task-result article {
@@ -24,14 +24,14 @@
 }
 .task-result dt {
   color: #607365;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .task-result dd {
   margin: 0 0 12px;
 }
 .task-result details {
   margin: 14px 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
 }
 .task-result summary {
   cursor: pointer;
@@ -51,16 +51,16 @@
 .task-result small {
   display: block;
   color: #64786a;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   margin-top: 16px;
 }
 .calculation-value {
-  font-size: 32px;
+  font-size: calc(32px * var(--text-scale, 1));
   font-variant-numeric: tabular-nums;
   color: #2e705b;
 }
 .calculation-value span {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale, 1));
   margin-left: 12px;
 }
 .assessment-heading {
@@ -99,13 +99,13 @@
   gap: 12px;
 }
 .assessment-number {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: #698274;
   font-variant-numeric: tabular-nums;
 }
 .assessment-findings button {
   font: inherit;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   min-height: 42px;
   white-space: normal;
 }

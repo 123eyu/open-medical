@@ -88,22 +88,31 @@ test("四个 WeCom adapter 通过 validateAdapter，能力矩阵与设计一致"
     ["wecom-aibot", "wecom-archive", "wecom-customer", "wecom-kf"],
   );
 
-  const tools = [];
-  app.server.pluginHost.registerTools(
-    { register: (tool) => tools.push(tool.definition.function.name) },
-    { kind: "session" },
-    null,
+  const wecomTools = () => {
+    const tools = [];
+    app.server.pluginHost.registerTools(
+      { register: (tool) => tools.push(tool.definition.function.name) },
+      { kind: "session" },
+      null,
+    );
+    // Other enabled plugins contribute their own tools to the same registry;
+    // this assertion covers the WeCom adapter tool surface.
+    return tools.filter((name) => name.startsWith("wecom_")).sort();
+  };
+  const contactTools = ["wecom_customers", "wecom_groups", "wecom_patient_contacts", "wecom_sync"];
+  // Customer contact not configured: read tools and the WeCom prompt stay hidden.
+  assert.ok(!wecomTools().some((name) => contactTools.includes(name)));
+  assert.doesNotMatch(app.server.pluginHost.promptFragments(), /wecom_customers/);
+
+  // Once the connector has a client, both appear.
+  const connector = service.connector;
+  connector.client = {};
+  t.after(() => { connector.client = null; });
+  assert.deepEqual(
+    wecomTools().filter((name) => contactTools.includes(name)),
+    contactTools,
   );
-  // Other enabled plugins contribute their own tools to the same registry;
-  // this assertion covers the WeCom adapter tool surface.
-  assert.deepEqual(tools.filter((name) => name.startsWith("wecom_")).sort(), [
-    "wecom_bind_propose",
-    "wecom_customers",
-    "wecom_group_message_propose",
-    "wecom_groups",
-    "wecom_patient_contacts",
-    "wecom_sync",
-  ]);
+  assert.match(app.server.pluginHost.promptFragments(), /wecom_customers/);
 });
 
 test("客户联系 adapter 未确认时返回 awaiting_member 且不发出网络请求", async (t) => {

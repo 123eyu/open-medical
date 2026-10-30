@@ -4,6 +4,7 @@ import {
   existsSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -88,7 +89,9 @@ function rewriteTree(directory, values) {
     if (!TEXT_EXTENSIONS.has(extension)) continue;
     // The template lives one or two levels below the plugin root, so resolve
     // the repository prefix from each file instead of from the destination.
-    const rootRelative = relative(dirname(absolute), ROOT)
+    // Resolve symlinks on both sides (macOS /var -> /private/var); Node loads
+    // the module from its real path, so the relative import must match it.
+    const rootRelative = relative(realpathSync(dirname(absolute)), realpathSync(ROOT))
       .split(sep)
       .join("/");
     const original = readFileSync(absolute, "utf8");

@@ -191,30 +191,46 @@ export function knowledgeTokens(text) {
   );
 }
 
+// Chunk token statistics are reused across queries: tokenizing every chunk on
+// each search dominated latency for larger libraries. Keyed by the exact text,
+// so edited or re-chunked content never reuses stale statistics.
+const tokenCache = new Map();
+const TOKEN_CACHE_LIMIT = 50000;
+function tokenStats(text) {
+  let stats = tokenCache.get(text);
+  if (stats) return stats;
+  const counts = new Map();
+  const tokens = knowledgeTokens(text);
+  for (const t of tokens) counts.set(t, (counts.get(t) || 0) + 1);
+  stats = { counts, length: tokens.length };
+  if (tokenCache.size >= TOKEN_CACHE_LIMIT) tokenCache.delete(tokenCache.keys().next().value);
+  tokenCache.set(text, stats);
+  return stats;
+}
+
 export function bm25Scores(query, records) {
   const terms = [...new Set(knowledgeTokens(query))];
-  const tokenized = records.map((r) => knowledgeTokens(r.text));
+  const stats = records.map((r) => tokenStats(r.text));
   const average =
-    tokenized.reduce((s, t) => s + t.length, 0) / (records.length || 1) || 1;
+    stats.reduce((s, t) => s + t.length, 0) / (records.length || 1) || 1;
   const dfs = new Map(
     terms.map((term) => [
       term,
-      tokenized.filter((tokens) => tokens.includes(term)).length,
+      stats.reduce((n, s) => n + (s.counts.has(term) ? 1 : 0), 0),
     ]),
   );
-  return tokenized.map((tokens) => {
-    const counts = new Map();
-    for (const t of tokens) counts.set(t, (counts.get(t) || 0) + 1);
-    return terms.reduce((score, term) => {
+  return stats.map(({ counts, length }) =>
+    terms.reduce((score, term) => {
       const tf = counts.get(term) || 0;
+      if (!tf) return score;
       const idf = Math.log(
         1 + (records.length - dfs.get(term) + 0.5) / (dfs.get(term) + 0.5),
       );
       return (
         score +
         (idf * tf * 2.2) /
-          (tf + 1.2 * (0.25 + (0.75 * tokens.length) / average))
+          (tf + 1.2 * (0.25 + (0.75 * length) / average))
       );
-    }, 0);
-  });
+    }, 0),
+  );
 }

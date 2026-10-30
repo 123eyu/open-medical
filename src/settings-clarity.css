@@ -399,7 +399,7 @@
   margin-top: 6px;
   color: var(--faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--text-scale, 1));
 }
 .app-settings-page .ext-safety {
   margin-top: 8px;

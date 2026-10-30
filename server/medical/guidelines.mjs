@@ -76,6 +76,17 @@ export class GuidelineLibrary {
     const docs = this.list();
     return [...saved.values()].map(item=>({...item, deletionToken:sha256(JSON.stringify([item,docs.filter(d=>d.collection===item.name).map(d=>[d.id,d.revision]).sort()])), documentCount:docs.filter(d=>d.collection===item.name).length, needsDescription:!item.description || !item.whenToUse})).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN'));
   }
+  // Small prompt digest of libraries that actually hold usable documents.
+  // Reads only metadata columns; document text is never parsed here.
+  collectionDigest(limit = 20) {
+    const counts = new Map(this.store.db.prepare(`SELECT COALESCE(json_extract(data,'$.collection'),'默认知识库') AS name, COUNT(*) AS n
+      FROM guideline_docs WHERE COALESCE(json_extract(data,'$.reviewStatus'),'unreviewed')<>'retired' GROUP BY name`).all().map(r => [r.name, r.n]));
+    const saved = new Map(this.store.db.prepare("SELECT name,data FROM knowledge_collections").all().map(row => [row.name, JSON.parse(row.data)]));
+    const clip = (value, size) => { const text = String(value || "").replace(/\s+/g, " ").trim(); return text.length > size ? text.slice(0, size) + "…" : text; };
+    return [...counts].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([name, documentCount]) => ({
+      name, documentCount, description: clip(saved.get(name)?.description, 120), whenToUse: clip(saved.get(name)?.whenToUse, 160),
+    }));
+  }
   saveCollection(name, input) {
     name = string(name, "知识库名称", 60);
     check(input && typeof input === 'object' && !Array.isArray(input),'INVALID_INPUT','知识库说明格式无效');
@@ -205,7 +216,7 @@ export class GuidelineLibrary {
   list({ kind, collection, reviewStatus, externalOnly = false, query = "" } = {}) {
     check(!reviewStatus || reviewStatus === "all" || KNOWLEDGE_STATES.includes(reviewStatus), "INVALID_INPUT", "来源复核状态无效");
     const counts = new Map(this.store.db.prepare("SELECT doc_id,COUNT(*) n FROM guideline_chunks GROUP BY doc_id").all().map((r) => [r.doc_id, r.n]));
-    return this.store.db.prepare("SELECT data FROM guideline_docs").all()
+    return this.store.db.prepare("SELECT json_remove(data,'$.text','$.metadataHistory') AS data FROM guideline_docs").all()
       .map((row) => { const doc = JSON.parse(row.data); return { ...doc, collection:doc.collection || '默认知识库', ...knowledgeMetadata(doc), chunkCount: counts.get(doc.id) || 0, text: undefined, metadataHistory: undefined }; })
       .filter((doc) => !kind || doc.kind === kind)
       .filter((doc) => !collection || doc.collection === collection)
@@ -434,8 +445,9 @@ export class GuidelineLibrary {
       }
       return { term, subs };
     });
+    // Document text is not needed for ranking; chunks carry the searchable text.
     const docs = this.store.db
-      .prepare("SELECT data FROM guideline_docs")
+      .prepare("SELECT json_remove(data,'$.text','$.metadataHistory') AS data FROM guideline_docs")
       .all()
       .map((row) => JSON.parse(row.data))
       .filter((doc) => !org || (doc.org || "").toLowerCase().includes(String(org).toLowerCase()))
@@ -479,7 +491,7 @@ export class GuidelineLibrary {
     );
     const records = docs.flatMap(doc => selectChunks.all(doc.id).map(chunk => ({doc,chunk,text:chunk.text})));
     const lexicalScores = bm25Scores(text, records);
-    const graphEvidence = this.graphEvidence?.(text, new Set(docs.map(d => d.id))) || [];
+    const graphEvidence = this.graphEvidence?.(text, new Set(docs.map(d => d.id)), collection) || [];
     for (const [recordIndex, {doc, chunk}] of records.entries()) {
         const lower = chunk.text.toLowerCase();
         let score = 0;
@@ -489,6 +501,9 @@ export class GuidelineLibrary {
         for (const { term, subs } of termDefs) {
           const exact = lower.includes(term);
           const found = exact ? [term] : [...new Set(subs)].filter(sub => lower.includes(sub));
+          // Natural-language fallback needs two distinct shared bigrams; one
+          // generic pair such as "目标" or "患者" is noise, not a term match.
+          if (!exact && found.length < 2) found.length = 0;
           if (!found.length) { missing = true; if (/\d/.test(term)) missingNumber = true; continue; }
           matchedTerms++;
           for (const needle of found) matchedNeedles.add(needle);

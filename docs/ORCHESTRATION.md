@@ -2,7 +2,7 @@
 
 实现日期：2026-09-07。三者是独立机制，通过会话引擎的资料快照、取消信号和事件日志组合使用。
 
-> 2026-10-30 更新：旧 `MedicalRuntime` 已移除，所有会话由统一内核执行。下文「子代理」一节（`server/subagents.mjs`、`delegate_medical_task`）和模型工具 `sandbox_python` 随旧引擎下线，仅作历史记录；手动隔离计算（`sandboxCode`）与持久调度仍可用，计划任务不再单独指定子代理。
+> 2026-10-30 更新：旧 `MedicalRuntime` 已移除，所有会话由统一内核执行。旧的 `server/subagents.mjs`、`delegate_medical_task` 和模型工具 `sandbox_python` 随旧引擎下线，下文已按统一内核更新；手动隔离计算（`sandboxCode`）与持久调度仍可用，计划任务不再单独指定子代理。
 
 ## 设计依据
 
@@ -18,19 +18,20 @@
 
 代码可使用 Python 标准库和 `sources`（本轮所选材料及任务输入原文），将 JSON 兼容值赋给 `result`。每次执行采用临时空工作目录，结束后清理；stdout/stderr 合计最多 64KiB，墙钟 5 秒，CPU 硬限制 3 秒，最多 2 个并发任务。取消和超限终止进程组。内存为每 100ms 采样的 256MiB RSS watchdog，**不是硬内存配额**，不能当作抵抗恶意内存瞬时分配的容器级资源隔离。
 
-支持两种入口：界面的“计划任务与沙箱 → 隔离计算”，以及模型工具 `sandbox_python`。代码、资料版本和运行状态写入事件轨迹，结果留在会话中且明确待复核。不会自动批准产物或修改原始记录。沙箱计算结果只有 JSON 和会话文本，当前不提供生成文件的下载通道。
+入口为界面的“计划任务与沙箱 → 隔离计算”（模型工具 `sandbox_python` 已随旧引擎下线；模型侧计算用 `calculate_python`）。代码、资料版本和运行状态写入事件轨迹，结果留在会话中且明确待复核。不会自动批准产物或修改原始记录。沙箱计算结果只有 JSON 和会话文本，当前不提供生成文件的下载通道。
+
+科研分析使用另一套独立的科研计算沙箱（同样基于 Seatbelt，带 pandas/statsmodels 等科学计算库，限额更宽），见 [RESEARCH](RESEARCH.md)。
 
 当前已在本机 macOS 实测。Linux/Windows/Docker 尚未实现；Python 或 Seatbelt 探测失败时工具不暴露，手动执行返回 `SANDBOX_UNAVAILABLE`，不会无沙箱降级。`MEDICAL_SANDBOX_PYTHON` 可指定本机可信 Python；默认探测 Homebrew / 系统 Python。服务端显式注册的 JavaScript `toolPlugins` 仍是可信同进程扩展，不受 Python 沙箱保护，不接受模型上传插件。
 
 ## 子代理
 
-`server/subagents.mjs` 提供时间线、检验资料、用药资料三个角色。父任务可通过 `delegate_medical_task` 分配角色、任务和来源 ID，也可在工作台勾选三个角色联合整理。
+统一内核提供两种委派：
 
-每个子代理有独立消息数组，不继承父任务或兄弟任务的对话。资料只能从父任务已授权来源中取子集。模型方式采用同一 Provider，因此 OpenAI-compatible 和 Claude 均复用已选适配器；本地方式执行确定性医疗工具。**本地方式是资料处理 worker，不运行 LLM 推理**。
+- `delegate_task` / `delegate_tasks`（医疗会话推荐）：父任务并行委派 1–3 个只读子任务，整次父任务合计最多 3 个。子任务继承父任务本轮的材料（`context.sources`）和领域上下文（关联患者、材料索引、医生偏好），可用医疗只读工具（如 `read_source`、`search_materials`、`read_patient_brief`）；不能写文件、写计划、递归委派、调用 MCP/浏览器，也不能确认提案（`*_confirm`）。单个子任务最多 6 轮、上下文 60000 字符，受父任务时限约束。
+- `spawn_agent`（编程工作区）：异步 reader / writer / verifier 团队，面向代码和文件修改，工具限于文件、git、终端和文档类，不含医疗工具。
 
-每个父任务最多 3 个子代理，全运行时子代理最多并行 2 个；单子代理最多 3 轮、每轮最多 6 个工具调用、上下文 40000 字符。子代理仅能使用本角色资料工具、材料读取/搜索和技能说明，不可递归、创建计划、调用任意插件或提高权限。模型用量单独记录并累加到父任务总量。
-
-生命周期为 queued → running → completed / failed / cancelled / interrupted。父任务取消传递到正在运行和排队中的子代理。结果带 `subagentId` 和来源，仍为 draft；UI 展示各子任务状态，追加式日志保留细节。联合整理中任一子任务失败，父任务不会伪装成完整成功；已完成子任务的草稿仍能在运行记录的 children 中检查。重启仅标记中断，不自动续跑不确定任务。
+子任务结果记录在运行的 `children` 中，用量累加到父任务。父任务取消会传递到子任务；任一子任务失败不会被伪装成成功。
 
 ## 调度
 
@@ -45,7 +46,7 @@ API（均需 X-Medical-Token）：
 | 请求                                      | 用途                                                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | GET /api/sessions/:id/schedules           | 列出计划与最近执行摘要                                                                                 |
-| POST /api/sessions/:id/schedules          | 创建，字段 name/message/runAt/intervalMinutes/fileIds/mode/delegations/externalConsent/sessionRevision |
+| POST /api/sessions/:id/schedules          | 创建，字段 name/message/runAt/intervalMinutes/fileIds/mode/externalConsent/sessionRevision |
 | PATCH /api/sessions/:id/schedules/:jobId  | 按 revision 更新 status 为 active 或 paused                                                            |
 | DELETE /api/sessions/:id/schedules/:jobId | 按 revision 删除非运行中的计划                                                                         |
 | POST /api/chat/:id/cancel                 | 取消当前运行，包括计划发起的运行                                                                       |

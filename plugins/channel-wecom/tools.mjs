@@ -11,11 +11,23 @@ const text = { type: "string" };
 // Read-only customer-contact tools only depend on this plugin's directory.
 // Binding/group-message proposals stay in care/tools.mjs until T7.3 because
 // their pending actions are applied by CareEngine.
+// Customer contact is configured once the connector has a client.
+export function wecomContactConfigured(ctx) {
+  try {
+    return Boolean(ctx.service("channel-wecom")?.connector?.directory?.c?.client);
+  } catch {
+    return false;
+  }
+}
+
 export function registerWecomTools(ctx, { registry }) {
+  // Without customer-contact credentials every call would fail; keep these
+  // tools out of the model's tool list until WeCom is set up.
+  if (!wecomContactConfigured(ctx)) return;
   const directory = () => {
     const service = ctx.service("channel-wecom");
     const value = service.connector.directory;
-    if (!value?.c.client)
+    if (!value?.c?.client)
       throw new Error(
         "尚未配置企业微信客户联系，请在「患者消息 → 设置」或接入向导第 4 步填写客户联系 Secret",
       );

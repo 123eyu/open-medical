@@ -12,7 +12,11 @@ const normalizeNode = (value) => {
   if (Array.isArray(value)) return value.map(normalizeNode);
   if (value && typeof value === "object")
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, normalizeNode(item)]),
+      Object.entries(value).map(([key, item]) => [
+        key,
+        // The host OS is reported as-is; the snapshot was recorded on Linux.
+        key === "platform" && typeof item === "string" ? "<platform>" : normalizeNode(item),
+      ]),
     );
   if (typeof value === "string")
     return value

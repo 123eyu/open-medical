@@ -39,8 +39,8 @@ export default definePlugin({
   enabledByDefault: true,
   provides: { service: "drg", apiVersion: 1 },
   legacyApiPaths: [{ method: "*", path: "/api/drg/*" }],
-  setup() {
-    const service = new DrgService(this.store);
+  setup(ctx) {
+    const service = new DrgService(ctx.store);
     service.load().catch(() => {});
     return service;
   },

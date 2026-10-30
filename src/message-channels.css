@@ -38,7 +38,7 @@
 .message-peer small {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: var(--muted);
   margin-top: 5px;
 }

@@ -14,7 +14,7 @@ export default defineUiPlugin({
         meta: {
           name: "临床速查",
           description: "量表、检验、编码与 ADR 查询。",
-          category: "医疗工具",
+          category: "临床",
           keywords: "评分 计算器 不良反应 药物",
           medical: true,
         },

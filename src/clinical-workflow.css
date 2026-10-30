@@ -18,7 +18,7 @@
   gap: 12px;
   min-height: 44px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   text-align: left;
   border-radius: 7px;
 }
@@ -181,19 +181,19 @@
   gap: 8px 16px;
 }
 .medical-shell .chart-heading h2 {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
   margin: 0;
 }
 .medical-shell .chart-heading p {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .medical-shell .chart-heading > button {
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .medical-shell .overview-diagnoses h3 small {
   display: block;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   font-weight: 400;
   color: var(--muted);
 }
@@ -214,7 +214,7 @@
 }
 .lab-display-options > summary {
   cursor: pointer;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   color: var(--accent);
   padding: 8px 0;
 }
@@ -247,7 +247,7 @@
 }
 .medical-shell .lab-section-title {
   margin: 22px 0 12px;
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale, 1));
 }
 .medical-shell .chart-lab-actions {
   display: block;
@@ -255,7 +255,7 @@
 }
 .chart-lab-actions > summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: var(--accent);
   padding: 6px 0;
 }
@@ -264,7 +264,7 @@
   border-bottom: 1px solid var(--border);
 }
 .medical-shell .chart-lab-actions button {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   margin-right: 8px;
 }
 .material-library {
@@ -313,7 +313,7 @@
   padding-right: 12px;
 }
 .material-file-list section > h3 {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: var(--muted);
   margin: 12px 10px 8px;
 }
@@ -344,13 +344,13 @@
 .material-file-list button b {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   line-height: 1.6;
   font-weight: 500;
 }
 .material-file-list button small {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   margin-top: 4px;
 }
 .medical-shell .material-file-list button.selected {
@@ -375,14 +375,14 @@
 }
 .material-reading-pane h3 {
   margin: 0 0 6px;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
   overflow-wrap: anywhere;
 }
 .material-reading-pane pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
   line-height: 1.85;
   padding: 12px 0;
 }
@@ -392,7 +392,7 @@
 .material-metadata > summary {
   cursor: pointer;
   color: var(--accent);
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .material-reading-pane .ocr-page-body,
 .material-reading-pane .ocr-compare {
@@ -408,12 +408,12 @@
   border: 0;
 }
 .agenda-heading h1 {
-  font-size: 28px;
+  font-size: calc(28px * var(--text-scale, 1));
   margin: 0 0 8px;
   letter-spacing: -0.03em;
 }
 .agenda-heading h1 span {
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
   color: var(--muted);
   margin-left: 8px;
   font-variant-numeric: tabular-nums;
@@ -461,7 +461,7 @@
 }
 .patient-followup-workspace h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
 }
 .patient-followup-workspace .digest-row {
   justify-content: space-between;
@@ -515,7 +515,7 @@
 }
 .followup-editor h3 {
   margin-top: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
 }
 .followup-records .hub-section-head {
   gap: 12px;
@@ -566,10 +566,10 @@
   padding: 0;
   border: 0;
   background: transparent;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .trial-ai .trial-ai-stats strong {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
   margin: 0;
 }
 .trial-evidence-workspace {
@@ -600,11 +600,11 @@
   background: #edf4ed;
 }
 .trial-condition > b {
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
   line-height: 1.7;
 }
 .trial-verdict {
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   font-weight: 600;
 }
 .trial-verdict.conflict {
@@ -625,7 +625,7 @@
   overflow-wrap: anywhere;
 }
 .trial-condition-reader h3 {
-  font-size: 19px;
+  font-size: calc(19px * var(--text-scale, 1));
   margin: 8px 0 16px;
 }
 .trial-citation-pane {
@@ -635,7 +635,7 @@
 }
 .trial-citation-pane h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
 }
 .trial-citation-pane blockquote {
   margin: 14px 0;
@@ -654,7 +654,7 @@
   border-top: 1px solid var(--border);
 }
 .trial-inline-review legend {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale, 1));
   font-weight: 600;
 }
 .trial-inline-review label {
@@ -736,38 +736,35 @@
     padding: 16px;
   }
 }
-.agenda-page .agenda-filters button { font-size:14px; min-height:40px; }
-.agenda-page .agenda-search input { font-size:14px; }
+.agenda-page .agenda-filters button { font-size:calc(14px * var(--text-scale, 1)); min-height:40px; }
+.agenda-page .agenda-search input { font-size:calc(14px * var(--text-scale, 1)); }
 .patient-followup-workspace .followup-records { margin-top:12px; }
 .patient-followup-workspace .followup-records > .muted { margin:6px 0 12px; }
 .patient-followup-workspace .hub-section-head { margin-bottom:4px; }
 .trial-run-options { margin:0 0 12px; }
-.trial-run-options > summary { cursor:pointer; color:var(--accent); font-size:14px; padding:6px 0; }
+.trial-run-options > summary { cursor:pointer; color:var(--accent); font-size:calc(14px * var(--text-scale, 1)); padding:6px 0; }
 .trial-run-options .trial-consent-check { margin:10px 0; }
 .medical-shell .trial-hub .trial-patient-context { padding:12px 16px; margin:12px 0 6px; }
 .trial-patient-context p { margin:6px 0 0; }
 .trial-hub .trial-ai .module-head { margin-bottom:8px; }
-.trial-hub .trial-ai .module-head h2 { font-size:21px; margin:0; }
+.trial-hub .trial-ai .module-head h2 { font-size:calc(21px * var(--text-scale, 1)); margin:0; }
 
 .patient-mobile-identity { display:none; }
 @media (max-width:700px) {
-  .medical-shell .patient-mobile-identity { display:flex; position:sticky; top:-12px; z-index:6; gap:12px; flex-wrap:wrap; background:var(--paper,#fafbf8); border-bottom:1px solid var(--border); padding:10px 0; font-size:16px; }
+  .medical-shell .patient-mobile-identity { display:flex; position:sticky; top:-12px; z-index:6; gap:12px; flex-wrap:wrap; background:var(--paper,#fafbf8); border-bottom:1px solid var(--border); padding:10px 0; font-size:calc(16px * var(--text-scale, 1)); }
 }
 .lab-plot-scroll { overflow-x:auto; max-width:100%; }
 .lab-plot-scroll svg { min-width:420px; width:100%; }
 .large-text .lab-plot-scroll svg { min-width:560px; }
-.chart-labs .lab-plot-scroll svg text { font-size:19px; }
+.chart-labs .lab-plot-scroll svg text { font-size:calc(19px * var(--text-scale, 1)); }
 .large-text .chart-labs .lab-plot-scroll svg text { font-size:23px; }
 .plan-conflict { border:1px solid var(--border); padding:16px; }
 .plan-conflict p { white-space:pre-wrap; overflow-wrap:anywhere; }
 .plan-conflict > div { border-bottom:1px solid var(--border); padding:10px 0; }
 
-.composer-materials { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:8px 2px; color:var(--muted); font-size:12px; }
+.composer-materials { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:8px 2px; color:var(--muted); font-size:calc(12px * var(--text-scale, 1)); }
 .composer-materials details { min-width:0; flex:1; }
 .composer-materials summary { cursor:pointer; }
 .composer-materials ul { padding-left:18px; margin:6px 0; max-height:160px; overflow:auto; overflow-wrap:anywhere; }
 .composer-materials > button { flex-shrink:0; }
 
-.composer-advanced { position: relative; font-size: 12px; color: var(--muted); }
-.composer-advanced > summary { cursor: pointer; padding: 6px; }
-.composer-advanced-fields { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }

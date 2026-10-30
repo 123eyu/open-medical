@@ -52,7 +52,7 @@
 .review-item small {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: var(--muted);
 }
 .review-item-actions {
@@ -99,7 +99,7 @@
   white-space: nowrap;
   vertical-align: middle;
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   line-height: 30px;
   border: 0;
   border-radius: 15px;
@@ -125,7 +125,7 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: var(--muted);
 }
 .intake-source-bar .text-button {
@@ -150,7 +150,7 @@
 }
 .intake-confirm-bar > span {
   flex: 1;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 
 .review-reasons {
@@ -159,7 +159,7 @@
   gap: 6px;
   flex-wrap: wrap;
   margin-top: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: var(--muted);
 }
 .intake-review .review-reasons button,
@@ -167,7 +167,7 @@
   min-height: 32px;
   height: auto;
   padding: 0 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   line-height: 30px;
   border: 1px solid #d6e0d0;
   border-radius: 11px;
@@ -196,7 +196,7 @@
   flex-direction: row;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   color: var(--ink);
 }
 .modal-form .intake-rerun-choice input {
@@ -221,7 +221,7 @@
   align-items: center;
   gap: 8px;
   flex-basis: 100%;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .modal-form .review-allergy-status select {
   width: auto;

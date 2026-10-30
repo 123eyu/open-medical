@@ -22,10 +22,10 @@
 }
 .kw-source-heading small {
   color: #627368;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-source-heading h2 {
-  font-size: 18px;
+  font-size: calc(18px * var(--text-scale, 1));
   line-height: 1.5;
   margin: 6px 0 0;
   overflow-wrap: anywhere;
@@ -42,7 +42,7 @@
   gap: 6px 14px;
   padding: 0 20px 12px;
   border-bottom: 1px solid #dce5df;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: #607367;
 }
 .kw-source-context strong {

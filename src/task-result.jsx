@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { EvidenceReader } from "./evidence-reader";
 import { medicalExcerpt } from "../shared/medical-excerpt.mjs";
+import { openKnowledgeCitation } from "./knowledge-source-events.js";
 import "./task-result.css";
 export function TaskResult({ run, files = [], sessionId }) {
   const results = run?.displayResults || [],
@@ -235,6 +236,23 @@ function AssessmentResult({ diagnostic, assessment, files, sessionId }) {
               >
                 查看本次评估依据 · {sources.length} 项
               </button>
+              {assessment.knowledgeMatches?.length > 0 && (
+                <article className="assessment-knowledge">
+                  <h4>指南与知识库出处</h4>
+                  <ul>
+                    {assessment.knowledgeMatches.map((m, i) => (
+                      <li key={i}>
+                        <a href={m.url} onClick={(event) => {
+                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          event.preventDefault();
+                          openKnowledgeCitation(m.url);
+                        }}>{m.docTitle} · L{m.line}–{m.endLine}</a>
+                        {m.reviewStatus !== "reviewed" && <small> · 来源待核对</small>}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )}
             </>
           )}
         </div>

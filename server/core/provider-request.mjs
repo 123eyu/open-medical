@@ -1,6 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { AppError } from "../errors.mjs";
 
+// Rate-limit waits honour retry-after up to one minute.
+const MAX_RETRY_WAIT_MS = 60000;
+
 // timeoutMs 约束的是“连续无数据”的时长（首字节前、流式片段之间），
 // 不是整段输出：长推理和长工具参数只要还在持续输出就不会被掐断。
 export function idleSignal(signal, ms) {
@@ -85,7 +88,7 @@ export async function requestProvider(fetchImpl, url, init, onStatus = () => {},
       const header = response.headers.get("retry-after");
       const requested = header === null ? NaN : /^\d+(\.\d+)?$/.test(header)
         ? Number(header) * 1000 : Date.parse(header) - Date.now();
-      const waitMs = Math.min(5000, Math.max(250, Number.isFinite(requested) ? requested : 300 * 2 ** attempt));
+      const waitMs = Math.min(MAX_RETRY_WAIT_MS, Math.max(250, Number.isFinite(requested) ? requested : 300 * 2 ** attempt));
       // An errored error-response body may reject cancellation after a socket
       // failure; disposing it must not prevent the bounded pre-stream retry.
       try { await response.body?.cancel(); } catch { /* best-effort disposal */ }

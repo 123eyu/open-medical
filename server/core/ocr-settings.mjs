@@ -37,11 +37,18 @@ const flat = (text) => String(text || "").replace(/\s+/g, "");
 const hits = (text) =>
   OCR_TEST_BASELINE.filter((item) => flat(text).includes(flat(item)));
 
-// 本机识别服务（PaddleOCR / medagent-gpu-worker）：仅允许 https 或回环/内网
-// http 由部署方自担——这里沿用主模型连接的口径，http 仅回环；GPU Worker 常见
-// 经 HTTP 代理映射出公网，应使用 https 或隧道。API Key 对应 worker 的
-// WORKER_API_KEY，服务端未启用鉴权时可留空。
-function serviceCandidate(previous, body) {
+// 本机识别服务（PaddleOCR / medagent-gpu-worker）：HTTPS 或 HTTP 均可；
+// 非本机的 HTTP 地址由 serviceInsecure() 标出，设置页提示明文传输风险。
+// API Key 对应 worker 的 WORKER_API_KEY，服务端未启用鉴权时可留空。
+export function serviceInsecure(baseUrl) {
+  try {
+    const url = new URL(baseUrl);
+    return url.protocol === "http:" && !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+export function serviceCandidate(previous, body) {
   const input = body && typeof body === "object" ? body : {};
   const rawBase = String(input.baseUrl ?? previous?.baseUrl ?? "").trim();
   check(rawBase.length > 0 && rawBase.length <= 500, "OCR_SETTINGS", "请填写 OCR 服务的接口地址");
@@ -56,12 +63,9 @@ function serviceCandidate(previous, body) {
     "OCR_SETTINGS",
     "OCR 服务地址不能包含账号、密码、查询参数或片段",
   );
-  check(
-    url.protocol === "https:" ||
-      (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)),
-    "OCR_SETTINGS",
-    "OCR 服务地址需使用 HTTPS；本机服务允许回环 HTTP 地址",
-  );
+  // 允许 HTTP（自建 worker 常见只有 HTTP）；非本机 HTTP 会标记 insecure，
+  // 设置页提示内容与 API Key 明文传输。
+  check(["https:", "http:"].includes(url.protocol), "OCR_SETTINGS", "OCR 服务地址需以 http:// 或 https:// 开头");
   const config = { baseUrl: serviceUrl(rawBase, "") };
   const apiKey = input.apiKey !== undefined ? String(input.apiKey || "").trim() : previous?.apiKey || "";
   check(apiKey.length <= 8192, "OCR_SETTINGS", "API Key 格式无效");
@@ -145,7 +149,7 @@ export class OcrSettings {
       strategy: this.strategy(),
       strategies: OCR_STRATEGIES,
       service: service
-        ? { baseUrl: service.baseUrl, hasKey: Boolean(service.apiKey), timeoutMs: service.timeoutMs }
+        ? { baseUrl: service.baseUrl, hasKey: Boolean(service.apiKey), timeoutMs: service.timeoutMs, insecure: serviceInsecure(service.baseUrl) }
         : null,
       model: saved
         ? {

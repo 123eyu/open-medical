@@ -3,6 +3,8 @@ import { check } from "../errors.mjs";
 import { OBSERVATIONS_MESSAGE, TASK_INPUT_MESSAGE } from "./run-progress.mjs";
 import { summarizeTaskInputs } from "./input-compaction.mjs";
 
+const MAX_SUMMARY_ROOM_CHARS = 6000;
+
 const size = (value) => JSON.stringify(value).length;
 
 // Keep whole assistant/tool batches. A compaction must never leave orphan tool results.
@@ -66,7 +68,10 @@ export async function compactContext({
   // Reserving against policy alone needlessly summarized ordinary intake requests.
   const fixedBudget = protectedBudget.fits && protectedRoom >= 1536 * protectedBudget.calibration && maxChars - protectedBudget.chars >= 512
     ? protectedBudget : measureResult([...system, ...(exactLatest ? [exactLatest] : [])]);
-  const summaryRoom = Math.max(0, Math.min(2500, Math.floor(maxChars * 0.25), Math.floor((maxChars - fixedBudget.chars) / 2),
+  // The summary carries everything older than the kept tail across long runs,
+  // so give it real room; the window-based terms below still shrink it for
+  // small models.
+  const summaryRoom = Math.max(0, Math.min(MAX_SUMMARY_ROOM_CHARS, Math.floor(maxChars * 0.25), Math.floor((maxChars - fixedBudget.chars) / 2),
     Math.floor((fixedBudget.inputLimit - fixedBudget.schemaTokens - fixedBudget.messageTokens - fixedBudget.mediaTokens) / (6 * fixedBudget.calibration))));
   // Compaction is triggered before the hard limit. If protected content leaves
   // no useful summary room but the complete request still fits, send it intact.
@@ -157,7 +162,8 @@ export async function compactContext({
   let summary = priorSummary ? priorSummary.content.slice(priorSummary.content.indexOf("\n") + 1) : "";
   let truncatedSummaries = 0, fallbackSummaries = 0;
   const summaryLimit = Math.max(128, Math.floor(summaryRoom * 0.7));
-  const outputReserve = Math.max(256, summaryLimit * 3);
+  // Never ask for more output than the model allows.
+  const outputReserve = Math.min(provider.maxTokens ?? 8192, Math.max(256, summaryLimit * 3));
   let fragment = 0;
   const inputFor = (historyRecords) => [
     {

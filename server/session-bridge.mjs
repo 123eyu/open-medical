@@ -8,10 +8,12 @@ import { assessmentPatientSource } from "./medical/assessment-source.mjs";
 // 医疗叠层）。旧版 sessions 表里的会话在启动时一次性迁移成会话工作区
 // （migrateLegacySessions），之后不再有第二条执行路径。患者页、随访、
 // 计划任务、消息摘要通过 dispatcher 使用同一引擎。
-import { imageTextWithFallback, visionTranscriber } from "./core/image-text.mjs";
+import { imageTextWithFallback, localOcrLines, visionTranscriber } from "./core/image-text.mjs";
+import { redactImage, replacedSpans } from "./medical/image-redact.mjs";
 import { assessOcrQuality } from "../shared/ocr-quality.mjs";
 import { autoClassifyMaterial, suggestDocumentDate, isCalendarDate, MATERIAL_CATEGORIES } from "../shared/material-classify.mjs";
 import { sqliteTransaction } from "./sqlite-transaction.mjs";
+import { materialTextHash, rulesIdentity } from "./medical/privacy.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -63,7 +65,7 @@ const resolveMode = (mode) => {
 export class SessionBridge {
   // store：医疗存储（审计日志；sessions 表只在迁移时读取）；service：统一内核；
   // sessionsRoot：会话工作区自动目录的父目录（数据库目录下）。
-  constructor(store, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, learning = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null } = {}) {
+  constructor(store, service, { sessionsRoot, patientRecord = null, skills = null, doctor = null, pluginHost = null, learning = null, plugins = [], contextBudget = 80000, maxRounds = 512, onMaterialIngest, onMaterialReingest, ocrModel = null, ocrStrategy = null, privacy = null } = {}) {
     Object.assign(this, {
       store,
       service,
@@ -82,7 +84,139 @@ export class SessionBridge {
       // ocrStrategy() 返回 auto|model|local（见 core/ocr-settings.mjs）。
       ocrModel,
       ocrStrategy,
+      // 去隐私（medical/privacy.mjs 的 MaterialPrivacy）：开启后发给模型的
+      // 资料文本一律是脱敏版本，原文只留在本机给医生看。
+      privacy,
+      privacyJobs: new Map(),
     });
+  }
+
+  // ---------- 去隐私 ----------
+  // 开启后，资料保存的就是脱敏文本（原文不保留），图片保存的是打码图。
+  // 刚导入、脱敏还在进行时，发给模型的文本按模式用本地规则兜底或给出
+  // 占位说明，并排队脱敏。
+  privacyReady(file) {
+    return file.privacy?.status === "ready" && file.privacy.textHash === materialTextHash(file.text);
+  }
+  modelText(sessionId, file) {
+    if (!this.privacy?.enabled() || this.privacyReady(file)) return file.text;
+    // 尚未识别的图片材料只有索引说明，没有病历内容。
+    if (file.extraction?.type === "image" && file.extraction?.ocr?.status !== "ready") return this.privacy.rules(file.text, this.sessionIdentities(sessionId)).text;
+    this.protectMaterial(sessionId, file.id);
+    if (this.privacy.strict())
+      return `[资料「${this.modelName(sessionId, file)}」${file.privacy?.status === "failed" && file.privacy.textHash === materialTextHash(file.text) ? `脱敏失败：${file.privacy.error}` : "正在脱敏"}。严格模式下脱敏完成前不能读取内容，请稍后再试，或请医生检查脱敏服务设置。]`;
+    return this.privacy.rules(file.text, this.sessionIdentities(sessionId)).text;
+  }
+  modelName(sessionId, file) {
+    if (!this.privacy?.enabled() || this.privacyReady(file)) return file.name;
+    return this.privacy.rules(file.name, this.sessionIdentities(sessionId)).text;
+  }
+  sessionIdentities(sessionId) {
+    try {
+      const patientId = this.workspace(sessionId)?.patientId;
+      const p = patientId && this.patientRecord ? this.patientRecord(patientId) : null;
+      return p ? [p.name, p.phone, p.patientNumber].filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }
+  indexView(sessionId, file) {
+    return this.privacy?.enabled() ? { ...file, name: this.modelName(sessionId, file), text: this.modelText(sessionId, file) } : file;
+  }
+  // 脱敏一段文本：服务优先；失败时按模式用规则兜底（返回 method:"rules"）
+  // 或返回 failed。
+  async deidentifyForStorage(sessionId, text) {
+    try {
+      check(this.privacy.hasService(), "PRIVACY_SERVICE_MISSING", "未配置脱敏服务");
+      return await this.privacy.protect(text);
+    } catch (error) {
+      const reason = String(error.message || error).slice(0, 300);
+      if (this.privacy.strict()) return { failed: true, error: reason };
+      return { ...this.privacy.rules(text, this.sessionIdentities(sessionId)), identity: rulesIdentity(text), serviceError: reason };
+    }
+  }
+  deidentifyName(sessionId, name, identity) {
+    let out = String(name);
+    for (const value of [identity?.name].filter((v) => typeof v === "string" && v.length >= 2)) out = out.split(value).join("[患者姓名]");
+    return this.privacy.rules(out, this.sessionIdentities(sessionId)).text;
+  }
+  privacyRecord(result, sourceHash, textHash, extra = {}) {
+    return {
+      status: "ready",
+      method: result.method,
+      textHash,
+      sourceHash,
+      at: iso(),
+      ...(result.policy ? { policy: result.policy } : {}),
+      ...(result.identity ? { identity: result.identity } : {}),
+      ...(result.serviceError ? { serviceError: result.serviceError } : {}),
+      ...extra,
+    };
+  }
+  // 后台脱敏一份资料并把脱敏文本写回（原文不再保留）。同一份资料同时只跑
+  // 一个任务；文本在脱敏期间变化则丢弃结果（变化处会重新排队）。
+  protectMaterial(sessionId, fileId, { force = false } = {}) {
+    if (!this.privacy?.enabled()) return null;
+    const key = `${sessionId}:${fileId}`;
+    if (this.privacyJobs.has(key)) return this.privacyJobs.get(key);
+    const job = (async () => {
+      const file = (this.workspace(sessionId).materials || []).find((item) => item.id === fileId);
+      if (!file) return null;
+      if (!force && this.privacyReady(file) && file.privacy.method === "service") return file;
+      if (file.extraction?.type === "image" && file.extraction?.ocr?.status !== "ready") return file; // 等识别时一起打码
+      const sourceHash = materialTextHash(file.text);
+      const result = await this.deidentifyForStorage(sessionId, file.text);
+      const original = file.extraction?.originalText;
+      const originalResult = original && !file.extraction.originalTextDeidentified && !result.failed ? await this.deidentifyForStorage(sessionId, original) : null;
+      let updated = null;
+      this.service.store.update(sessionId, (current) => {
+        const target = (current.materials || []).find((item) => item.id === fileId);
+        if (!target || materialTextHash(target.text) !== sourceHash) return;
+        if (result.failed) {
+          target.privacy = { status: "failed", error: result.error, textHash: sourceHash, at: iso() };
+        } else {
+          target.text = result.text;
+          target.hash = materialTextHash(result.text);
+          target.size = Buffer.byteLength(result.text);
+          target.name = this.deidentifyName(sessionId, target.name, result.identity);
+          if (originalResult && !originalResult.failed) {
+            target.extraction.originalText = originalResult.text;
+            target.extraction.originalTextDeidentified = true;
+          }
+          target.privacy = this.privacyRecord(result, file.privacy?.sourceHash || sourceHash, target.hash, file.privacy?.images ? { images: file.privacy.images } : {});
+        }
+        updated = target;
+      });
+      if (updated) {
+        this.store.audit(sessionId, "file.deidentified", { fileId, status: updated.privacy.status, method: updated.privacy.method || null });
+        if (updated.privacy.status === "ready" && this.onMaterialReingest)
+          try {
+            this.onMaterialReingest(updated);
+          } catch {}
+      }
+      return updated;
+    })().finally(() => this.privacyJobs.delete(key));
+    this.privacyJobs.set(key, job);
+    job.catch(() => {});
+    return job;
+  }
+  // 开启脱敏或服务恢复后补处理：没有服务脱敏结果的资料重新排队。
+  async reprocessPrivacy({ onlyMissing = true } = {}) {
+    if (!this.privacy?.enabled()) return { queued: 0 };
+    const jobs = [];
+    for (const w of this.service.store.list?.() || []) {
+      if (!sessionKind(w)) continue;
+      for (const file of w.materials || []) {
+        const done = this.privacyReady(file) && file.privacy.method === "service";
+        if (onlyMissing && done) continue;
+        jobs.push({ id: w.id, fileId: file.id });
+      }
+    }
+    // 逐个处理，避免占满 worker 的并发预算。
+    (async () => {
+      for (const job of jobs) await this.protectMaterial(job.id, job.fileId, { force: !onlyMissing }).catch(() => {});
+    })();
+    return { queued: jobs.length };
   }
 
   // ---------- 类别判定 ----------
@@ -231,8 +365,9 @@ export class SessionBridge {
     }
     return { migrated, failed };
   }
-  // 医疗会话当前提供的工具名（医疗核心工具 + 已启用插件工具）。每次实时
-  // 计算，插件启停、患者渠道连接变化立即反映，不在启动时固定。
+  // 医疗会话的领域工具名（医疗核心工具 + 已启用插件工具），不含通用内核
+  // 工具（文件、终端、git、浏览器、委派等）。每次实时计算，插件启停、渠道
+  // 配置变化立即反映，不在启动时固定。
   toolNames() {
     const registry = new ToolRegistry();
     this.service.domain?.registerTools?.({
@@ -393,16 +528,18 @@ export class SessionBridge {
         422,
       );
       check(
-        current.materials.every((f) => f.hash !== file.hash),
+        // 开启脱敏后保存的是脱敏文本，同时比对脱敏前的原文指纹。
+        current.materials.every((f) => f.hash !== file.hash && f.privacy?.sourceHash !== file.hash),
         "DUPLICATE_FILE",
         "相同内容已在本会话中",
         409,
       );
       current.materials.push(file);
     });
+    this.protectMaterial(id, file.id);
     if (this.onMaterialIngest)
       try {
-        this.onMaterialIngest(file);
+        this.onMaterialIngest(this.indexView(id, file));
       } catch {}
     return file;
   }
@@ -430,7 +567,15 @@ export class SessionBridge {
     //   model 识别模型先行，失败回本机 OCR
     //   local 仅本机 OCR，图片字节不发往任何模型
     // 医生手动「重新识别」（preferVision）视为明确同意用模型，越过策略开关。
-    const strategy = preferVision ? "model" : this.ocrStrategy?.() || "auto";
+    // 开启脱敏后原图里的身份信息无法打码，原图只交给 OCR（OCR 服务或本机
+    // 组件），识别出的文字再脱敏；不发给视觉模型。
+    // 已打码的图片（重新识别时）可以交给视觉模型；未打码的原图不行。
+    const privacyOn = Boolean(this.privacy?.enabled());
+    const maskedIds = new Set((workspace.artifacts || []).filter((a) => a.privacy === "masked").map((a) => a.id));
+    const allMasked = images.every((image) => maskedIds.has(image.artifactId));
+    const imagesLocal = privacyOn && !allMasked;
+    check(!(preferVision && imagesLocal), "PRIVACY_IMAGES_LOCAL", "已开启患者资料脱敏：原图不会发给视觉模型，只能用文字识别（OCR）。如确需模型识别，请先在设置中关闭脱敏。", 409);
+    const strategy = imagesLocal ? "local" : preferVision ? "model" : this.ocrStrategy?.() || "auto";
     const mainProvider = this.service.provider;
     const visionProvider =
       this.ocrModel?.() || (mainProvider?.vision === true ? mainProvider : null);
@@ -456,12 +601,20 @@ export class SessionBridge {
       return imageTextWithFallback(data, signal, analyzeImage);
     };
     const pages = [];
+    const boxPages = []; // 开启脱敏时：每页 OCR 行坐标，用于打码
     let kind = "ocr";
     let upgraded = false;
     for (const image of images) {
       signal?.throwIfAborted();
       const original = this.service.artifacts.read(id, image.artifactId);
-      let result = await transcribe(original.data);
+      let result;
+      if (imagesLocal) {
+        // 原图只交给 OCR（OCR 服务或本机组件），保留行坐标用于打码。
+        const local = await localOcrLines(original.data, signal);
+        check(local.available, "OCR_UNAVAILABLE", "已开启患者资料脱敏：图片只能用文字识别（OCR）读取，但当前没有可用的 OCR 服务或本机识别组件。请在文字识别设置中配置 OCR 服务。", 503);
+        result = { kind: "ocr", text: local.lines.map((line) => line.text).join("\n") };
+        boxPages.push({ artifactId: image.artifactId, page: image.page, lines: local.lines, data: original.data });
+      } else result = await transcribe(original.data);
       // 本地 OCR 质量过差且识别模型可用时自动升级重转录，避免垃圾文本流入病历。
       // 干净的模板页（标签重复但常用字规整，如系统导出的无数值清单）升级也读不出
       // 原文没有的数值，跳过以省去无效的视觉调用。「仅本机」策略绝不外发。
@@ -495,8 +648,44 @@ export class SessionBridge {
     const text = pages.map(page => `[${file.name}${page.page ? ` 第 ${page.page} 页` : ""} · ${sourceLabel}]
 ` + page.lines.map(line => `${line.text}${line.confidence < 0.7 ? " [识别置信度低，请核对原图]" : ""}`).join("\n")).join("\n\n");
     const quality = assessOcrQuality(text);
+    // 开启脱敏：识别出的文字脱敏后再保存，图片按脱敏结果打码并替换原图。
+    let privacyResult = null;
+    let originalResult = null;
+    let sourceHash = null;
+    const replacements = [];
+    // 失败或取消时清掉已生成的打码图，原图和原记录保持不变。
+    const discardRedacted = () => {
+      for (const replacement of replacements)
+        try {
+          this.service.artifacts.remove(id, replacement.to);
+        } catch {}
+    };
+    if (privacyOn) try {
+      const baseRaw = file.extraction.type === "image" ? "" : file.extraction.originalText || file.text;
+      const finalRaw = (file.extraction.type === "image" ? "" : `${baseRaw}\n\n`) + text;
+      sourceHash = file.privacy?.sourceHash || materialTextHash(finalRaw);
+      privacyResult = await this.deidentifyForStorage(id, finalRaw);
+      if (!privacyResult.failed) {
+        const spans = replacedSpans(finalRaw, privacyResult.text);
+        const identity = privacyResult.identity || {};
+        const secrets = [...new Set([...(spans || []), identity.name, identity.birthDate].filter((v) => typeof v === "string" && v.trim().length >= 2))];
+        for (const page of boxPages) {
+          signal?.throwIfAborted();
+          const redacted = await redactImage(page.data, page.lines, secrets);
+          const complete = redacted.complete && spans !== null;
+          const saved = this.service.artifacts.save(id, `已打码-${page.page ? `第${page.page}页` : "图片"}.jpg`, redacted.image, "privacy");
+          this.service.artifacts.mark(id, saved.id, { privacy: complete ? "masked" : "partial" });
+          replacements.push({ from: page.artifactId, to: saved.id, complete, masked: redacted.masked });
+        }
+        if (baseRaw && !file.extraction.originalTextDeidentified) originalResult = await this.deidentifyForStorage(id, baseRaw);
+      }
+    } catch (error) {
+      discardRedacted();
+      throw error;
+    }
+    const swapIds = (value) => replacements.reduce((out, r) => out.split(r.from).join(r.to), String(value));
     let prepared;
-    this.service.store.update(id, current => {
+    try { this.service.store.update(id, current => {
       const target = current.materials.find(item => item.id === fileId);
       check(target, "NOT_FOUND", "材料已移除", 404);
       check((target.revision || 0) === originalRevision, "REVISION_CONFLICT", "识别期间资料已变化，请核对最新文字后重试", 409);
@@ -520,6 +709,24 @@ export class SessionBridge {
       };
       target.extraction.originalText = file.extraction.originalText || file.text;
       target.text = (file.extraction.type === "image" ? "" : target.extraction.originalText + "\n\n") + text;
+      if (privacyResult && !privacyResult.failed) {
+        target.text = swapIds(privacyResult.text);
+        if (originalResult && !originalResult.failed) {
+          target.extraction.originalText = swapIds(originalResult.text);
+          target.extraction.originalTextDeidentified = true;
+        } else if (file.extraction.type === "image") target.extraction.originalText = swapIds(this.privacy.rules(target.extraction.originalText).text);
+        if (target.extraction.type === "image" && replacements[0]) target.extraction.artifactId = replacements[0].to;
+        if (Array.isArray(target.extraction.pageImages))
+          target.extraction.pageImages = target.extraction.pageImages.map((p) => ({ ...p, artifactId: replacements.find((r) => r.from === p.artifactId)?.to || p.artifactId }));
+        target.name = this.deidentifyName(id, target.name, privacyResult.identity);
+        target.hash = materialTextHash(target.text);
+        target.size = Buffer.byteLength(target.text);
+        target.privacy = this.privacyRecord(privacyResult, sourceHash, target.hash, {
+          images: replacements.map((r) => ({ artifactId: r.to, complete: r.complete, masked: r.masked })),
+        });
+      } else if (privacyResult?.failed) {
+        target.privacy = { status: "failed", error: privacyResult.error, textHash: materialTextHash(target.text), at: iso() };
+      }
       Object.assign(target, autoClassifyMaterial(target));
       if (!target.documentDate) {
         const date = suggestDocumentDate({ name: target.name, text: target.text });
@@ -527,15 +734,25 @@ export class SessionBridge {
         else delete target.dateSuggestion;
       }
       prepared = target;
-    });
-    this.reingestMaterial(prepared);
+    }); } catch (error) {
+      discardRedacted();
+      throw error;
+    }
+    // 打码图已替换引用，原图不再保留。
+    for (const replacement of replacements)
+      try {
+        this.service.artifacts.remove(id, replacement.from);
+      } catch {}
+    if (replacements.length) this.store.audit(id, "file.images.redacted", { fileId, images: replacements.map((r) => ({ masked: r.masked, complete: r.complete })) });
+    this.reingestMaterial(prepared, id);
     this.store.audit(id, "file.ocr.completed", { fileId, pages: pages.length, method: kind, quality: quality.level, upgraded, strategy });
     return prepared;
   }
   // 材料文本变化后同步检索索引，否则助手检索到的仍是旧识别文本。
-  reingestMaterial(file) {
+  reingestMaterial(file, sessionId) {
+    if (sessionId) this.protectMaterial(sessionId, file.id);
     if (!this.onMaterialReingest) return;
-    try { this.onMaterialReingest(file); } catch {}
+    try { this.onMaterialReingest(sessionId ? this.indexView(sessionId, file) : file); } catch {}
   }
   // 病历整理回写质量标注：从建档/档案更新提案的正文里找出模型自述读不清的
   // 原文文件，把它们的识别质量降为「待核对」（已有更差的评级则不动）。
@@ -600,7 +817,7 @@ export class SessionBridge {
       if (target.extraction.ocr) target.extraction.ocr.quality = quality;
       prepared = target;
     });
-    this.reingestMaterial(prepared);
+    this.reingestMaterial(prepared, id);
     this.store.audit(id, "file.text.edited", { fileId, chars: value.length });
     return prepared;
   }
@@ -823,10 +1040,12 @@ export class SessionBridge {
     return [
       ...materials.map((f) => ({
         id: f.id,
-        name: f.name,
-        text: f.text,
+        name: this.modelName(w.id, f),
+        text: this.modelText(w.id, f),
         hash: f.hash,
         extraction: f.extraction,
+        // 仅本机使用（建档时回填身份），不进入模型上下文。
+        ...(f.privacy?.identity ? { privacy: { identity: f.privacy.identity } } : {}),
       })),
       {
         id: randomUUID(),

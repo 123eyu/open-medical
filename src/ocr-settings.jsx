@@ -134,6 +134,9 @@ export function OcrSettingsSection() {
               安装本机识别引擎
             </button>
           )}
+          {data.service?.insecure && (
+            <p role="alert">识别服务 {data.service.baseUrl} 使用明文 HTTP，图片在网络上未加密传输；经公网访问时建议使用 HTTPS。</p>
+          )}
           {engine?.error && <p role="alert">{engine.error}</p>}
           <button
             onClick={() =>

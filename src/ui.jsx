@@ -201,8 +201,8 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
   // shell falls back to the ordinary artifact view when no card is registered.
   const resultCard = resultCards.find((item) => item.type === artifact.type);
   if (resultCard) return (
-    <div className="acceptance case-reader" role="dialog" aria-label={resultCard.label || "查看结果"}>
-      <div className="accept-bar"><button className="text-button" onClick={onClose}>‹ 返回对话</button><h3>{resultCard.label || artifact.title || "查看结果"}</h3></div>
+    <div className="acceptance case-reader" role="region" aria-label={resultCard.label || "查看结果"}>
+      <div className="accept-bar"><button className="text-button accept-close" onClick={onClose} aria-label="关闭结果，回到对话">× 关闭</button><h3>{resultCard.label || artifact.title || "查看结果"}</h3></div>
       <div className="case-reader-body">
         <ResultCard artifact={artifact} fallback={artifactToLines(artifact, { preview: true }).map((line, index) => (
           <p key={index} className={line.startsWith("【") || line.startsWith("—") ? "acc-head" : ""}>{line}</p>
@@ -213,9 +213,9 @@ export function AcceptanceView({ artifact, previous, onSource, onClose, onReview
     </div>
   );
   return (
-    <div className="acceptance" role="dialog" aria-label="查看结果">
+    <div className="acceptance" role="region" aria-label="查看结果">
       <div className="accept-bar">
-        <button className="text-button" onClick={onClose}>‹ 返回对话</button>
+        <button className="text-button accept-close" onClick={onClose} aria-label="关闭结果，回到对话">× 关闭</button>
         <h3>{artifact.title} · v{artifact.version}</h3>
         <span className={`acc-badge ${artifact.status}`}>{STATUS_TEXT[artifact.status] || artifact.status}</span>
         <div className="seg">

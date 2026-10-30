@@ -1039,7 +1039,33 @@ export class KnowledgeOrganizer {
     }
     return { jobs, skipped, documentCount: items.length };
   }
+  // Assembling the graph parses every analysis; searches call this on each
+  // query. Reuse the result until any input row changes. The signature is
+  // computed inside SQLite and covers every field the assembly reads.
+  graphSignature() {
+    const db = this.store.db;
+    const rows = [
+      db.prepare(`SELECT id, json_extract(data,'$.sha256'), json_extract(data,'$.reviewStatus'), json_extract(data,'$.collection'),
+        json_extract(data,'$.title'), json_extract(data,'$.edition'), json_extract(data,'$.createdAt') FROM guideline_docs ORDER BY id`).all(),
+      db.prepare(`SELECT doc_id, length(data), json_extract(data,'$.updatedAt'), json_extract(data,'$.sourceHash'), json_extract(data,'$.extractionVersion')
+        FROM knowledge_analysis ORDER BY doc_id`).all(),
+      db.prepare(`SELECT rowid, json_extract(data,'$.id'), json_extract(data,'$.docId'), json_extract(data,'$.status'), json_extract(data,'$.stage'),
+        json_extract(data,'$.error'), json_extract(data,'$.batchDone'), json_extract(data,'$.batchTotal'), json_extract(data,'$.indexOnly'),
+        json_extract(data,'$.fileName'), json_extract(data,'$.previousAnalysis.updatedAt') FROM knowledge_jobs ORDER BY rowid`).all(),
+    ];
+    return createHash("sha256").update(JSON.stringify([MEDICAL_GRAPH_VERSION, rows])).digest("hex");
+  }
   graph(collection) {
+    const key = collection || "", signature = this.graphSignature();
+    this.graphCache ||= new Map();
+    const cached = this.graphCache.get(key);
+    if (cached?.signature === signature) return cached.value;
+    const value = this.assembleGraph(collection);
+    if (this.graphCache.size >= 32) this.graphCache.delete(this.graphCache.keys().next().value);
+    this.graphCache.set(key, { signature, value });
+    return value;
+  }
+  assembleGraph(collection) {
     const items = this.graphDocuments(collection), sources = [];
     for (const { doc, analysis, job } of items) {
       // Keep the last usable result visible while its replacement runs or fails.
@@ -1061,8 +1087,9 @@ export class KnowledgeOrganizer {
       schemaVersion: MEDICAL_GRAPH_VERSION,
     };
   }
-  searchEvidence(query, docIds) {
-    const graph = this.graph();
+  searchEvidence(query, docIds, collection) {
+    if (!docIds.size) return [];
+    const graph = this.graph(collection);
     const terms = new Set(knowledgeTokens(query));
     const seeds = graph.nodes.filter(n => n.evidence.some(e => docIds.has(e.docId)) && [n.label,...(n.aliases || [])].some(label => {
       const tokens = knowledgeTokens(label);

@@ -549,7 +549,7 @@ export function PatientsView({
       {notice && <p className="notice">{notice}</p>}
       {!detail && createProposals.length > 0 && (
         <div className="patient-risk-list" style={{ marginBottom: 14 }}>
-          <p className="muted" style={{ fontSize: 12 }}>
+          <p className="muted" style={{ fontSize: "calc(12px * var(--text-scale, 1))" }}>
             AI 建档提案（从对话材料中识别的新患者，确认后才真正建档）：
           </p>
           {createProposals.map((proposal) => {

@@ -1,7 +1,7 @@
 .doctor-notifications { max-width: 850px; }
 .notification-channel { border: 1px solid #d9e3d8; border-radius: 12px; padding: 24px; margin: 24px 0; background: #fff; }
 .notification-channel h3 { margin: 0 0 16px; }
-.notification-channel h3 small { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 12px; }
+.notification-channel h3 small { font-size: calc(13px * var(--text-scale, 1)); font-weight: 400; color: var(--muted); margin-left: 12px; }
 .notification-channel fieldset { border: 0; padding: 0; margin: 18px 0; min-width: 0; }
 .notification-channel label { display: grid; gap: 7px; margin: 14px 0; }
 .notification-channel input:not([type=checkbox]) { width: 100%; min-width: 0; }
@@ -22,6 +22,6 @@
 .doctor-notifications button[type=submit] { background: var(--accent-deep, #28674f); border-color: var(--accent-deep, #28674f); color: white; }
 .doctor-notifications button:disabled { opacity: .5; cursor: default; }
 .doctor-notifications input[type=checkbox] { accent-color: var(--accent-deep, #28674f); }
-.doctor-notifications summary { font-size: 14px; cursor: pointer; }
-.notification-warning { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--caution-line, #ecd7ae); border-radius: 8px; background: var(--caution-soft, #fdf6e9); color: var(--caution, #8a5a12); font-size: 14px; }
+.doctor-notifications summary { font-size: calc(14px * var(--text-scale, 1)); cursor: pointer; }
+.notification-warning { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--caution-line, #ecd7ae); border-radius: 8px; background: var(--caution-soft, #fdf6e9); color: var(--caution, #8a5a12); font-size: calc(14px * var(--text-scale, 1)); }
 .notification-channel select { width: 100%; min-width: 0; }

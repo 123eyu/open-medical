@@ -42,7 +42,7 @@
 .demo-confirm > div { display: flex; gap: 8px; }
 
 .hub-demo-entry { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 18px 20px; border: 1px solid #cdded4; border-radius: 12px; background: #f3f8f4; margin: 18px 0; }
-.hub-demo-entry p { margin: 5px 0 0; color: #52635a; font-size: 13px; }
+.hub-demo-entry p { margin: 5px 0 0; color: #52635a; font-size: calc(13px * var(--text-scale, 1)); }
 @media (max-width: 760px) {
   .demo-scenario { grid-template-columns: 28px minmax(0, 1fr); }
   .demo-actions { grid-column: 2; justify-content: flex-start; }

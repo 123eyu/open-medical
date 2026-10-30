@@ -6,7 +6,7 @@ export default defineUiPlugin({
     "chat.resultCards": {
       similar_cases: {
         label: "查看相似病例",
-        component: () => import("./SimilarCases.jsx"),
+        component: () => import("./SimilarCases.jsx").then((module) => ({ default: module.SimilarCases })),
       },
     },
   },

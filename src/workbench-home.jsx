@@ -32,6 +32,7 @@ import { careSetupProgress, requestPluginIntent } from "./plugin-navigation";
 import { usePluginActive, usePluginConnected } from "./plugin-slots";
 import { api, medicalEnabled, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { uploadProgressText } from "./import-material";
+import { ComposerModelMenu } from "./composer-model-menu.jsx";
 import { requestPendingReview } from "./pending-tray";
 import "./home-today.css";
 
@@ -327,7 +328,6 @@ export function WorkbenchHome({
   const [error, setError] = useState("");
   const [category, setCategory] = useState("clinical");
   const [showAllFlows, setShowAllFlows] = useState(false);
-  const [runtimeOptions, setRuntimeOptions] = useState(false);
   const [projectId, setProjectId] = useState(draftState.projectId ?? "");
   const taskType = projectId ? "project" : "medical";
   const availableProjects = projects.filter(p => !p.archived && p.kind !== "session" && p.kind !== "task");
@@ -797,32 +797,7 @@ export function WorkbenchHome({
               )}
               {taskType !== "project" && !isFollowup && (
                 <>
-                  <button
-                    type="button"
-                    className="tb-item"
-                    title={`当前模型：${config?.model || "未配置"}；点击切换或配置模型`}
-                    onClick={onModelSettings}
-                  >
-                    模型 <b>{config?.model || "未配置"}</b>
-                  </button>
-                  <button type="button" className="attach-button" aria-expanded={runtimeOptions} onClick={() => setRuntimeOptions(!runtimeOptions)}>设置</button>
-                  {runtimeOptions && <><span className="tb-divider" />
-                  {config?.modelConfigured && (
-                    <label
-                      className="tb-item"
-                      title="深入：请求模型启用思考/推理通道（取决于供应商支持；标准=关闭）"
-                    >
-                      思考
-                      <select
-                        value={thinking}
-                        onChange={(e) => onThinkingChange(e.target.value)}
-                        disabled={starting}
-                      >
-                        <option value="disabled">标准（不启用推理）</option>
-                        <option value="enabled">深入（启用推理）</option>
-                      </select>
-                    </label>
-                  )}</>}
+                  <ComposerModelMenu config={config} thinking={thinking} onThinkingChange={onThinkingChange} onModelSettings={onModelSettings} disabled={starting} />
                 </>
               )}
               <span className="composer-spacer" />

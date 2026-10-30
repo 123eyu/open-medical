@@ -1,6 +1,6 @@
 .patient-labs { min-width: 0; }
 .medical-shell .patient-labs .labs-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 6px 0 22px; }
-.medical-shell .patient-labs h2 { margin: 0 0 5px; font-size: 24px; line-height: 1.4; }
+.medical-shell .patient-labs h2 { margin: 0 0 5px; font-size: calc(24px * var(--text-scale, 1)); line-height: 1.4; }
 .labs-heading .muted { font-size: var(--meta-size, 13px); }
 .labs-header-actions, .lab-detail-toolbar, .lab-detail-toolbar > div { display: flex; align-items: center; gap: 14px; }
 .labs-menu { position: relative; }
@@ -27,7 +27,7 @@
 .medical-shell .patient-labs .labs-abnormal-summary b { margin-right: 6px; color: var(--high); font-size: var(--meta-size, 14px); }
 .lab-result-row > div { min-width: 0; display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
 .medical-shell .patient-labs .lab-result-name h3 { font-size: var(--body-size, 16px); line-height: 1.5; margin: 0; font-weight: 600; }
-.medical-shell .patient-labs .lab-result-value strong { font-size: 24px; font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1.25; }
+.medical-shell .patient-labs .lab-result-value strong { font-size: calc(24px * var(--text-scale, 1)); font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1.25; }
 .medical-shell .patient-labs :is(.lab-result-previous, .lab-result-change) b { font-size: var(--body-size, 16px); line-height: 1.9; font-weight: 500; font-variant-numeric: tabular-nums; }
 .medical-shell .patient-labs .lab-result-row :is(small,time) { color: var(--muted); font-size: var(--meta-size, 13px); line-height: 1.55; }
 .medical-shell .patient-labs .lab-result-row .lab-data-note { color: #855b29; }
@@ -38,7 +38,7 @@
 .lab-detail-toolbar > b { font-size: var(--body-size, 15px); font-weight: 500; }
 .patient-labs .lab-plot-scroll { max-width: 760px; margin: 0 auto 14px; overflow-x: auto; }
 .patient-labs .lab-plot-scroll svg { width: 100%; min-width: 350px; height: auto; display: block; }
-.patient-labs .lab-plot-scroll svg text { fill: var(--muted); font-size: 13px; }
+.patient-labs .lab-plot-scroll svg text { fill: var(--muted); font-size: calc(13px * var(--text-scale, 1)); }
 .patient-labs .chart-lab-records > summary { cursor: pointer; padding: 8px 0; font-size: var(--meta-size, 13px); color: var(--muted); }
 .patient-labs .chart-table-wrap { max-width: 100%; }
 .patient-labs .chart-table-wrap table { min-width: 560px; }
@@ -65,9 +65,9 @@
 }
 @media (max-width: 480px) {
   .medical-shell .patient-labs .labs-heading { gap: 8px; align-items: start; flex-wrap: wrap; }
-  .medical-shell .patient-labs h2 { font-size: 22px; }
+  .medical-shell .patient-labs h2 { font-size: calc(22px * var(--text-scale, 1)); }
   .labs-header-actions { gap: 10px; }
   .lab-result-row { gap: 14px 8px; padding-inline: 0; }
-  .medical-shell .patient-labs .lab-result-value strong { font-size: 23px; }
+  .medical-shell .patient-labs .lab-result-value strong { font-size: calc(23px * var(--text-scale, 1)); }
   .lab-result-row time { white-space: normal; }
 }

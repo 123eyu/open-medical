@@ -23,7 +23,7 @@
   color: #55685d;
   border: 0;
   border-radius: 7px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .kw-nav button.active {
   background: #e2ede5;
@@ -31,7 +31,7 @@
   font-weight: 650;
 }
 .kw-nav button span {
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale, 1));
   padding: 1px 6px;
   border-radius: 4px;
   background: #fff9;
@@ -40,11 +40,11 @@
   padding: 24px 0;
 }
 .kw-content h2 {
-  font-size: 21px;
+  font-size: calc(21px * var(--text-scale, 1));
   margin: 0 0 8px;
 }
 .kw-content h3 {
-  font-size: 16px;
+  font-size: calc(16px * var(--text-scale, 1));
   margin: 0 0 12px;
 }
 .kw-content p {
@@ -61,7 +61,7 @@
 .kw-intro p,
 .kw-section-heading p {
   color: #627368;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   margin: 0;
 }
 .kw-section {
@@ -87,7 +87,7 @@
 .kw-import label {
   display: grid;
   gap: 7px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #586f60;
 }
 .kw-workspace :is(input, select),
@@ -100,10 +100,10 @@
   min-width: 0;
   max-width: 100%;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-filters > span {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #64796b;
   padding: 10px 0;
   margin-left: auto;
@@ -117,13 +117,13 @@
 .kw-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   text-align: left;
 }
 .kw-table th {
   background: #f2f5ef;
   color: #52695b;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   font-weight: 550;
   white-space: nowrap;
 }
@@ -143,13 +143,13 @@
 }
 .kw-table small {
   display: block;
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale, 1));
   color: #6a7b6e;
   margin-top: 5px;
 }
 .kw-doc-title {
   text-align: left;
-  font-size: 14px !important;
+  font-size: calc(14px * var(--text-scale, 1)) !important;
   line-height: 1.6;
   font-weight: 600;
 }
@@ -157,7 +157,7 @@
   display: inline-block;
   padding: 3px 7px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale, 1));
   color: #566c5c;
   background: #eef2ec;
 }
@@ -176,7 +176,7 @@
   gap: 6px;
 }
 .kw-row-actions .text-button {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .kw-quality-list,
 .kw-results {
@@ -230,7 +230,7 @@
 }
 .kw-search-box input {
   flex: 1;
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale, 1));
   padding: 14px;
 }
 .kw-results blockquote {
@@ -238,7 +238,7 @@
   padding-left: 14px;
   border-left: 3px solid #b6cabb;
   line-height: 1.8;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -260,7 +260,7 @@
   gap: 12px;
   padding: 10px 0;
   border-bottom: 1px solid #e3e9e0;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-import fieldset {
   border: 0;
@@ -278,7 +278,7 @@
   background: #f5f8f2;
 }
 .kw-dropzone p {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #667b6a;
 }
 .kw-import-files {
@@ -294,7 +294,7 @@
   align-items: center;
   border-bottom: 1px solid #e2e9df;
   padding: 8px 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .kw-import-files li span {
   flex: 1;
@@ -302,7 +302,7 @@
 }
 .kw-import-mode legend {
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-import .kw-import-mode {
   display: grid;
@@ -327,12 +327,12 @@
   line-height: 1.6;
 }
 .kw-import .muted {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   line-height: 1.7;
 }
 .kw-import summary {
   cursor: pointer;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-sheet {
   margin: 20px 0;
@@ -344,7 +344,7 @@
 .kw-sheet summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .kw-sheet .kw-table td {
   min-width: 100px;
@@ -357,7 +357,7 @@
   align-items: center;
   gap: 12px;
   padding-top: 12px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .library-hub .kw-workspace .module-view {
   padding: 0;
@@ -376,7 +376,7 @@
 .kw-library-tools summary {
   cursor: pointer;
   color: #5d7462;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 @media (max-width: 850px) {
   .kw-overview-grid {
@@ -427,11 +427,11 @@
   margin: 0;
 }
 .medical-shell .library-hub .library-description h2 {
-  font-size: 22px;
+  font-size: calc(22px * var(--text-scale, 1));
 }
 .kw-library-scope {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #64796b;
 }
 .kw-library-scope summary {
@@ -475,7 +475,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: #607367;
 }
 .kw-reader-toolbar button {
@@ -496,19 +496,19 @@
 }
 .kw-sheet-title h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale, 1));
 }
 .kw-sheet-title > span,
 .kw-sheet-options {
   color: #627368;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-table-citation {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
   margin: 12px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: #386750;
 }
 .kw-sheet-primary .kw-table :is(td, th) {
@@ -516,7 +516,7 @@
 }
 .kw-sheet-primary .kw-table td {
   min-width: 74px;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .kw-sheet-primary .kw-table th {
   white-space: normal;
@@ -544,7 +544,7 @@
   width: auto;
 }
 .kw-table-notes {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #627368;
   margin: 12px 0;
 }
@@ -554,7 +554,7 @@
 .kw-source-details > summary {
   cursor: pointer;
   color: #52695b;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
 }
 .kw-source-details-open > summary {
   display: none;
@@ -594,7 +594,7 @@
 }
 .kw-document-count {
   color: #64796b;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   white-space: nowrap;
 }
 .kw-documents-table td:first-child {
@@ -614,14 +614,14 @@
   gap: 8px 16px;
 }
 .kw-document-actions .text-button {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .kw-document-more > summary,
 .kw-library-manage > summary,
 .kw-search-options > summary {
   cursor: pointer;
   color: #5d7462;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-document-more .kw-row-actions {
   margin-top: 12px;
@@ -662,7 +662,7 @@
   padding: 10px 14px;
   background: #f3f6f1;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kw-search-options {
   margin-top: 16px;
@@ -719,7 +719,7 @@
 
 .kw-reading-modes { display: flex; gap: 8px; margin: 16px 0; }
 .kw-reading-modes [aria-pressed="true"] { border-color: var(--accent); color: var(--ink); }
-.knowledge-coverage-note, .kw-retrieval-details { color: var(--muted); font-size: 12px; }
+.knowledge-coverage-note, .kw-retrieval-details { color: var(--muted); font-size: calc(12px * var(--text-scale, 1)); }
 .kw-retrieval-details { margin: 10px 0; }
 .kw-retrieval-details summary { cursor: pointer; }
 .kw-results mark { background: #f5ebae; color: inherit; }

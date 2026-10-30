@@ -12,6 +12,11 @@ export function checkToolAvailability(name, context) {
 export class ToolRegistry {
   constructor(tools = []) {
     this.tools = new Map();
+    // Deferred tools stay registered and executable but are not listed to the
+    // model until their group is revealed (see deferred-tools.mjs).
+    this.hidden = new Set();
+    this.groupOf = new Map();
+    this.onReveal = null;
     for (const tool of tools) this.register(tool);
   }
   register({ definition, execute, permission, capability, observation, parallel = false } = {}) {
@@ -83,7 +88,15 @@ export class ToolRegistry {
             )),
       )
       .filter((tool) => !this.readinessFilter || this.readinessFilter(tool))
+      .filter((tool) => !this.hidden.has(tool.definition.function.name))
       .map((tool) => tool.definition);
+  }
+  // Lists a deferred group from the next model round on.
+  reveal(groupId) {
+    const names = [...this.groupOf].filter(([, group]) => group === groupId).map(([name]) => name);
+    const newly = names.filter((name) => this.hidden.delete(name));
+    if (newly.length) this.onReveal?.(groupId, newly);
+    return names;
   }
   authorize(name, permissions) {
     const tool = this.get(name);
@@ -102,6 +115,9 @@ export class ToolRegistry {
   }
   async execute(name, args, context, permissions) {
     const tool = this.authorize(name, permissions);
+    // A model may call a deferred tool it already knows; run it and list its
+    // whole group from now on.
+    if (this.hidden.has(name)) this.reveal(this.groupOf.get(name));
     checkToolAvailability(name, context);
     validateArguments(
       args,

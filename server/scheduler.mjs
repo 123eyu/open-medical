@@ -13,6 +13,7 @@ export class MedicalScheduler {
       pollMs = 1000,
       autoStart = true,
       resolveSession,
+      hasRequest,
     } = {},
   ) {
     Object.assign(this, { store, runtime, now, pollMs, autoStart });
@@ -20,6 +21,8 @@ export class MedicalScheduler {
     // {revision, files}，由服务装配时提供。
     check(typeof resolveSession === "function", "INVALID_INPUT", "计划任务需要会话解析器");
     this.resolveSession = resolveSession;
+    check(typeof hasRequest === "function", "INVALID_INPUT", "计划任务需要执行记录查询");
+    this.hasRequest = hasRequest;
     this.inFlight = new Set();
     this.stopped = false;
     store.db.exec(
@@ -282,10 +285,7 @@ export class MedicalScheduler {
     try {
       this.validateSnapshot(job);
       const requestId = `schedule_${job.id}_${job.nextRunAt}`;
-      const existing = this.store
-        .get(job.sessionId)
-        .runs.find((r) => r.requestId === requestId);
-      if (existing)
+      if (this.hasRequest(job.sessionId, requestId))
         throw new AppError(
           "DUPLICATE_REQUEST",
           "该计划时点已有执行记录，请核对后重新创建计划",

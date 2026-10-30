@@ -10,8 +10,7 @@ export default function TrialsToolCard({ onNavigate }) {
       <h2>临床试验</h2>
       <p>管理试验方案，按入排标准开展患者初筛。</p>
       <footer>
-        <small>试验初筛</small>
-        <span className="tool-card-action">打开 →</span>
+        <small>本地</small>
       </footer>
     </a>
   </article>;

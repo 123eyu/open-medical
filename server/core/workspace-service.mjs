@@ -15,7 +15,7 @@ const EXTENSION_GRANTS = Object.freeze([
   "memory.read",
   "memory.write",
 ]);
-import { localOcrLines } from "./image-text.mjs";
+import { imageTextWithFallback, localOcrLines } from "./image-text.mjs";
 import { windowsOcrAvailable } from "./windows-ocr.mjs";
 import { normalizeDelivery } from "./delivery.mjs";
 import { completionRequirements, collectWorkspaceDelivery, collectApprovalReadiness } from "./workspace-delivery.mjs";
@@ -39,6 +39,7 @@ import { WorkspaceExtensions } from "./extensions.mjs";
 import { providerConfigured } from "./provider-status.mjs";
 import { randomUUID } from "node:crypto";
 import { check, AppError, string } from "../errors.mjs";
+import { applyDeferredTools } from "./deferred-tools.mjs";
 import { PermissionEngine } from "./permissions.mjs";
 import { WorkspaceScheduler } from "./workspace-scheduler.mjs";
 import { WorkspaceRecovery } from "./workspace-recovery.mjs";
@@ -112,8 +113,12 @@ export class WorkspaceService {
       onNotification = () => {},
       getOcrModel = null,
       imageShrink = null,
+      privacy = null,
     } = {},
   ) {
+    // 隐私策略（领域提供）：rawImagesBlocked() 为真时原图不发给任何模型，
+    // inspect_image 改为 OCR + protectText() 脱敏后只返回文字。
+    this.privacy = privacy;
     this.modelProfiles = modelProfiles;
     this.jev = jev;
     this.store = new WorkspaceStore(db);
@@ -1212,6 +1217,14 @@ export class WorkspaceService {
             },
           });
           try {
+            // The child sees the same materials and domain context as the
+            // parent round (patient, material index), but stays read-only.
+            const current = this.store.get(id);
+            const parentRun = current.runs.find((r) => r.id === runId);
+            const sources = context?.sources?.length ? context.sources : [];
+            const extras = parentRun && this.domain.runSystemExtras
+              ? this.domain.runSystemExtras(current, parentRun, { sources }).filter(Boolean).join("\n")
+              : "";
             const result = await new AgentRuntime({
               provider: this.provider,
               // 读取+汇总类子任务在 3 轮内经常无法完成（列目录、读文件、
@@ -1223,12 +1236,30 @@ export class WorkspaceService {
                 {
                   role: "system",
                   content:
-                    this.systemFor(this.store.get(id)) +
-                    "\n你在执行独立子任务，只返回本子任务结果。",
+                    this.systemFor(current) +
+                    (extras ? "\n" + extras : "") +
+                    "\n你在执行独立子任务，只返回本子任务结果。不能确认或执行提案，结论交回父任务。",
                 },
                 { role: "user", content: a.task },
               ],
-              domain: this.domain,
+              context: {
+                workspaceId: id,
+                runId,
+                ...(sources.length ? { sources } : {}),
+              },
+              domain: {
+                ...this.domain,
+                preparedResponse: undefined,
+                beforeTool: async (args) => {
+                  check(
+                    !/_confirm$/.test(args.name),
+                    "CHILD_READ_ONLY",
+                    "子任务不能确认或执行提案，请把结论交回父任务。",
+                    403,
+                  );
+                  await this.domain.beforeTool?.(args);
+                },
+              },
               registry: this.registry(id, runId, { planWritable: false }),
               permissions: childPermissions,
               signal: context.signal,
@@ -1400,6 +1431,18 @@ export class WorkspaceService {
           const mime = imageMime(b);
           check(mime, "IMAGE_TYPE", "只支持 PNG、JPEG 和 WebP 图片");
           const shrinkInfo = shrunkFrom ? { compressedFromBytes: shrunkFrom } : {};
+          // 完整打码过的图片（privacy: "masked"）可以照常交给视觉模型。
+          if (this.privacy?.rawImagesBlocked?.() && source?.item?.privacy !== "masked") {
+            const read = await imageTextWithFallback(b, context.signal, null, { strategy: "local" });
+            const cleaned = await this.privacy.protectText(read.text, { signal: context.signal });
+            return {
+              path: a.path, artifactId: a.artifactId, hash: file.hash, method: "ocr-deidentified",
+              analysis: cleaned.text,
+              deidentification: cleaned.method,
+              note: "已开启患者资料脱敏：原图没有发给模型，以上是文字识别后再脱敏的文本，不能解读 CT/病理等医学影像；数值、单位需对照原图核对。",
+              ...shrinkInfo,
+            };
+          }
           if (this.provider.vision !== true) {
             // 专用识别模型优先：主模型是纯文本时，图片问题仍可交给它回答；
             // 失败回本机 OCR，保证工具始终有产出。
@@ -1532,7 +1575,17 @@ export class WorkspaceService {
       registry,
       workspace: structuredClone(w),
       runId,
+      artifacts: this.artifacts,
     });
+    // 按需工具组：领域可把少用的工具先不列给模型，开启后本会话保留。
+    const deferred = this.domain.deferredTools?.({ workspace: w, runId });
+    if (deferred)
+      applyDeferredTools(registry, deferred, {
+        persist: (groupId) =>
+          this.store.update(id, (current) => {
+            current.toolGroups = [...new Set([...(current.toolGroups || []), groupId])];
+          }),
+      });
     // 模型可见性按真实就绪过滤（B1）：需要新启动容器的工具在后端/镜像
     // 不可用时不进入 definitions()，模型不会调用注定失败的工具；会话
     // 控制工具与快照不受影响。探测缓存按配置身份（镜像引用）+ TTL，
@@ -2593,6 +2646,8 @@ export class WorkspaceService {
           content: result.text,
           runId: run.id,
           ...(outcome ? { outcome } : {}),
+          // Earlier turns' progress notes, shown folded under the answer.
+          ...(result.progressText ? { progress: result.progressText.slice(0, 8000) } : {}),
         });
       });
       let finalRounds = 0;
@@ -2616,16 +2671,24 @@ export class WorkspaceService {
       this.notify(id, run.id, finalStatus);
       return { status: finalStatus, runId: run.id, ...(outcome ? { outcome } : {}), ...(delivery || finalStatus === "waiting_approval" ? { delivery } : {}) };
     } catch (error) {
+      const abortCode = controller.signal.aborted ? controller.signal.reason?.code : undefined;
+      // The run deadline aborts through the same controller as a user stop,
+      // so tell them apart by the abort reason.
+      const runTimedOut = abortCode === "RUN_TIMEOUT";
       const status =
-        controller.signal.reason?.code === "RUN_INTERRUPTED"
+        abortCode === "RUN_INTERRUPTED"
           ? "interrupted"
-          : controller.signal.aborted
-            ? "cancelled"
-            : "failed";
-      const timedOut = [error, error?.cause, error?.cause?.cause].some(cause => cause?.name === "TimeoutError");
+          : runTimedOut
+            ? "failed"
+            : controller.signal.aborted
+              ? "cancelled"
+              : "failed";
+      const timedOut = !runTimedOut && [error, error?.cause, error?.cause?.cause].some(cause => cause?.name === "TimeoutError");
       const message =
         status === "cancelled" ? "任务已由你停止，原问题和已生成的部分内容已保留，可载入后重试。"
           : status === "interrupted" ? "服务中断，任务尚未完成，已保留原问题和部分内容。"
+          : runTimedOut
+          ? `任务运行超过本次时限（${Math.round(run.limits.timeoutMs / 60000) || 1} 分钟），已自动停止。已完成的步骤和部分内容已保留，可继续执行。`
           : timedOut
           ? `模型连续 ${Math.round((this.provider.timeoutMs || 90000) / 1000)} 秒未响应，本次任务未完成。请在模型设置中测试连接；本机模型请确认模型已加载、内存充足，或减少材料后重试。已产生的内容仍作为未完成草稿保留。`
           : error instanceof AppError
@@ -2645,7 +2708,7 @@ export class WorkspaceService {
       );
       emit(status === "cancelled" ? "run.cancelled" : "error", {
         status,
-        code: timedOut ? "PROVIDER_TIMEOUT" : error instanceof AppError ? error.code : "INTERNAL",
+        code: runTimedOut ? "RUN_TIMEOUT" : timedOut ? "PROVIDER_TIMEOUT" : error instanceof AppError ? error.code : "INTERNAL",
         error: message,
       });
       this.notify(id, run.id, status);

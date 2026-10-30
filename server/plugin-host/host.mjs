@@ -932,10 +932,24 @@ export class PluginHost {
   promptFragments() {
     return this.ordered
       .filter(
-        (record) => this._isActive(record) && record.promptText.trim(),
+        (record) =>
+          this._isActive(record) &&
+          record.promptText.trim() &&
+          this._promptWanted(record),
       )
       .map((record) => record.promptText.trim())
       .join("\n\n");
+  }
+
+  // A plugin can hide its prompt while it has nothing usable to offer (for
+  // example a channel that is not configured). A failing check keeps it.
+  _promptWanted(record) {
+    if (!record.spec?.promptWhen) return true;
+    try {
+      return record.spec.promptWhen(this.contextFor(record)) !== false;
+    } catch {
+      return true;
+    }
   }
 
   skillDirs() {

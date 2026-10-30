@@ -1,3 +1,5 @@
+import { check } from "../../server/errors.mjs";
+
 const reply = (send, status, value) => {
   send(status, value);
   return true;
@@ -79,7 +81,11 @@ export function createWecomApi(service) {
       parts.length === 4 &&
       req.method === "DELETE"
     )
-      return reply(send, 200, connector.unbind(parts[3]));
+    {
+      const result = connector.unbind(parts[3]);
+      check(result.removed, "NOT_FOUND", "该关联不存在或已解除", 404);
+      return reply(send, 200, result);
+    }
     if (path === "/api/wecom/tasks" && req.method === "GET")
       return reply(send, 200, {
         tasks: connector.tasks(url.searchParams.get("patientId")),

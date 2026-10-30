@@ -68,6 +68,8 @@ import { ModelSettings } from "./core/model-settings.mjs";
 import { JevSettings } from "./core/jev-settings.mjs";
 import { OcrSettings, OCR_MODEL_PROFILE_ID } from "./core/ocr-settings.mjs";
 import { PaddleLocal } from "./core/paddle-local.mjs";
+import { ResearchPython } from "./core/research-python.mjs";
+import { MaterialPrivacy, PrivacySettings, deidentifyViaService } from "./medical/privacy.mjs";
 import { configureLocalOcrService, imageTextWithFallback, visionTranscriber } from "./core/image-text.mjs";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const mime = {
@@ -351,6 +353,22 @@ export function createServer(options = {}) {
     });
   // 装过本机引擎且服务配置仍指向它时，拉起/收养残留进程；后台兜底动作，
   // 失败不阻塞启动（识别层自动落回系统组件）。
+  // 患者资料去隐私：开启后发给模型的资料文本先经 gpu-worker 脱敏（或本地
+  // 规则兜底），原图不发给模型。身份只在本机用于建档回填。
+  const privacySettings = new PrivacySettings(models.vault, ocrSettings);
+  const materialPrivacy =
+    options.materialPrivacy ||
+    new MaterialPrivacy({
+      settings: privacySettings,
+      roster: () => (patients ? patients.all().flatMap((p) => [p.name, p.phone, p.patientNumber]) : []),
+    });
+  // 科研计算环境（独立 Python 虚拟环境 + Seatbelt 沙箱）；用户在设置里点击
+  // 安装后 research_analyze 才可用。
+  const researchPython =
+    options.researchPython ||
+    new ResearchPython({
+      dataDir: databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-research-")) : dirname(databasePath),
+    });
   paddleLocal
     .resume({ wantsService: (url) => ocrSettings.service()?.baseUrl === url })
     .catch(() => {});
@@ -366,7 +384,7 @@ export function createServer(options = {}) {
     id: job.id, docId: job.docId, status: job.status, stage: job.stage,
     batchDone: job.batchDone, batchTotal: job.batchTotal, error: job.error,
   }));
-  guidelines.graphEvidence = (query, docIds) => knowledgeOrganizer.searchEvidence(query, docIds);
+  guidelines.graphEvidence = (query, docIds, collection) => knowledgeOrganizer.searchEvidence(query, docIds, collection);
   guidelines.beforeRemoveCollection = name => knowledgeOrganizer.assertRemovable(name);
   guidelines.beforeMoveDocument = id => knowledgeOrganizer.assertRemovable(null, [id]);
   guidelines.afterMoveDocument = (id,collection) => knowledgeOrganizer.moveDocument(id,collection);
@@ -499,8 +517,10 @@ export function createServer(options = {}) {
     modelProfiles: knowledgeProfiles,
     getOcrModel: ocrModelResolver,
     imageShrink: options.imageShrink || null,
+    privacy: materialPrivacy,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
+      knowledgeDigest: () => guidelines.collectionDigest(),
       personalContext: (run, workspaceId) =>
         pluginActive("learning") ? pluginService("learning")?.personalContext(run, workspaceId) : null,
       saveIntakeNotes: (id, runId, notes) => workspaces.store.update(id, w => { w.runs.find(run => run.id === runId).intakeNotes = notes; }),
@@ -510,6 +530,8 @@ export function createServer(options = {}) {
       // 全局助手工具面的依赖（访问器延迟解析：注册表在下方才创建）。
       patients: () => patients,
       pending: () => pending,
+      research: () => researchPython,
+      privacy: () => materialPrivacy,
       plugins: [
         ...knowledgeToolPlugins,
         ...localPlugins(pendingActionTools(pending, doctor)),
@@ -572,6 +594,7 @@ export function createServer(options = {}) {
     },
     ocrModel: ocrModelResolver,
     ocrStrategy: ocrStrategyResolver,
+    privacy: materialPrivacy,
   });
   sessionBridge.migrateLegacySessions();
   const intakeJobs = new IntakeJobs(sessionBridge, pending);
@@ -592,6 +615,8 @@ export function createServer(options = {}) {
         files: (w.materials || []).map((f) => ({ id: f.id, hash: f.hash })),
       };
     },
+    hasRequest: (sessionId, requestId) =>
+      workspaces.store.hasRequest(sessionId, requestId),
   });
   const patients = new PatientRegistry(store, agentRuntime, {
     onIdentityChanged: (patient, previousName) => {
@@ -1683,6 +1708,32 @@ export function createServer(options = {}) {
       // 本机 PaddleOCR 引擎：状态 / 安装 / 启停。安装只在用户点击后进行，
       // 长任务返回 202 由前端轮询 status；失败原因（缺 Python、pip 网络、
       // 启动超时）都会带可执行的下一步建议。
+      // 患者资料去隐私设置。开启或更换服务后，把还没经服务脱敏的资料补处理。
+      if (path === "/api/privacy-settings" && req.method === "GET")
+        return send(res, 200, privacySettings.public());
+      if (path === "/api/privacy-settings" && req.method === "PUT") {
+        const result = privacySettings.save(await body(req));
+        const reprocess = await sessionBridge.reprocessPrivacy();
+        return send(res, 200, { ...result, reprocess });
+      }
+      if (path === "/api/privacy-settings/test" && req.method === "POST") {
+        const input = await body(req).catch(() => ({}));
+        const service = input.service ? privacySettings.candidateService(input.service) : privacySettings.service();
+        check(service, "PRIVACY_SERVICE_MISSING", "还没有配置脱敏服务；可以填写 gpu-worker 地址，或在文字识别设置里配置后沿用", 400);
+        const sample = "姓名：测试患者甲  电话：13900000000  住址：某市某区测试路1号\n主诉：头痛2天。主治医师：李医生";
+        const started = Date.now();
+        const result = await deidentifyViaService(service, sample);
+        return send(res, 200, { ok: true, policy: result.policy, sample: result.text, ms: Date.now() - started, message: "脱敏服务可用" });
+      }
+      if (path === "/api/privacy-settings/reprocess" && req.method === "POST")
+        return send(res, 202, await sessionBridge.reprocessPrivacy({ onlyMissing: true }));
+      // 科研计算环境：状态 / 安装。安装只在用户点击后进行，202 后前端轮询。
+      if (path === "/api/research-env" && req.method === "GET")
+        return send(res, 200, researchPython.status());
+      if (path === "/api/research-env/install" && req.method === "POST") {
+        researchPython.startInstall().catch(() => {});
+        return send(res, 202, researchPython.status());
+      }
       if (path === "/api/ocr-settings/local-engine" && req.method === "GET")
         return send(res, 200, paddleLocal.status());
       if (path === "/api/ocr-settings/local-engine/install" && req.method === "POST") {

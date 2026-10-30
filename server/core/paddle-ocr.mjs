@@ -67,6 +67,8 @@ const linesFromRecords = (records) => {
     .map((record) => ({
       text: String(record?.text ?? "").trim(),
       confidence: typeof record?.score === "number" ? record.score : 1,
+      // 像素坐标（[x1,y1,x2,y2] 或四点多边形），图片打码用。
+      ...(record?.box ? { box: record.box } : {}),
     }))
     .filter((line) => line.text);
   return lines;

@@ -59,3 +59,25 @@ test("drg：停用后接口 404，分组工具不注册", async (t) => {
   assert.ok(!after.includes("drg_group"));
   assert.ok(!after.includes("drg_batch_analyze"));
 });
+
+test("drg：保存费率与导入权重后可读回", async (t) => {
+  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  t.after(() => app.close());
+  const saved = await app.request("/api/drg/settings", {
+    method: "POST",
+    body: { rate: 12345, hospital: "测试统筹区" },
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.rate, 12345);
+  const read = await app.request("/api/drg/settings");
+  assert.equal(read.body.rate, 12345);
+  assert.equal(read.body.hospital, "测试统筹区");
+
+  const imported = await app.request("/api/drg/import", {
+    method: "POST",
+    body: { weights: { TEST01: 1.5 } },
+  });
+  assert.equal(imported.status, 200, JSON.stringify(imported.body));
+  assert.equal(imported.body.imported, 1);
+  assert.equal(imported.body.overriddenCodes, 1);
+});

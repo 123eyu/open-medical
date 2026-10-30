@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdtempSync,
   readdirSync,
+  realpathSync,
   rmSync,
 } from "node:fs";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
@@ -185,9 +186,10 @@ test("桌面打包 stage 包含运行时插件但排除测试资产", async (t) 
     server.listen(0, "127.0.0.1", resolveListen);
   });
 
+  // Compare real paths: macOS temp dirs sit behind the /var -> /private/var link.
   assert.equal(
-    server.pluginHost.pluginDirs[0],
-    resolve(stage, "plugins"),
+    realpathSync(server.pluginHost.pluginDirs[0]),
+    realpathSync(resolve(stage, "plugins")),
     "打包后的默认插件目录必须是 stage/plugins",
   );
 

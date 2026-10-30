@@ -323,7 +323,7 @@ export class LiteratureService {
 }
 
 const textDef = { type: "string" };
-// Agent tools. Registration goes through MedicalRuntime toolPlugins, so the
+// Agent tools. The literature plugin registers them into each session, so the
 // model can search literature during evidence work; search sends only the
 // query string to the configured public source.
 export function literatureTools(literature) {

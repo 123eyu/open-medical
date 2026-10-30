@@ -8,7 +8,7 @@
 .kg-heading p {
   margin: 5px 0 0;
   color: #647168;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kg-heading .primary {
   flex-shrink: 0;
@@ -19,12 +19,12 @@
   gap: 8px 20px;
   padding: 10px 0 14px;
   border-bottom: 1px solid #e3e7df;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #647168;
 }
 .kg-jobs {
   padding: 12px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kg-jobs > div {
   display: flex;
@@ -43,7 +43,7 @@
   gap: 14px;
   flex-wrap: wrap;
   margin: 8px 0 14px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #647168;
 }
 .kg-legend span {
@@ -76,7 +76,7 @@
   padding: 12px 14px;
   border-bottom: 1px solid #e4e9e1;
   color: #66766c;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .kg-canvas-tools > div {
   display: flex;
@@ -88,7 +88,7 @@
   color: #3b5147;
   border-radius: 6px;
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   cursor: pointer;
 }
 .knowledge-map .kg-canvas-panel svg {
@@ -103,11 +103,11 @@
 }
 .knowledge-map .kg-node .node-type {
   fill: #fff;
-  font-size: 10px;
+  font-size: calc(10px * var(--text-scale, 1));
   pointer-events: none;
 }
 .knowledge-map .kg-node-label {
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   paint-order: stroke;
   stroke: #fafcf9;
   stroke-width: 5px;
@@ -133,7 +133,7 @@
   stroke-width: 3;
 }
 .knowledge-map .kg-edge-label {
-  font-size: 10px;
+  font-size: calc(10px * var(--text-scale, 1));
   fill: #65766c;
   paint-order: stroke;
   stroke: #fafcf9;
@@ -142,14 +142,14 @@
 }
 .kg-help {
   padding: 0 14px;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   line-height: 1.7;
   color: #6b786e;
 }
 .kg-node-list {
   padding: 12px 14px;
   border-top: 1px solid #e3e7df;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   max-height: 240px;
   overflow: auto;
 }
@@ -170,7 +170,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   color: #6b786e;
 }
 .knowledge-map-evidence h4 {
@@ -236,10 +236,10 @@
 }
 @media (max-width: 600px) {
   .knowledge-map .kg-node-label {
-    font-size: 14px;
+    font-size: calc(14px * var(--text-scale, 1));
   }
   .knowledge-map .kg-edge-label {
-    font-size: 12px;
+    font-size: calc(12px * var(--text-scale, 1));
   }
 }
 
@@ -256,7 +256,7 @@
 }
 .kd-recommendation {
   color: var(--muted, #65716c);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
   margin: 0 0 16px;
 }
 .kd-container {
@@ -267,7 +267,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .kd-picker select {
   max-width: 100%;
@@ -287,7 +287,7 @@
 .kd-caption p {
   margin: 0;
   color: var(--muted, #65716c);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale, 1));
 }
 .kd-zoom {
   display: flex;
@@ -319,7 +319,7 @@
 .knowledge-map .kd-text {
   fill: #25473d;
   text-anchor: middle;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   font-weight: 500;
   pointer-events: none;
 }
@@ -373,7 +373,7 @@
 .kd-evidence {
   padding: 18px;
   border-left: 1px solid #dce3df;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   overflow-wrap: anywhere;
 }
 .kd-evidence h4 {
@@ -423,7 +423,7 @@
   background: #fff;
   color: #315147;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   cursor: pointer;
 }
 .kd-views button:hover,

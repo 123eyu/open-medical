@@ -1,15 +1,15 @@
 .share-wizard { min-width: 0; }
-.share-wizard .share-step h3 { margin: 0 0 12px; font-size: 15px; }
+.share-wizard .share-step h3 { margin: 0 0 12px; font-size: calc(15px * var(--text-scale, 1)); }
 .share-wizard .toolbar-actions { margin-top: 16px; }
 .share-sections { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 12px; }
-.share-sections label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
-.share-hint { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 10px 0; }
+.share-sections label { display: inline-flex; align-items: center; gap: 6px; font-size: calc(14px * var(--text-scale, 1)); }
+.share-hint { color: var(--muted); font-size: calc(13px * var(--text-scale, 1)); line-height: 1.7; margin: 10px 0; }
 .share-findings {
   background: #f4f6f3;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 12px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   margin: 0 0 12px;
 }
 .share-preview {
@@ -23,7 +23,7 @@
 .share-preview section { margin-bottom: 12px; }
 .share-preview h4 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
   color: #263831;
   border-left: 3px solid #263831;
   padding-left: 8px;
@@ -34,7 +34,7 @@
   gap: 12px;
   padding: 4px 0;
   border-bottom: 1px dashed #e2e8e0;
-  font-size: 13px;
+  font-size: calc(13px * var(--text-scale, 1));
 }
 .share-preview li span { flex: 0 0 96px; color: var(--muted); }
 .share-preview li strong { font-weight: 400; overflow-wrap: anywhere; }
