@@ -635,3 +635,67 @@ iframe.wb-file-preview {
 .wb-run-blocked {
   color: #a44436;
 }
+
+/* Inline write authorization (project workspaces) */
+.wb-write-auth {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line, #c8d8ce);
+  border-radius: 10px;
+  background: var(--accent-soft, #edf3eb);
+  color: var(--desk-text, #26302a);
+  font-size: calc(12.5px * var(--text-scale, 1));
+}
+.wb-write-auth-head {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.wb-write-auth-head svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--accent, #28654c);
+}
+.wb-write-auth-head b {
+  display: block;
+  margin-bottom: 2px;
+}
+.wb-write-auth-head p {
+  margin: 0;
+  line-height: 1.6;
+  color: var(--desk-muted, #7b8578);
+  overflow-wrap: anywhere;
+}
+.wb-write-auth ul {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.wb-write-auth li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #fff;
+}
+.wb-write-auth li code {
+  overflow-wrap: anywhere;
+}
+.wb-write-auth li span {
+  color: var(--desk-muted, #7b8578);
+  font-size: calc(11.5px * var(--text-scale, 1));
+}
+.wb-write-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.wb-binary-change {
+  margin: 6px 0;
+  color: var(--desk-muted, #7b8578);
+}

@@ -283,6 +283,10 @@ export async function workspaceApi({
     send(res, 200, service.revert(id, parts[4], await body(req)));
     return true;
   }
+  if (action === "approvals" && !parts[4] && req.method === "POST") {
+    send(res, 200, service.approveAll(id, await body(req)));
+    return true;
+  }
   if (action === "approvals" && parts[4] && req.method === "POST") {
     send(res, 200, service.decide(id, parts[4], await body(req)));
     return true;

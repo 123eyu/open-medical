@@ -71,12 +71,13 @@ export class WorkspaceStore {
   // An explicit id is only for session ids that already exist elsewhere
   // (patients, schedules, chat peers) when old sessions are migrated, and for
   // API callers that choose a session id. Duplicates fail at INSERT.
-  create({ id = randomUUID(), title = "新工作区", root, permissions, kind, patientId }) {
+  create({ id = randomUUID(), title = "新工作区", root, permissions, kind, patientId, approvalPolicy }) {
     const workspace = {
       id,
       title,
       root,
       permissions,
+      ...(approvalPolicy ? { approvalPolicy } : {}),
       ...(kind ? { kind } : {}),
       ...(patientId ? { patientId } : {}),
       revision: 0,

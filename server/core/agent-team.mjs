@@ -34,6 +34,7 @@ const ALLOWED = new Set([
   "git_log",
   "read_file_proposal",
   "propose_file_write",
+  "save_artifact_to_workspace",
   "propose_file_edit",
   "propose_file_delete",
   "revise_file_proposal",

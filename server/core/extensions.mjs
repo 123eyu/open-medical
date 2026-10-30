@@ -777,7 +777,9 @@ export class WorkspaceExtensions {
               artifactIds: a.artifactId ? [a.artifactId] : a.artifactIds || [],
               timeoutMs: 120000,
             },
-            { ...c, interactive: false, discardOutputs: action === "read" || c.discardOutputs },
+            { ...c, interactive: false, discardOutputs: action === "read" || c.discardOutputs,
+              // Render previews stay downloadable artifacts; they never go into the folder.
+              artifactsOnly: action === "render" },
           );
           return this.runner.wait(id, session.id, 30000, c.signal);
         },

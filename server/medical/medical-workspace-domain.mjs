@@ -63,7 +63,7 @@ export const SESSION_TOOL_GROUPS = Object.freeze([
     names: [
       "list_directory", "read_file", "search_files", "inspect_file", "project_instructions",
       "propose_file_write", "propose_file_edit", "propose_file_delete", "revise_file_proposal",
-      "read_file_proposal", "apply_file_proposal", "list_artifacts",
+      "read_file_proposal", "apply_file_proposal", "list_artifacts", "save_artifact_to_workspace",
       "git_status", "git_diff", "git_log", "git_commit",
       "browser_open", "browser_action", "browser_snapshot", "browser_screenshot",
       "terminal_run", "terminal_check", "terminal_start", "terminal_read", "terminal_write", "terminal_stop", "terminal_wait",

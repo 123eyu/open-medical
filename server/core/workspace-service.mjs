@@ -6,6 +6,33 @@ import { shrinkImage } from "./image-shrink.mjs";
 // 32MB 是为了给自动缩图留出原料（手机直出照片常见 5-12MB）。
 const IMAGE_BYTES_LIMIT = 4_000_000;
 const IMAGE_READ_LIMIT = 32_000_000;
+// PDF/Office files: extracted text, hashed by their bytes so a later binary
+// write can detect that the file changed in between.
+async function readDocument(files, { path, startLine, endLine }) {
+  const file = files.bytes(path, DOCUMENT_READ_LIMIT);
+  let extracted;
+  try {
+    extracted = await extractDocumentText(file.data, path);
+  } catch (error) {
+    throw new AppError("DOCUMENT_READ", `无法提取文档文字：${error.message}`, 422);
+  }
+  let text = extracted.text;
+  if (startLine !== undefined || endLine !== undefined) {
+    const lines = text.split("\n"),
+      start = startLine ?? 1,
+      end = Math.min(endLine ?? start + 199, start + 999);
+    text = lines.slice(start - 1, end).join("\n");
+  }
+  return {
+    path,
+    text,
+    hash: file.hash,
+    size: file.size,
+    format: extracted.extraction?.type,
+    readOnly: true,
+    note: "二进制文档的提取文字，仅供阅读。修改请生成新文件（document_create 或终端），再用 save_artifact_to_workspace 写回目录。",
+  };
+}
 const EXTENSION_GRANTS = Object.freeze([
   "network",
   "browser.read",
@@ -60,6 +87,7 @@ import {
 } from "./capability.mjs";
 import { WorkspaceStore } from "./workspace-store.mjs";
 import { WorkspaceFiles, hashText } from "./workspace-files.mjs";
+import { DOCUMENT_EXTENSIONS, DOCUMENT_READ_LIMIT, IMAGE_EXTENSIONS, extractDocumentText } from "./document-text.mjs";
 
 const schema = (
   name,
@@ -429,6 +457,17 @@ export class WorkspaceService {
     });
     if (source.modeFlags?.medical)
       this.setModeFlag(created.id, "medical", true);
+    // "Always allow writes" was given for this folder, not for one task.
+    if (
+      source.approvalPolicy === "workspace-write" &&
+      source.permissions?.grants?.["filesystem.write"] &&
+      !Array.isArray(source.writeScope)
+    ) {
+      this.store.update(created.id, (w) => {
+        w.approvalPolicy = "workspace-write";
+      });
+      return this.get(created.id);
+    }
     return created;
   }
   create(body) {
@@ -449,9 +488,17 @@ export class WorkspaceService {
     // 联网读取（web_search / web_fetch / 浏览器基线）对所有工作区默认
     // 放开：会话侧的模型外发确认、临床安全闸门是独立权限，不受影响。
     // 配置来源白名单后 web_fetch 自动收紧；其余扩展能力仍默认关闭。
+    // Project folders start Codex-style: everything inside is readable and
+    // the assistant may propose writes, each one confirmed by the user until
+    // they switch the workspace to automatic writes.
+    const project = body.kind === undefined;
     const permissions = new PermissionEngine({
       profile: "standard",
-      grants: { "browser.read": true, network: true },
+      grants: {
+        "browser.read": true,
+        network: true,
+        ...(project ? { "filesystem.write": true } : {}),
+      },
     }).snapshot();
     return publicWorkspace(
       this.store.create({
@@ -462,6 +509,7 @@ export class WorkspaceService {
         permissions,
         ...(body.kind ? { kind: body.kind } : {}),
         ...(body.patientId ? { patientId: body.patientId } : {}),
+        ...(project ? { approvalPolicy: "review" } : {}),
       }),
     );
   }
@@ -967,7 +1015,7 @@ export class WorkspaceService {
       {
         definition: schema(
           "read_file",
-          "读取相对路径的文本文件，返回原文和修改所需的 hash。",
+          "读取相对路径的文件，返回原文和修改所需的 hash。文本文件返回原文；PDF/DOCX/XLSX/PPTX 返回提取的文字（只读，修改时生成新文件后用 save_artifact_to_workspace 写回）。",
           {
             path: text,
             startLine: { type: "integer", minimum: 1 },
@@ -978,10 +1026,15 @@ export class WorkspaceService {
         permission: "filesystem.read",
         observation: { revision: "hash", content: "text" },
         parallel: true,
-        execute: (a) => ({
-          ...files.read(a.path, a),
-          instructions: new ProjectInstructions(files).read(a.path),
-        }),
+        execute: async (a) => {
+          if (DOCUMENT_EXTENSIONS.test(a.path)) return readDocument(files, a);
+          if (IMAGE_EXTENSIONS.test(a.path))
+            throw new AppError("FILE_TYPE", "这是图片文件，请用 inspect_image 读取内容", 415);
+          return {
+            ...files.read(a.path, a),
+            instructions: new ProjectInstructions(files).read(a.path),
+          };
+        },
       },
       {
         definition: schema(
@@ -1003,6 +1056,36 @@ export class WorkspaceService {
             a.expectedHash ?? null,
           );
           return this.propose(id, runId, approval);
+        },
+      },
+      {
+        definition: schema(
+          "save_artifact_to_workspace",
+          "把已生成的成果（PPTX/DOCX/XLSX/PDF/图片等）写入授权文件夹。path 省略时使用成果原名。目标已存在时需 overwrite:true；覆盖前旧版本会自动备份为成果。按工作区审批策略：每次批准时等待用户确认，自动模式直接写入。",
+          {
+            artifactId: text,
+            path: text,
+            overwrite: { type: "boolean" },
+          },
+          ["artifactId"],
+        ),
+        permission: "filesystem.write",
+        execute: (a) => {
+          const { item } = this.artifacts.read(id, a.artifactId);
+          const path = a.path || item.name;
+          this.assertWriteScope(id, path, runId);
+          const current = files.currentHash(path);
+          check(
+            current === null || a.overwrite === true,
+            "FILE_EXISTS",
+            `目标文件 ${path} 已存在；确认覆盖请传 overwrite:true，或换一个文件名`,
+            409,
+          );
+          return this.propose(
+            id,
+            runId,
+            files.binaryProposal(path, item, current),
+          );
         },
       },
     ]);
@@ -1766,6 +1849,44 @@ export class WorkspaceService {
     });
     return this.get(id);
   }
+  // Answer to the write-authorization prompt: approve every pending change
+  // and, with alwaysAllow, let later changes in this workspace apply directly.
+  approveAll(id, body) {
+    check(
+      !this.active.has(id) && !this.hasMutation(id),
+      "RUN_ACTIVE",
+      "请等待当前运行结束后审批",
+      409,
+    );
+    const w = this.store.get(id);
+    check(body.revision === w.revision, "REVISION_CONFLICT", "工作区已更新，请刷新后重试", 409);
+    new PermissionEngine(w.permissions).require("filesystem.write");
+    if (body.alwaysAllow === true)
+      check(
+        body.autoApplyConsent === true && this.domain.allowAutoFileWrites === true,
+        "APPROVAL_CONSENT",
+        "需要明确授权自动应用工作区文件修改",
+        412,
+      );
+    const failed = [];
+    for (const approval of w.approvals.filter((a) => a.status === "pending")) {
+      try {
+        this.decide(id, approval.id, {
+          decision: "approve",
+          revision: this.store.get(id).revision,
+        });
+      } catch (error) {
+        failed.push({ approvalId: approval.id, path: approval.path, error: error.message });
+      }
+    }
+    if (body.alwaysAllow === true && (w.approvalPolicy || "review") === "review") {
+      this.store.update(id, (current) => {
+        current.approvalPolicy = "workspace-write";
+      });
+      this.store.event(id, "manual", "approval_policy.changed", { approvalPolicy: "workspace-write" });
+    }
+    return { ...this.get(id), failed };
+  }
   applyAutomatic(id, approvalId) {
     const w = this.store.get(id),
       approval = w.approvals.find((a) => a.id === approvalId);
@@ -1804,7 +1925,10 @@ export class WorkspaceService {
     const w = this.store.get(id),
       approvalId = approval.id;
     try {
-      const result = new WorkspaceFiles(w.root).apply(approval);
+      const result =
+        approval.kind === "file.write.binary"
+          ? this.#applyBinary(id, w, approval)
+          : new WorkspaceFiles(w.root).apply(approval);
       this.store.update(id, (current) =>
         Object.assign(
           current.approvals.find((a) => a.id === approvalId),
@@ -1828,6 +1952,28 @@ export class WorkspaceService {
       });
       throw error;
     }
+  }
+  #applyBinary(id, w, approval) {
+    const files = new WorkspaceFiles(w.root);
+    const { data } = this.artifacts.read(id, approval.artifactId);
+    let backupArtifactId = null;
+    if (approval.expectedHash !== null) {
+      // Keep the replaced version downloadable; a full artifact store must
+      // not block the write the user already approved.
+      try {
+        const previous = files.bytes(approval.path, 10_000_000);
+        if (previous.hash === approval.expectedHash)
+          backupArtifactId = this.artifacts.save(
+            id,
+            `${approval.path}.before-${new Date().toISOString().replace(/[:.]/g, "-")}`,
+            previous.data,
+            approval.runId,
+          ).id;
+      } catch {
+        backupArtifactId = null;
+      }
+    }
+    return { ...files.applyBinary(approval, data), backupArtifactId };
   }
   prepare(id, body) {
     check(!this.stopping, "SERVICE_STOPPING", "服务正在关闭", 503);

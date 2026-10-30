@@ -67,6 +67,23 @@ export function collectWorkspaceDelivery(service, id, runId, signal) {
       }
       continue;
     }
+    if (approval.kind === "file.write.binary") {
+      try {
+        check(w.permissions.grants["filesystem.read"], "PERMISSION_DENIED", "文件读取未授权");
+        const current = files.currentHash(approval.path);
+        if (current !== approval.result?.hash)
+          gaps.push({ reason: "file_changed", path: approval.path, detail: "当前文件与本次应用记录不一致。" });
+        else {
+          currentFiles.set(approval.path, { hash: current, text: "" });
+          evidence.push({ kind: "file", source: "file-write", path: approval.path, hash: current, readable: true,
+            bytes: approval.result?.size ?? approval.size, binary: true, runId, approvalId: approval.id });
+        }
+      } catch (error) {
+        gaps.push({ reason: "file_unverified", path: approval.path, code: error.code || "READ_FAILED",
+          detail: "无法通过工作区权限边界读取并核对文件。" });
+      }
+      continue;
+    }
     if (approval.before !== null && approval.before !== undefined && hashText(approval.before) === approval.result?.hash) {
       gaps.push({ reason: "no_file_change", path: approval.path, detail: "文件与运行前相同，没有本次实际修改。" });
       continue;
@@ -174,8 +191,10 @@ export function collectApprovalReadiness(service, id, runId, request, signal) {
     service.assertWriteScope(id, a.path, runId);
     // Also checks the underlying source version; approval still checks again.
     if (a.kind === "file.delete") files.deletion(a.path, a.expectedHash);
+    else if (a.kind === "file.write.binary")
+      check(files.currentHash(a.path) === a.expectedHash, "FILE_CONFLICT", "文件版本已变化，请重新读取后修改", 409);
     else files.proposal(a.path, a.content, a.expectedHash);
-    const hash = a.kind === "file.delete" ? null : hashText(a.content);
+    const hash = a.kind === "file.delete" ? null : a.kind === "file.write.binary" ? a.contentHash : hashText(a.content);
     check(receipts.some((v) => v.approvalIds?.includes(a.id) && (hash === null
       ? !v.inputs?.some((f) => f.path === a.path)
       : v.inputs?.some((f) => f.path === a.path && f.hash === hash))),
@@ -184,8 +203,9 @@ export function collectApprovalReadiness(service, id, runId, request, signal) {
   });
   for (const required of run.completion?.files || []) {
     const a = pending.find((p) => p.path === required.path && p.kind !== "file.delete");
-    check(a && (!required.hash || hashText(a.content) === required.hash) &&
-      (required.contains === undefined || a.content.includes(required.contains)),
+    const binary = a?.kind === "file.write.binary";
+    check(a && (!required.hash || (binary ? a.contentHash : hashText(a.content)) === required.hash) &&
+      (required.contains === undefined || (!binary && a.content.includes(required.contains))),
       "APPROVAL_NOT_READY", "提案尚未满足显式文件完成条件");
   }
   signal?.throwIfAborted();

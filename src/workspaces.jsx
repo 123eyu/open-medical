@@ -32,6 +32,7 @@ import { RichMessage } from "./workbench/message";
 import { DiffView } from "./workbench/diff";
 import { Activity } from "./workbench/activity";
 import { RunStatusNotice, OutcomeCard } from "./workbench/run-status-view";
+import { WriteAuthorizationCard, binarySummary } from "./workbench/write-authorization";
 import { blockedText, runChipLabel } from "./workbench/run-status";
 import { ComposerTools } from "./workbench/composer-tools";
 import { Artifacts } from "./workbench/artifacts";
@@ -121,8 +122,8 @@ export function WorkspacesView({
     const id = selectedId.current;
     try {
       let result = { path };
-      // Image/PDF stream as blobs; office docs go through the document
-      // runtime; everything readable as text (html/md/code) uses read_file.
+      // Image/PDF stream as blobs; office docs are converted to text by the
+      // preview effect; everything else (html/md/code) uses read_file here.
       if (
         !/\.(png|jpe?g|webp|gif|pdf|docx|xlsx|pptx)$/i.test(path)
       ) {
@@ -288,7 +289,7 @@ export function WorkspacesView({
     setHtmlUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [previewKind, content]);
-  // Office documents convert automatically through the document runtime.
+  // Office documents are converted to text in-process by read_file.
   useEffect(() => {
     if (previewKind !== "office" || !file || officeBusy || officeText) {
       if (previewKind !== "office") setOfficeError("");
@@ -298,7 +299,7 @@ export function WorkspacesView({
     setOfficeBusy(true);
     setOfficeError("");
     api(base + "/tools", "POST", {
-      tool: "document_read",
+      tool: "read_file",
       arguments: { path: file.path },
     })
       .then((result) => {
@@ -721,6 +722,41 @@ export function WorkspacesView({
   }
   const pendingApprovals =
     current?.approvals.filter((a) => a.status === "pending") || [];
+  const asksBeforeWrite =
+    Boolean(current) && (current.approvalPolicy || "review") === "review";
+  function showReview() {
+    setPanel("review");
+    setInspectorOpen(true);
+    onDisplayModeChange?.("work");
+  }
+  function approvePending(alwaysAllow) {
+    act(async () => {
+      const result = await api(base + "/approvals", "POST", {
+        revision: current.revision,
+        alwaysAllow,
+        ...(alwaysAllow ? { autoApplyConsent: true } : {}),
+      });
+      await refresh();
+      if (result.failed?.length)
+        setError(
+          "部分修改未写入：" +
+            result.failed.map((f) => `${f.path}（${f.error}）`).join("；"),
+        );
+    });
+  }
+  function rejectPending() {
+    act(async () => {
+      let revision = current.revision;
+      for (const a of pendingApprovals)
+        revision = (
+          await api(base + "/approvals/" + a.id, "POST", {
+            revision,
+            decision: "reject",
+          })
+        ).revision;
+      await refresh();
+    });
+  }
   // W7 状态呈现：活跃运行 + 待审批数 → 统一等待状态（优先服务端
   // derivedStatus，通用接口未下发时按同一事实在展示层归一）。
   const activeRun =
@@ -754,7 +790,7 @@ export function WorkspacesView({
             }}
           >
             <p className="muted">
-              选择助手可以读取的本地文件夹。文件修改会单独请求授权
+              选择一个本地文件夹：里面的文件（含 PDF、Word、Excel、PPT）助手都能读取；写入前会先征求你的同意，也可以改为自动写入
               {medical ? "，医疗工具在项目任务中同样可用。" : "。"}
             </p>
             <label>
@@ -813,7 +849,7 @@ export function WorkspacesView({
                 checked={directoryConsent}
                 onChange={(e) => setDirectoryConsent(e.target.checked)}
               />
-              授权此工作区读取该目录
+              授权此工作区读取该文件夹，并在我同意后写入
             </label>
             <button className="primary" disabled={busy || running || !directoryConsent || !root}>
               创建工作区
@@ -853,7 +889,7 @@ export function WorkspacesView({
             <FolderOpen size={29} />
             <h3>项目工作区</h3>
             <p>
-              连接一个本地文件夹开始：读取限定在授权目录内，文件修改先查看、再批准。
+              连接一个本地文件夹开始：文件夹里的文件都能读取；写入前先征求你的同意，也可以设为自动写入。
               {medical ? "医疗工具（文献、知识库、用药核查）在项目任务中同样可用。" : ""}
             </p>
             <button
@@ -1046,15 +1082,23 @@ export function WorkspacesView({
                   </article>
                 )}
               </div>
-              <RunStatusNotice
-                run={activeRun}
-                pendingCount={pendingApprovals.length}
-                onApprove={() => {
-                  setPanel("review");
-                  setInspectorOpen(true);
-                  onDisplayModeChange?.("work");
-                }}
-              />
+              {!running && asksBeforeWrite && pendingApprovals.length > 0 ? (
+                <WriteAuthorizationCard
+                  pending={pendingApprovals}
+                  firstTime={!current.approvals.some((a) => a.status === "applied")}
+                  root={current.root}
+                  busy={busy}
+                  onReview={showReview}
+                  onApprove={approvePending}
+                  onReject={rejectPending}
+                />
+              ) : (
+                <RunStatusNotice
+                  run={activeRun}
+                  pendingCount={pendingApprovals.length}
+                  onApprove={showReview}
+                />
+              )}
               {!running && lastRun && (lastRun.outcome || lastRun.delivery) && (
                 <OutcomeCard
                   outcome={lastRun.outcome}
@@ -1501,14 +1545,36 @@ export function WorkspacesView({
                           <b>{a.path}</b>
                           <span>{stateLabel(a.status)}</span>
                         </div>
-                        <details open={a.status === "pending"}>
-                          <summary>查看修改前后</summary>
-                          <DiffView
-                            path={a.path}
-                            before={a.before}
-                            after={a.kind === "file.delete" ? "" : a.content}
-                          />
-                        </details>
+                        {a.kind === "file.write.binary" ? (
+                          <p className="wb-binary-change">
+                            {binarySummary(a)}
+                            {current.artifacts?.some((x) => x.id === a.artifactId) && (
+                              <>
+                                {" · "}
+                                <button
+                                  type="button"
+                                  className="om-link"
+                                  onClick={() =>
+                                    downloadArtifact(
+                                      current.artifacts.find((x) => x.id === a.artifactId),
+                                    )
+                                  }
+                                >
+                                  下载查看
+                                </button>
+                              </>
+                            )}
+                          </p>
+                        ) : (
+                          <details open={a.status === "pending"}>
+                            <summary>查看修改前后</summary>
+                            <DiffView
+                              path={a.path}
+                              before={a.before}
+                              after={a.kind === "file.delete" ? "" : a.content}
+                            />
+                          </details>
+                        )}
                         {a.error && <p role="alert">{a.error}</p>}
                         {a.status === "applied" && a.before !== null && (
                           <button

@@ -57,6 +57,7 @@ const deniedReason = (part) => {
   return null;
 };
 const forbidden = (part) => deniedReason(part) !== null;
+export const BINARY_WRITE_LIMIT = 10_000_000;
 // ---------------------------------------------------------------------------
 // search_files：受控 ripgrep 引擎 + 受限内置降级引擎
 //
@@ -1165,6 +1166,98 @@ export class WorkspaceFiles {
       status: "pending",
       createdAt: Date.now(),
     };
+  }
+  // Hash of the current bytes, or null when the file does not exist yet.
+  currentHash(path) {
+    try {
+      return this.bytes(path, BINARY_WRITE_LIMIT).hash;
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
+  }
+  // Binary write (PPTX/DOCX/PDF/images…). The bytes live in the workspace
+  // artifact store; the proposal only records which artifact goes where and
+  // which on-disk version it may replace (null = the file must not exist).
+  binaryProposal(path, artifact, expectedHash) {
+    check(
+      artifact && typeof artifact.id === "string" &&
+        typeof artifact.hash === "string" &&
+        Number.isSafeInteger(artifact.size) &&
+        artifact.size <= BINARY_WRITE_LIMIT,
+      "FILE_LIMIT",
+      "二进制文件写入上限为 10MB",
+    );
+    this.path(path, { create: true, parents: true });
+    const current = this.currentHash(path);
+    check(
+      expectedHash === current,
+      "FILE_CONFLICT",
+      "文件版本已变化，请重新读取后修改",
+      409,
+    );
+    return {
+      id: randomUUID(),
+      kind: "file.write.binary",
+      path,
+      before: null,
+      overwrites: current !== null,
+      expectedHash,
+      content: null,
+      artifactId: artifact.id,
+      contentHash: artifact.hash,
+      size: artifact.size,
+      status: "pending",
+      createdAt: Date.now(),
+    };
+  }
+  applyBinary(proposal, data) {
+    check(
+      Buffer.isBuffer(data) && hashText(data) === proposal.contentHash,
+      "ARTIFACT_CHANGED",
+      "待写入的成果内容已变化",
+      409,
+    );
+    const target = this.path(proposal.path, { create: true, parents: true });
+    check(
+      this.currentHash(proposal.path) === proposal.expectedHash,
+      "FILE_CONFLICT",
+      "目标文件版本已变化",
+      409,
+    );
+    mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+    this.path(proposal.path, { create: true });
+    const temp = join(
+      dirname(target),
+      `.${basename(target)}.${randomUUID()}.tmp`,
+    );
+    try {
+      writeFileSync(temp, data, {
+        flag: "wx",
+        mode:
+          proposal.expectedHash === null
+            ? 0o600
+            : lstatSync(target).mode & 0o777,
+      });
+      // Revalidate immediately before mutation.
+      check(
+        this.currentHash(proposal.path) === proposal.expectedHash,
+        "FILE_CONFLICT",
+        "目标文件版本已变化",
+        409,
+      );
+      if (proposal.expectedHash === null) {
+        linkSync(temp, target);
+        unlinkSync(temp);
+      } else renameSync(temp, target);
+      return { path: proposal.path, hash: proposal.contentHash, size: data.length };
+    } finally {
+      try {
+        unlinkSync(temp);
+      } catch {
+        /* Cleanup errors cannot change a completed write. */
+      }
+    }
   }
   snapshot() {
     const paths = [],

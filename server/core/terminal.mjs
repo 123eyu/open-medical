@@ -191,9 +191,14 @@ export class TerminalTools {
       const stagedHashes = new Map(before);
       for (const proposal of proposals) {
         files.path(proposal.path, { create: true, parents: true });
+        let binaryData = null;
         if (proposal.kind === "file.delete")
           files.deletion(proposal.path, proposal.expectedHash);
-        else
+        else if (proposal.kind === "file.write.binary") {
+          check(files.currentHash(proposal.path) === proposal.expectedHash,
+            "FILE_CONFLICT", "文件版本已变化，请重新读取后修改", 409);
+          binaryData = this.service.artifacts.read(id, proposal.artifactId).data;
+        } else
           files.proposal(
             proposal.path,
             proposal.content,
@@ -208,11 +213,12 @@ export class TerminalTools {
           await rm(dest, { force: true });
           stagedHashes.delete(canonical);
         } else {
-          inputBytes += Buffer.byteLength(proposal.content);
+          const data = binaryData ?? proposal.content;
+          inputBytes += Buffer.byteLength(data);
           check(inputBytes <= 10000000, "SNAPSHOT_LIMIT", "终端输入超过 10MB");
           await mkdir(dirname(dest), { recursive: true, mode: 0o755 });
-          await writeFile(dest, proposal.content, { mode: 0o644 });
-          stagedHashes.set(canonical, hashText(proposal.content));
+          await writeFile(dest, data, { mode: 0o644 });
+          stagedHashes.set(canonical, hashText(data));
         }
       }
       const marker = "\nOMW_OUTPUT_" + randomUUID() + "\n";
@@ -363,17 +369,29 @@ export class TerminalTools {
                 if (stagedHashes.get(binary.path) === hashText(binary.data))
                   continue;
                 try {
-                  // Reuse the same protected-name checks. Artifacts never overwrite workspace files.
+                  // Reuse the same protected-name checks. The bytes are kept as a
+                  // downloadable artifact; writing them into the folder is a
+                  // separate binary proposal under the workspace approval policy.
                   files.path(binary.path, { create: true, parents: true });
                   this.service.assertWriteScope(id, binary.path, context.runId);
-                  artifacts.push(
-                    this.service.artifacts.save(
-                      id,
-                      binary.path,
-                      binary.data,
-                      context.runId || "terminal",
-                    ),
+                  const artifact = this.service.artifacts.save(
+                    id,
+                    binary.path,
+                    binary.data,
+                    context.runId || "terminal",
                   );
+                  artifacts.push(artifact);
+                  if (context.artifactsOnly) continue;
+                  const proposal = files.binaryProposal(
+                    binary.path,
+                    artifact,
+                    files.currentHash(binary.path),
+                  );
+                  proposal.runId = context.runId || "terminal";
+                  proposal.terminalId = session.id;
+                  const previous = proposals.find((p) => p.path === binary.path);
+                  if (previous) proposal.replaces = previous.id;
+                  changes.push(proposal);
                 } catch (error) {
                   output.skipped.push(binary.path + "：" + error.message);
                 }
@@ -400,7 +418,7 @@ export class TerminalTools {
               const outputPaths = new Set(
                 [...output.files, ...output.binaries].map((f) => f.path),
               );
-              // 二进制输出只会成为可下载成果，不会写回宿主文件；若它的内容
+              // 二进制输出按写入提案处理，原文件不会被自动删除；若它的内容
               // 与某个已消失的输入文件一致（容器内被移动/改名），保留宿主
               // 原文件，避免「批准移动」实际变成删除原件。
               const binaryHashes = new Map(
@@ -417,7 +435,7 @@ export class TerminalTools {
                 const movedTo = binaryHashes.get(before.get(path));
                 if (movedTo && movedTo !== path) {
                   output.skipped.push(
-                    `${path}：二进制文件被移动为成果 ${movedTo}，宿主原文件保留；如需在宿主上移动请手动处理`,
+                    `${path}：二进制文件被移动为 ${movedTo}，宿主原文件保留；如需删除原文件请手动处理`,
                   );
                   continue;
                 }
