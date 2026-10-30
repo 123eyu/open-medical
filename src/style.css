@@ -4845,7 +4845,7 @@ nav.toolbox .session b{font-weight:500;}
 .care-history { border-left: 2px solid var(--border); padding: 5px 0 5px 12px; margin-top: 10px; }
 .care-history small { display: block; }
 .care-due { color: #a76626; }
-.care-empty { padding: 35px 12px; color: var(--muted); font-size: 13px; text-align: center; }
+.care-empty { padding: 14px 18px; color: var(--muted); font-size: var(--meta-size, 14px); text-align: left; }
 .care-task-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 14px; }
 .care-task-form label { display: grid; gap: 7px; font-size: 13px; }
 .care-task-form input, .care-task-form select, .care-task-form textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font: inherit; background: white; }

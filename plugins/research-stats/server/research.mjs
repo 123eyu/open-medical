@@ -324,13 +324,13 @@ export class ResearchService {
         "每组至少需要 2 个有效数值",
       );
       result = method === "welch-t" ? welchTTest(groups) : mannWhitney(groups);
+      // Each group keeps its level name so readers can tell which arm is which.
       result = {
         ...result,
+        levels,
         groups: levels.map((level, i) => ({
           level,
-          ...result[i === 0 ? "group1" : "group2"] !== undefined
-            ? { ...result[i === 0 ? "group1" : "group2"], level: undefined }
-            : { n: groups[i].length },
+          ...(result[i === 0 ? "group1" : "group2"] ?? { n: groups[i].length }),
         })),
       };
       if (method === "mann-whitney") delete result.groups;

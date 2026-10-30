@@ -1,3 +1,4 @@
+import "../helpers/fixed-clock.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
