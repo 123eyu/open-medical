@@ -121,3 +121,52 @@ test("同一项目的新任务沿用“始终允许写入”", async (t) => {
   const task = service.newTask(id);
   assert.equal(service.get(task.id).approvalPolicy, "workspace-write");
 });
+
+// Document generation without Docker: a stand-in for the local document
+// environment exercises the tool wiring, readiness and write proposal.
+function setupWithDocuments(t, documentPython) {
+  const base = mkdtempSync(join(tmpdir(), "omw-project-docs-"));
+  const root = join(base, "project");
+  mkdirSync(root);
+  const db = new DatabaseSync(join(base, "agent.sqlite"));
+  const service = new WorkspaceService(db, provider, { documentPython });
+  t.after(() => {
+    db.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+  return { service, root, id: service.create({ root, directoryConsent: true }).id };
+}
+
+test("文档生成环境就绪时，document_create 默认可用并生成写入提案", async (t) => {
+  const calls = [];
+  const fake = {
+    ready: () => true,
+    create: async (request) => {
+      calls.push(request);
+      return { path: request.path, data: Buffer.from("PK fake pptx") };
+    },
+  };
+  const { service, root, id } = setupWithDocuments(t, fake);
+  const listed = service.registry(id).definitions(new (await import("../../server/core/permissions.mjs")).PermissionEngine(service.get(id).permissions))
+    .map((d) => d.function.name);
+  assert.ok(listed.includes("document_create"), "无需 Docker 或终端授权即可列出");
+  const result = await service.tool(id, {
+    tool: "document_create",
+    arguments: { path: "out/方案.pptx", contentJson: JSON.stringify({ slides: [{ title: "a" }] }) },
+  });
+  assert.equal(result.environment, "local-sandbox");
+  assert.equal(result.status, "pending");
+  assert.deepEqual(calls[0].content, { slides: [{ title: "a" }] });
+  assert.equal(existsSync(join(root, "out/方案.pptx")), false);
+  service.decide(id, result.approvalId, { decision: "approve", revision: service.get(id).revision });
+  assert.equal(readFileSync(join(root, "out/方案.pptx"), "utf8"), "PK fake pptx");
+});
+
+test("文档生成环境未安装且没有容器时，document_create 不列给模型", async (t) => {
+  const { service, id } = setupWithDocuments(t, { ready: () => false });
+  const { PermissionEngine } = await import("../../server/core/permissions.mjs");
+  const listed = service.registry(id).definitions(new PermissionEngine(service.get(id).permissions))
+    .map((d) => d.function.name);
+  assert.ok(!listed.includes("document_create"));
+  assert.ok(listed.includes("read_file"));
+});

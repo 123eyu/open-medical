@@ -37,16 +37,18 @@ export function patientSuggestions(patient) {
   return out.slice(0, 4);
 }
 
-export function PatientSuggestionList({ patient, onChoose }) {
+export function PatientSuggestionList({ patient, onChoose, disabled = false }) {
   const suggestions = patient ? patientSuggestions(patient) : [];
   if (!suggestions.length) return null;
   return <div className="assistance-suggestions">
     <h2><Sparkles size={16} aria-hidden="true"/>根据档案建议</h2>
-    <ul>{suggestions.map(({ icon: Icon, label, prompt }) => <li key={label}><button type="button" onClick={() => onChoose(prompt)}><Icon size={17} aria-hidden="true"/><span>{label}</span></button></li>)}</ul>
+    <ul>{suggestions.map(({ icon: Icon, label, prompt }) => <li key={label}><button type="button" disabled={disabled} onClick={() => onChoose(prompt)}><Icon size={17} aria-hidden="true"/><span>{label}</span></button></li>)}</ul>
   </div>;
 }
 
-export function ClinicalAssistance({ patient, onOpenTask }) {
+// 对话只由模型执行：未连接模型时说明原因并锁定提问入口。
+const LOCKED = { border: 0, padding: 0, margin: 0, minWidth: 0 };
+export function ClinicalAssistance({ patient, onOpenTask, modelConfigured = true, onModelSettings }) {
   const [question, setQuestion] = useClinicalDraft(patient.id, 'assistanceQuestion', '');
   const [workflow, setWorkflow] = useClinicalDraft(patient.id, 'assistanceWorkflow', '');
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,7 @@ export function ClinicalAssistance({ patient, onOpenTask }) {
   const sending = useRef(false);
   const submit = async event => {
     event.preventDefault();
-    if (sending.current || !question.trim()) return;
+    if (sending.current || !question.trim() || !modelConfigured) return;
     sending.current = true;
     setBusy(true);
     setError('');
@@ -68,12 +70,15 @@ export function ClinicalAssistance({ patient, onOpenTask }) {
   return <section className="clinical-assistance" aria-label="患者诊疗辅助面板">
     <h1>本次想了解什么？</h1>
     <p className="assistance-lead">助手会读取 {patient.name} 的诊断、用药、检验与资料作答，结论供您复核。</p>
+    {!modelConfigured && <p className="notice" role="status">需先连接模型：未连接时不能向助手提问。{onModelSettings && <button type="button" className="text-button" onClick={onModelSettings}>连接模型</button>}</p>}
     <form onSubmit={submit}>
-      <textarea aria-label="本次诊疗问题" value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入诊疗问题，例如：近 3 个月血压控制如何？是否需要调整用药？" disabled={busy} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e); }}/>
-      <div className="assistance-submit"><span>Enter 发送 · Shift + Enter 换行</span><button type="submit" className="primary" disabled={busy || !question.trim()}>{busy ? '正在开始…' : '发送问题'}</button></div>
+      <textarea aria-label="本次诊疗问题" value={question} onChange={e => setQuestion(e.target.value)} placeholder="输入诊疗问题，例如：近 3 个月血压控制如何？是否需要调整用药？" disabled={busy || !modelConfigured} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e); }}/>
+      <div className="assistance-submit"><span>Enter 发送 · Shift + Enter 换行</span><button type="submit" className="primary" disabled={busy || !question.trim() || !modelConfigured} title={modelConfigured ? undefined : '需先连接模型'}>{busy ? '正在开始…' : '发送问题'}</button></div>
     </form>
     {error && <p role="alert" className="error-text">{error}</p>}
-    <PatientSuggestionList patient={patient} onChoose={prompt => { setQuestion(prompt); setWorkflow(''); }}/>
-    <PatientQuestionStarters label="常用方向" onChoose={({ prompt, workflow = "" }) => { setQuestion(prompt); setWorkflow(workflow); }}/>
+    <fieldset disabled={!modelConfigured} style={LOCKED} aria-label="提问建议">
+      <PatientSuggestionList patient={patient} disabled={!modelConfigured} onChoose={prompt => { setQuestion(prompt); setWorkflow(''); }}/>
+      <PatientQuestionStarters label="常用方向" onChoose={({ prompt, workflow = "" }) => { setQuestion(prompt); setWorkflow(workflow); }}/>
+    </fieldset>
   </section>;
 }

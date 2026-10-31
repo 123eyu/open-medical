@@ -94,7 +94,6 @@ import {
   MemoryNote,
   PatientSummaryCard,
   StepsFlow,
-  modeToRequest,
 } from "./ui";
 // 固定区页面按路由懒加载；首页/对话工作区/患者仍静态进入首屏。
 // CSS 继续由固定入口静态导入，保证加载顺序和层叠关系不变。
@@ -243,7 +242,7 @@ function ArtifactView({ artifact, onEdit, onSource, onOpen }) {
       </div>
       <h3>{artifactTitle(artifact) || "未命名结果"}</h3>
       <p className="muted">
-        {artifact.provenance === "local_rule" ? "本地规则整理" : "生成草稿"} ·{" "}
+        {artifact.provenance === "local_rule" ? "工具按原文抽取" : "生成草稿"} ·{" "}
         {artifact.createdAt
           ? new Date(artifact.createdAt).toLocaleString("zh-CN")
           : "时间未记录"}
@@ -715,7 +714,7 @@ function App() {
     ? (questionSelection.sessionId === session.id ? questionSelection.runId : session.runs.at(-1)?.id) : undefined;
   const questionRun = session?.runs.find(r => r.id === questionRunId);
   const questionIds = conversationRunIds(session?.runs, questionRunId);
-  const canFollowQuestion = questionRun?.status === "completed" && questionRun?.mode !== "local";
+  const canFollowQuestion = questionRun?.status === "completed" && !["local", "code"].includes(questionRun?.mode);
   // 与服务端 resolveTaskContexts 一致：未显式设置时，普通会话沿用最近一轮、
   // 患者会话沿用所追问那一轮的任务上下文。
   const inheritedContexts = (taskContexts !== undefined ? [] : (session?.patientId ? (canFollowQuestion ? questionRun?.policy?.contexts : null) : session?.runs?.at(-1)?.policy?.contexts) || []).filter((c) => c.sticky);
@@ -1055,8 +1054,10 @@ function App() {
     const pendingWorkflow = override.workflow ?? pendingWorkflowRef.current;
     const pendingContexts = override.context !== undefined ? override.context : pendingContextsRef.current;
     const modelEnabled = Boolean(config?.modelConfigured);
-    if (["knowledge-answer", "literature-research"].includes(pendingWorkflow) && !modelEnabled) {
-      setError(pendingWorkflow === "literature-research" ? "文献研究需要模型进行阅读和综合。请先配置模型，或在文献页使用查找论文。问题已保留。" : "知识来源问答需要配置并使用模型。问题和来源已保留；可先返回知识库检索原文，或配置模型后重试。");
+    // 对话与任务只由模型执行；仅医生手动提交的沙箱代码不需要模型。
+    if (!modelEnabled && override.mode !== "code") {
+      if (override.message && !draft.trim()) setDraft(text);
+      setError(pendingWorkflow === "literature-research" ? "需先连接模型：文献研究需要模型进行阅读和综合。问题已保留；可在文献页使用查找论文。" : pendingWorkflow === "knowledge-answer" ? "需先连接模型：知识来源问答需要模型。问题和来源已保留；可先返回知识库检索原文。" : "需先连接模型：未连接模型时不能发送任务。问题已保留。");
       return;
     }
     // 执行中追加要求：统一内核会话（kind:"session"）走 steer 指令队列，与
@@ -1109,17 +1110,14 @@ function App() {
     let started = false;
     let failed = false;
 
-    const req = modeToRequest(modelEnabled, {
-      message: text,
-    });
     try {
       await streamTurn(
         id,
         {
-          message: req.message,
-          mode: req.mode,
-          externalConsent: modelEnabled,
-          ...(thinking === "enabled" && modelEnabled
+          message: text,
+          mode: "model",
+          externalConsent: true,
+          ...(thinking === "enabled"
             ? { thinking: "enabled" }
             : {}),
           skills: pickedSkills,
@@ -1248,6 +1246,11 @@ function App() {
     }
   };
   const selectWorkflow = async (flow) => {
+    // 工作流由模型执行：未连接模型时不为它新建会话。
+    if (!config?.modelConfigured) {
+      setError("需先连接模型：工作流由模型执行，未连接时不能发送任务。");
+      return;
+    }
     if (!session) await create();
     setDraft(flow.prompt);
     inputRef.current?.focus();
@@ -1299,6 +1302,8 @@ function App() {
   };
   // 首页点附件：先确保有待发会话（患者任务挂患者会话），再弹文件选择
   const homeAttach = async (patientSessionId) => {
+    // 首页附件只随任务发送；未连接模型时不预建会话。
+    if (!config?.modelConfigured) return;
     if (!homePending.current) {
       homePending.current = patientSessionId
         ? await select(patientSessionId)
@@ -1911,7 +1916,8 @@ function App() {
                     <AlertCircle size={16} />
                     <span>{error}</span>
                     {!config && <button onClick={init}>重新连接</button>}
-                    {pendingWorkflowRef.current === "knowledge-answer" && !modelEnabled && <><button onClick={() => setModal("model")}>配置模型</button><button onClick={() => navigate("knowledge")}>返回知识库检索原文</button></>}
+                    {config && !modelEnabled && <button onClick={() => setModal("model")}>连接模型</button>}
+                    {pendingWorkflowRef.current === "knowledge-answer" && !modelEnabled && <button onClick={() => navigate("knowledge")}>返回知识库检索原文</button>}
                     {!session && config && <button onClick={() => navigate("tasks")}>返回任务记录</button>}
                     <IconButton
                       title="关闭错误提示"
@@ -1974,18 +1980,18 @@ function App() {
                             ? `查看已添加的 ${session.files.length} 份资料`
                             : "添加任务材料"}
                         </button>}
-                        {!draft.trim() && session?.patientId && patientDetail?.id === session.patientId && <div className="workbench-suggestions"><PatientSuggestionList patient={patientDetail} onChoose={(prompt) => {
+                        {!draft.trim() && session?.patientId && patientDetail?.id === session.patientId && <div className="workbench-suggestions"><PatientSuggestionList disabled={config && !config.modelConfigured} patient={patientDetail} onChoose={(prompt) => {
                           setDraft(prompt);
                           pendingWorkflowRef.current = '';
                           draftWorkflows.current.set(draftContext.current.key, '');
                           inputRef.current?.focus();
                         }}/></div>}
-                        {!draft.trim() && (session?.patientId ? <PatientQuestionStarters onChoose={({ prompt, workflow = '' }) => {
+                        {!draft.trim() && (session?.patientId ? <fieldset className="plain-fieldset" disabled={Boolean(config && !config.modelConfigured)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><PatientQuestionStarters onChoose={({ prompt, workflow = '' }) => {
                           setDraft(prompt);
                           pendingWorkflowRef.current = workflow;
                           draftWorkflows.current.set(draftContext.current.key, workflow);
                           inputRef.current?.focus();
-                        }}/> : (
+                        }}/></fieldset> : (
                           <div className="workflow-grid">
                             {WORKFLOWS.map((flow) => (
                               <button
@@ -2000,9 +2006,10 @@ function App() {
                             ))}
                           </div>
                         ))}
-                        {!session?.patientId && <div className="welcome-note">
+                        {!session?.patientId && config && !config.modelConfigured && <div className="welcome-note" role="status">
                           <ShieldCheck size={14} />
-                          未配置模型时使用本地整理；配置后可直接提问。
+                          需先连接模型：任务和提问都由模型执行，未连接时不能发送。
+                          <button type="button" className="text-button" onClick={() => setModal("model")}>连接模型</button>
                         </div>}
                       </div>
                     )}
@@ -2386,8 +2393,10 @@ function App() {
                             !draft.trim() ||
                             loading ||
                             !config ||
+                            !config.modelConfigured ||
                             uploading
                           }
+                          title={config && !config.modelConfigured ? "需先连接模型" : undefined}
                         >
                           <ArrowUp size={19} />
                         </button>
@@ -2399,12 +2408,13 @@ function App() {
                     <span>
                       {!config?.modelConfigured && (
                         <>
-                          未配置模型，当前仅按规则整理材料。
+                          需先连接模型：未连接时不能发送任务。
                           <button
+                            type="button"
                             className="text-button"
                             onClick={() => setModal("model")}
                           >
-                            配置模型
+                            连接模型
                           </button>
                         </>
                       )}
@@ -2804,7 +2814,7 @@ function App() {
                             </div>
                             <p>
                               {INTENTS[run.policy?.intent] || "医疗任务"} ·{" "}
-                              {run.mode === "local" ? "本地整理" : "模型处理"}
+                              {run.mode === "code" ? "沙箱计算" : run.mode === "local" ? "旧版本地整理" : "模型处理"}
                             </p>
                             <p>{session.messages.find(m => m.role === "user" && m.runId === run.id)?.content}</p>
                             <details className="run-conversation">
@@ -2907,8 +2917,9 @@ function App() {
               setModal(null);
               send(null, {
                 message: "对选中医疗资料进行沙箱计算，结果待复核。",
-                mode: "local",
+                mode: "code",
                 sandboxCode: code,
+                fileIds: selectedFileIds,
               });
             }}
           />

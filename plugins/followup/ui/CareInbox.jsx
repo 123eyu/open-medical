@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bell, Contact, Inbox, Loader2, MessageSquare, RefreshCw, Send, Settings2, Stethoscope, UserCog } from "lucide-react";
 import { api } from "../../../src/agent-runtime";
 import { Modal } from "../../../src/components";
-import { careSetupProgress, takePluginIntent } from "../../../src/plugin-navigation";
+import { takePluginIntent } from "../../../src/plugin-navigation";
 import { CareContacts } from "../../channel-wecom/ui/CareContacts.jsx";
 import { CareSetup } from "./CareSetup.jsx";
+import { usePluginConnected } from "../../../src/plugin-slots.jsx";
 import "../../../src/care.css";
 import "./followup-clarity.css";
 
@@ -45,10 +46,10 @@ export function CareInbox({ onOpenPatient }) {
   const [patientSettings, setPatientSettings] = useState(null);
   const [patients, setPatients] = useState(null);
   const [setupOpen, setSetupOpen] = useState(() => Boolean(takePluginIntent("followup", "care-setup")));
-  const [setup, setSetup] = useState(null);
   const [setupLater, setSetupLater] = useState(() => { try { return sessionStorage.getItem("omw-care-setup-later") === "1"; } catch { return false; } });
-  const loadSetup = useCallback(() => api("/api/care/settings").then((value) => setSetup(careSetupProgress(value))).catch(() => {}), []);
-  useEffect(() => { loadSetup(); }, [loadSetup]);
+  // The banner follows the host's verdict: any connected patient channel
+  // (desktop WeChat, WeCom bot, archive…) counts, not only the WeCom 客服 pieces.
+  const connected = usePluginConnected("followup");
 
   const load = useCallback(async () => {
     const request = ++loadGeneration.current;
@@ -87,13 +88,13 @@ export function CareInbox({ onOpenPatient }) {
     <header className="directory-heading om-page-head care-head"><div><h1>患者消息</h1>
       <span className="om-page-meta">{overview ? [stats.openAlerts ? `${stats.openAlerts} 条提醒待处理` : "暂无未处理提醒", stats.drafts ? `${stats.drafts} 份草稿待发送` : "", stats.pending ? `${stats.pending} 条消息待处理` : ""].filter(Boolean).join(" · ") : "正在读取…"}</span></div></header>
     {patientFilter && <section className="care-notice" aria-label="患者筛选"><span>当前患者：{patientFilter.name || patientFilter.id}</span><button type="button" className="text-button" onClick={() => { loadGeneration.current++; setData({}); setError(""); setPatientFilter(null); }}>清除患者筛选</button></section>}
-    {setup && !setup.essential && !setupLater && <section className="care-setup-banner" aria-label="企业微信接入">
+    {!connected && !setupLater && <section className="care-setup-banner" aria-label="企业微信接入">
       <div><strong>患者消息连接尚未就绪</strong>
         <span>新消息不会自动进入；可先在患者「消息记录」中粘贴聊天记录整理随访。</span></div>
       <button type="button" className="primary" onClick={() => setSetupOpen(true)}>查看连接方式</button>
       <button type="button" className="secondary" onClick={() => { setSetupLater(true); try { sessionStorage.setItem("omw-care-setup-later", "1"); } catch { /* storage unavailable */ } }}>稍后</button>
     </section>}
-    {setupOpen && <CareSetup onClose={() => { setSetupOpen(false); loadSetup(); load(); }} onChanged={loadSetup} />}
+    {setupOpen && <CareSetup onClose={() => { setSetupOpen(false); load(); }} />}
     {!patientFilter && <section className="care-stats" aria-label="今日统计（全部患者）">
       {[["未处理提醒", stats.openAlerts, stats.urgentAlerts ? "urgent" : stats.openAlerts ? "attention" : "", stats.urgentAlerts ? `其中 ${stats.urgentAlerts} 条紧急` : ""], ["待处理消息", stats.pending, stats.pending ? "attention" : ""], ["待发送草稿", stats.drafts, stats.drafts ? "attention" : ""], ["今日消息", stats.messagesToday], ["今日自动回复", stats.autoRepliedToday], ["进行中随访", stats.activeCampaigns]].filter(([, value], index) => index < 4 || value > 0).map(([label, value, tone, note]) =>
         <div key={label} className={`care-stat ${tone || ""}`}><span>{label}</span><strong>{value ?? "—"}</strong>{note && <small>{note}</small>}</div>)}
@@ -193,7 +194,7 @@ function AssignControl({ message, patients, busy, onAssign }) {
 }
 
 function MessageList({ messages, patients, busy, onProcess, onMark, onAssign, onPatientSettings, onOpenPatient }) {
-  if (!messages.length) return <Empty>还没有患者消息。</Empty>;
+  if (!messages.length) return <Empty>还没有患者消息。微信桌面读取和导入的聊天记录在患者「消息记录」或「随访 → 聊天随访」中核对归档。</Empty>;
   return <ul className="care-list compact">{messages.map((m) => {
     const s = m.state || {};
     return <li key={m.id} className={`care-card level-${s.level || "routine"}`}>

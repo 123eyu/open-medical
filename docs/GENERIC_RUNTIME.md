@@ -58,11 +58,12 @@ flowchart TD
 | 模式     | Minimal/Standard/Creator/Code 是现有工具的权限预设；不是参照产品四种完整工作流的等价实现                                                                                                |
 | 技能     | 发现并读取授权工作区 `skills/<name>/SKILL.md`；不自动执行脚本、Hooks 或安装远程插件                                                                                                     |
 | 计划     | 单次或固定间隔、暂停与重新授权恢复；应用需运行；无 cron 表达式、DAG 或系统唤醒                                                                                                          |
+| 文档生成 | `document_create` 优先使用本机「文档生成环境」：`<数据目录>/document-python/venv`（python-pptx、python-docx、openpyxl、reportlab、pypdf、pillow，约 70MB），在「设置 → 文档生成环境」点击安装；运行在与科研计算相同的系统沙箱中（macOS Seatbelt / Windows AppContainer），禁网、禁子进程、只写本次临时目录。未安装时退回容器运行时（需终端授权和镜像）。`document_render` 仍需容器。`MEDICAL_DOCUMENT_PYTHON` 可指定已装好这些包的解释器 |
 | 沙箱     | 医疗计算使用 macOS Seatbelt；通用终端和插件命令使用本地 Docker Linux 容器，网络关闭、只读宿主挂载、256MiB/1CPU/64进程/5分钟上限；没有 Docker 时 fail-closed                             |
 | MCP      | 官方 TypeScript SDK 的 stdio、Streamable HTTP、SSE；工具分页发现、JSON Schema（draft 7/2019/2020）、resources、prompts、来源限制、响应上限；stdio 运行在隔离容器，HTTP 非本机必须 HTTPS |
 | 插件     | 离线 `plugin.json` 清单、摘要校验、安装/升级/启停/卸载；技能、命令和 MCP 入口分开授权；不执行 hooks、不安装依赖或市场脚本                                                               |
 | 通用终端 | 交互 stdin、输出游标、取消；选定文本文件进入 `/input` 只读快照，写入 `/work` 内存盘，成功结果转换为逐项文件提案                                                                         |
-| 浏览器   | Electron 独立 Chromium 会话或 Playwright；来源白名单、禁止下载/弹窗/密码文件输入、点击/填写待用户批准，拒绝跨来源和重定向                                                               |
+| 浏览器   | Computer-use 式浏览器（参考 browser-use / Playwright MCP）：桌面版为每个工作区独立、登录状态持久的 Electron Chromium（DevTools 协议输入），开发环境为 Playwright。可打开任意 http(s) 网站；快照给可交互元素编号 ref，`browser_action` 支持 click/double_click/right_click/hover/type/select/press/scroll/click_at/back/forward/reload/wait 并返回新页面状态；`browser_screenshot` 带编号框截图交给视觉模型回答问题（不把图片 base64 放进对话）；新窗口在同页继续；工作区文件只能在工作区内打开；不下载文件、不授予摄像头/定位等站点权限；用户可显示窗口亲自登录或过验证码 |
 | 语义记忆 | 每工作区最多 256 个分片；离线 LSA 或本机 Ollama/OpenAI-compatible 嵌入，余弦检索、来源 hash/有效期/模型命名空间、删除和重建索引                                                         |
 
 文件修改采用临时文件和替换，保留原文件权限。原文件内容保存在本地审批记录中；数据库未加密。本地 API 认证防跨站请求，不能抵御已控制本机的程序。文件系统检查与替换不是针对同机恶意进程的完整抗竞态安全沙箱。

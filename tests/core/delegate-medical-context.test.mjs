@@ -32,7 +32,7 @@ test("医疗会话委派子任务：子任务能看到材料索引并读取本�
     body: {
       sessionId: session.body.id,
       message: "血压记录：148/92 mmHg，请委派子任务整理",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

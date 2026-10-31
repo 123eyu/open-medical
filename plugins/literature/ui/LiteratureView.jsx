@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../src/agent-runtime";
+import { requestSettingsTab } from "../../../src/extension-center";
 import "../../../src/tools-clarity.css";
 import "./literature.css";
 import { Search, Loader2, FilePlus, Copy, ExternalLink, Check } from "lucide-react";
 
 // Literature search view: queries PubMed / Europe PMC through the local
 // server. Only the query text leaves the machine; imports land as session
-// materials with SHA-256 provenance.
-export function LiteratureView({ onOpenTask }) {
+// materials with SHA-256 provenance. Non-Latin queries (e.g. Chinese) are
+// handed to the assistant, which needs a configured model.
+const NON_LATIN = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u;
+export function LiteratureView({ onOpenTask, config, onSettings }) {
+  const modelConfigured = Boolean(config?.modelConfigured);
+  const openModelSettings = () => { requestSettingsTab("general"); onSettings?.(); };
   const [specialty, setSpecialty] = useState("");
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("research");
@@ -36,12 +41,17 @@ export function LiteratureView({ onOpenTask }) {
     event?.preventDefault();
     const searchQuery = options.query ?? query;
     if (searchInFlight.current || !searchQuery.trim()) return;
+    const needsAssistant = mode === "research" || NON_LATIN.test(searchQuery);
+    if (needsAssistant && !modelConfigured) {
+      setError("需先连接模型：研究与综述、中文等非英文检索交给助手处理，未连接模型时不能发送。可改用英文关键词直接查找论文。");
+      return;
+    }
     searchInFlight.current = true;
     setBusy(true);
     setError("");
     setResults(null);
     try {
-      if (mode === "research" || /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(searchQuery)) {
+      if (needsAssistant) {
         const session = await api("/api/sessions", "POST", { title: `${mode === "research" ? "文献研究" : "文献检索"} · ${searchQuery.slice(0, 40)}` });
         // 医生的检索词原样作为提问；方式、来源和年份作为附带上下文。
         await onOpenTask(session.id, {
@@ -55,6 +65,7 @@ export function LiteratureView({ onOpenTask }) {
               source: options.source || source,
               ...(yearFrom ? { yearFrom } : {}),
               ...(yearTo ? { yearTo } : {}),
+              ...(options.sort === "date" ? { sort: "date" } : {}),
             },
           },
           ...(mode === "research" ? { workflow: "literature-research" } : {}),
@@ -172,11 +183,12 @@ export function LiteratureView({ onOpenTask }) {
                 }
                 disabled={busy}
               >
-                {mode === 'research' ? '研究我关注的领域：' : '查找最新论文：'}{specialty} →
+                {mode === 'research' ? '让助手研究我关注的领域：' : NON_LATIN.test(specialty) ? '让助手查找近期论文：' : '查找最新论文：'}{specialty} →
               </button>
             )}
           </div>
-          <p className="om-meta literature-mode-hint">{mode === "research" ? "描述临床问题，助手检索并比较证据，生成带出处的总结。" : "按主题、标题、PMID 或英文关键词直接检索 PubMed / Europe PMC。"}</p>
+          <p className="om-meta literature-mode-hint">{mode === "research" ? "描述临床问题，助手检索并比较证据，生成带出处的总结（需已连接模型）。" : "按主题、标题、PMID 或英文关键词直接检索 PubMed / Europe PMC；中文等非英文检索词交给助手处理，需已连接模型。"}</p>
+          {!modelConfigured && (mode === "research" || NON_LATIN.test(query)) && <p className="notice" role="status">需先连接模型：{mode === "research" ? "研究与综述" : "非英文检索"}由助手执行，未连接模型时不能发送。<button type="button" className="text-button" onClick={openModelSettings}>连接模型</button></p>}
           <form className="literature-form" onSubmit={runSearch}>
             <textarea
               rows={3}
@@ -205,9 +217,9 @@ export function LiteratureView({ onOpenTask }) {
               onChange={(e) => setYearTo(e.target.value.replace(/\D/g, ""))}
             />
             </div></details>
-            <button className="primary" type="submit" disabled={busy || !query.trim()}>
+            <button className="primary" type="submit" disabled={busy || !query.trim() || (!modelConfigured && (mode === "research" || NON_LATIN.test(query)))} title={!modelConfigured && (mode === "research" || NON_LATIN.test(query)) ? "需先连接模型" : undefined}>
               {busy ? <Loader2 className="spin" size={15} /> : <Search size={15} />}
-              {mode === "research" ? "开始研究" : /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Devanagari}]/u.test(query) ? "让助手查找" : "检索"}
+              {mode === "research" ? "开始研究" : NON_LATIN.test(query) ? "让助手查找" : "检索"}
             </button>
           </form>
         </section>
@@ -296,7 +308,7 @@ export function LiteratureView({ onOpenTask }) {
           )}
         </ul>}
         <p className="tool-footnote">
-          证据类型标签由出版类型映射而来，仅为提示，不构成质量结论；全文导入仅限摘要与开放获取许可范围。
+          证据类型标签由出版类型映射而来，仅为提示，不构成质量结论；「导入为材料」只导入题录与摘要（含 MeSH 主题词），不下载全文。
         </p>
       </section>
     </div>

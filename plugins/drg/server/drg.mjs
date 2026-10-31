@@ -143,7 +143,7 @@ export class DrgService {
       return {
         principalDx: diagnosis,
         drgCode: null,
-        ungroupedReason: `主要诊断「${diagnosis}」在示例方案中无法路由到 MDC（${mdcName}）。请导入本地分组方案。`,
+        ungroupedReason: `主要诊断「${diagnosis}」在示例方案中无法路由到 MDC（${mdcName}）。示例方案只覆盖部分常见病组，导入权重不会增加分组规则；请以本院医保分组器为准。`,
         schemeVersion: this.scheme.drgGroups.version,
       };
     const mdcAdrgs = this.scheme.drgGroups.adrgs.filter((entry) => entry.mdc === mdc);
@@ -152,7 +152,7 @@ export class DrgService {
         principalDx: diagnosis,
         mdc: `${mdc} ${mdcName}`,
         drgCode: null,
-        ungroupedReason: `MDC ${mdc}（${mdcName}）在示例方案中暂无病组定义。请导入本地分组方案。`,
+        ungroupedReason: `MDC ${mdc}（${mdcName}）在示例方案中暂无病组定义。导入权重不会增加分组规则；请以本院医保分组器为准。`,
         schemeVersion: this.scheme.drgGroups.version,
       };
     // First matching surgical ADRG wins (list order); otherwise the medical
@@ -262,7 +262,7 @@ export class DrgService {
       totalActual: results.reduce((sum, result) => sum + (result.actualCost || 0), 0),
       distribution,
       results,
-      note: "CMI 与费用为示例方案下的测算草稿；未分组病例请检查诊断编码或导入本地方案。",
+      note: "CMI 与费用为示例方案下的测算草稿；未分组病例请检查诊断编码；示例方案未覆盖的病组需以本院医保分组器为准。",
     };
   }
 }

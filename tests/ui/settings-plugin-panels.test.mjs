@@ -10,6 +10,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 test("设置：消息渠道子页签顺序与插件声明一致", async (t) => {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });

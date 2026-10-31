@@ -39,7 +39,7 @@ test("相似病例工作流：调用 similar_case_search → finish_similar_case
     body: {
       sessionId: target.sessionId,
       message: "这个患者有相似病例吗？仅本地检索",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

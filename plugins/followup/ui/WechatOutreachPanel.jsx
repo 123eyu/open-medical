@@ -10,6 +10,9 @@ export function WechatOutreachPanel() {
   const [data, setData] = useState(null), [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(''), [offset, setOffset] = useState(0);
   const load = () => api(`/api/chat-autofollow/queue?limit=20&offset=${offset}`).then((v) => { setData(v); setError(''); }).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [offset]);
+  // 已验证发送链只在 Windows 桌面组件中实现；其他平台不显示发送按钮。
+  const [canSend, setCanSend] = useState(null);
+  useEffect(() => { api('/api/chat-followups/settings').then((v) => setCanSend(v.connections?.find((c) => c.channel === 'wechat')?.platform === 'win32')).catch(() => setCanSend(false)); }, []);
   const act = (key, fn, done) => async () => {
     setBusy(key); setError(''); setNotice('');
     try { const r = await fn(); if (done) done(r); await load(); } catch (e) { setError(e.message); } finally { setBusy(''); }
@@ -27,12 +30,12 @@ export function WechatOutreachPanel() {
     {error && <p className="form-error" role="alert">{error}</p>}
     {!data && !error && <p role="status">正在读取微信随访队列…</p>}
     {data && !data.items.length && <div className="care-empty"><p>当前没有到期的微信随访任务。</p><p className="care-hint">在患者档案里应用随访模板后，到期任务会出现在这里；患者的微信会话需先在「聊天随访」中关联并校准。</p></div>}
-    <ul className="care-list">{(data?.items || []).map((it) => <OutreachItem key={`${it.jobId}:${it.outreach?.revision || 0}`} it={it} busy={busy} act={act} />)}</ul>
+    <ul className="care-list">{(data?.items || []).map((it) => <OutreachItem key={`${it.jobId}:${it.outreach?.revision || 0}`} it={it} busy={busy} act={act} canSend={canSend === true} />)}</ul>
     {(offset > 0 || (data?.items?.length || 0) >= 20) && <nav className="toolbar-actions" aria-label="微信随访分页"><button className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>上一页</button><span>第 {Math.floor(offset / 20) + 1} 页</span><button className="secondary" disabled={(data?.items?.length || 0) < 20} onClick={() => setOffset(offset + 20)}>下一页</button></nav>}
   </section>;
 }
 
-function OutreachItem({ it, busy, act }) {
+function OutreachItem({ it, busy, act, canSend }) {
   const o = it.outreach;
   const [text, setText] = useState(o?.text || '');
   const [consent, setConsent] = useState(false);
@@ -53,8 +56,10 @@ function OutreachItem({ it, busy, act }) {
     {o?.text && o.status === 'draft' && <>
       {o.screen && !o.screen.ok && <p className="form-error" role="note">话术筛查提示：{o.screen.reasons.join('；')}。请人工核对后自行决定是否发送。</p>}
       <label>随访消息<textarea rows={3} maxLength={2000} value={text} onChange={(e) => { setText(e.target.value); setConsent(false); }} /></label>
-      <label className="chat-check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />我已核对话术与该患者的对应关系，确认发送</label>
-      <button className="primary" disabled={busy !== '' || !wechatOk || !consent || !text.trim()} onClick={act(`s-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/send`, 'POST', { text, consent: true }), () => setNotice('已发送并在微信窗口内核验'))}>{busy === `s-${it.jobId}` ? '正在核验发送…' : '发送到微信'}</button>
+      {canSend ? <>
+        <label className="chat-check"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />我已核对话术与该患者的对应关系，确认发送</label>
+        <button className="primary" disabled={busy !== '' || !wechatOk || !consent || !text.trim()} onClick={act(`s-${it.jobId}`, () => api(`/api/chat-autofollow/${it.jobId}/send`, 'POST', { text, consent: true }), () => setNotice('已发送并在微信窗口内核验'))}>{busy === `s-${it.jobId}` ? '正在核验发送…' : '发送到微信'}</button>
+      </> : <p className="muted">从工作台发送目前仅支持 Windows 微信；请复制上方话术在微信中手动发送，联系后在患者「随访计划」中登记结果。</p>}
     </>}
     {o?.status === 'sent' && <p className="muted">已发送{when(o.sentAt)}；监听模式读到患者回复后，这里会提示整理。</p>}
     {(o?.status === 'replied' || o?.record) && <>

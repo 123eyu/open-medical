@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { check } from "../errors.mjs";
 import { TASK_TEMPLATES } from "../../shared/task-templates.mjs";
 
@@ -173,11 +172,4 @@ export function renderTaskContexts(contexts = [], { inherited = false, pluginHos
     `本轮任务上下文：由应用随医生的问题附带，医生界面只显示标签，不显示这里的说明${inherited ? "；沿用自本会话上一轮问题" : ""}。医生的问题见用户消息；若医生的问题明确改变了范围或输出要求，以医生的问题为准；安全边界不变。`,
     ...blocks,
   ].join("\n\n");
-}
-
-// 本地规则模式没有系统提示，上下文作为一份材料交给规则整理。
-export function taskContextSource(contexts, options) {
-  const text = renderTaskContexts(contexts, options);
-  if (!text) return null;
-  return { id: "task-context", name: "任务上下文", text, hash: createHash("sha256").update(text).digest("hex") };
 }

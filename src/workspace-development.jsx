@@ -87,7 +87,7 @@ export function WorkspaceDevelopment({ current, busy, act, refresh, select }) {
         </button>
         {!current.permissions.grants["process.spawn"] && (
           <p className="workspace-note">
-            先在「工具、插件与记忆」启用终端并选择本地镜像。
+            需要 Docker：先在上方「项目工具与连接」勾选「运行分析工具」，填写本地镜像并保存许可。
           </p>
         )}
         {result && (

@@ -149,7 +149,7 @@ test("开启脱敏：模型只看到脱敏资料，建档提案在本机回填�
   assert.equal(ready.privacy.identity.name, "赵测试", "身份只在本机留存，用于建档回填");
   const run = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: id, message: "根据资料建档", fileIds: [file.body.id], mode: "standard", externalConsent: true },
+    body: { sessionId: id, message: "根据资料建档", fileIds: [file.body.id], mode: "model", externalConsent: true },
   });
   assert.equal(run.body.status, "completed", JSON.stringify(run.body));
   const sent = JSON.stringify(provider.calls.map((call) => call.messages));
@@ -178,7 +178,7 @@ test("严格模式且服务不可用：资料不发给模型", async (t) => {
   });
   const run = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: id, message: "看看这份资料", fileIds: [file.body.id], mode: "standard", externalConsent: true },
+    body: { sessionId: id, message: "看看这份资料", fileIds: [file.body.id], mode: "model", externalConsent: true },
   });
   assert.equal(run.body.status, "completed", JSON.stringify(run.body));
   const sent = JSON.stringify(provider.calls.map((call) => call.messages));
@@ -202,7 +202,7 @@ test("规则兜底模式且未配置服务：用本地规则脱敏", async (t) =
   assert.equal(ready.privacy.method, "rules");
   await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: id, message: "看看这份资料", fileIds: [file.body.id], mode: "standard", externalConsent: true },
+    body: { sessionId: id, message: "看看这份资料", fileIds: [file.body.id], mode: "model", externalConsent: true },
   });
   const sent = JSON.stringify(provider.calls.map((call) => call.messages));
   for (const secret of ["赵测试", "13912345678", "110101196703120015", "ZY20260011"]) assert.ok(!sent.includes(secret), `模型不应看到 ${secret}`);

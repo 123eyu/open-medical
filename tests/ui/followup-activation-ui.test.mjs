@@ -7,6 +7,9 @@ import { createServer as createViteServer } from "vite";
 async function load() {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });
@@ -89,7 +92,7 @@ test("followup 停用：settingsTab=followup 仍解析到患者随访连接面�
   );
 });
 
-test("patient tabs：followup 启用但未连接患者渠道时只有随访 tab，消息 tab 不出现", async (t) => {
+test("patient tabs：followup 启用但未连接患者渠道时消息 tab 仍出现（可导入聊天文件）", async (t) => {
   const { vite, slots, plugin } = await load();
   t.after(() => vite.close());
 
@@ -97,7 +100,7 @@ test("patient tabs：followup 启用但未连接患者渠道时只有随访 tab�
   const html = renderToStaticMarkup(harness(slots));
 
   const keys = [...html.matchAll(/data-key="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(keys, ["appointments", "followups"]);
+  assert.deepEqual(keys, ["messages", "appointments", "followups"]);
 });
 
 test("patient tabs：连接患者渠道后消息/随访 tab 都出现", async (t) => {

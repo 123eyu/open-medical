@@ -69,7 +69,7 @@ test("运行时把超大参数作为工具错误交回模型，任务继续完�
   const session = await app.request("/api/assistant/session", { method: "POST", body: {} });
   const run = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: session.body.id, message: "写一份长报告", mode: "standard", externalConsent: true },
+    body: { sessionId: session.body.id, message: "写一份长报告", mode: "model", externalConsent: true },
   });
   assert.equal(run.body.status, "completed", JSON.stringify(run.body));
   const toolMessage = provider.calls[1].messages.find(
@@ -96,7 +96,7 @@ test("模型流中途断开：同一轮自动重试，任务照常完成", async
   const session = await app.request("/api/assistant/session", { method: "POST", body: {} });
   const run = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: session.body.id, message: "你好", mode: "standard", externalConsent: true },
+    body: { sessionId: session.body.id, message: "你好", mode: "model", externalConsent: true },
   });
   assert.equal(run.body.status, "completed", JSON.stringify(run.body));
   assert.equal(provider.calls.length, 2);

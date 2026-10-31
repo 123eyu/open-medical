@@ -1651,6 +1651,7 @@ export function WorkspacesView({
                     key={current.id}
                     current={current}
                     running={running}
+                    events={events}
                     onSettings={() => setPanel("extensions")}
                   />
                 </>

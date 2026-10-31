@@ -64,7 +64,7 @@ npm start
 
 `npm start` opens the desktop app. `npm run desktop`, `npm run agent` and `npm run harness` use the same entry point.
 
-**First steps:** Open Example walkthroughs → Prepare all examples to explore ready-made records, or create a patient → add material → select a model → start a task. Patient records, clinical entries and follow-up records can be managed without a model.
+**First steps:** Open Example walkthroughs → Prepare all examples to explore ready-made records, or create a patient → add material → select a model → start a task. Patient records, clinical entries and follow-up records can be managed without a model; asking the assistant or starting a task requires a connected model, and nothing answers in its place when none is connected.
 
 ### Build desktop packages
 
@@ -382,7 +382,7 @@ Connect a local folder as a project to read and organize files with project-spec
 <details>
 <summary><strong>Browser, media and analysis tools</strong></summary>
 
-Manage browser access, media tasks and tool permissions in the work panel, and use conversation to work with pages and files. Terminal and some office tools require their runtimes; containerized analysis requires Docker.
+The assistant uses a browser the way a person does: it opens any website, clicks, types, selects and scrolls by numbered page elements, and hands screenshots to a vision model to read the page. The work panel shows the assistant browser live and accepts clicks; for logins or captchas you can show the browser window and finish them yourself, and the sign-in stays within the project. The analysis terminal and Office page previews require Docker plus a pre-imported local image, entered in the project Connections panel.
 
 ![Browser, media and analysis tools](docs/assets/features/project-browser.png)
 
@@ -393,7 +393,7 @@ Manage browser access, media tasks and tool permissions in the work panel, and u
 <details>
 <summary><strong>Skills, connected tools and automation rules</strong></summary>
 
-Use built-in medical Skills, manage personal skills and automation rules, and connect MCP or plugin services with project-specific scopes. Request custom behavior through conversation and review proposals before applying them.
+Use built-in medical Skills and manage personal skills and automation rules. MCP servers and offline plugins are currently added through the local workspace API (`POST /api/workspaces/:id/extensions`); once added, they can be enabled, disabled and scoped per project in the Connections panel. Request custom behavior through conversation and review proposals before applying them.
 
 ![Skills, connected tools and automation rules](docs/assets/features/settings-skills.png)
 

@@ -25,7 +25,7 @@ export function KnowledgeMetadataModal({ doc, onClose, onSaved }) {
     <form className="modal-form" onSubmit={save}><fieldset className="identity-fields" disabled={busy}>
       <label>文档标题<input required maxLength={150} value={form.title} onChange={set("title", true)} /></label>
       <div className="form-grid"><label>机构或作者<input maxLength={80} value={form.org} onChange={set("org", true)} /></label><label>出版年份<input type="number" min="1950" max={new Date().getFullYear()} value={form.year} onChange={set("year", true)} /></label></div>
-      <div className="form-grid"><label>类别<select value={form.kind} onChange={set("kind", true)}>{KNOWLEDGE_KINDS.map((v) => <option key={v}>{v}</option>)}</select></label><label>所属知识库<input required maxLength={60} value={form.collection} onChange={set("collection", true)} /></label></div>
+      <div className="form-grid"><label>类别<select value={form.kind} onChange={set("kind", true)}>{[...KNOWLEDGE_KINDS, ...(KNOWLEDGE_KINDS.includes(doc.kind || "指南") ? [] : [doc.kind])].map((v) => <option key={v}>{v}</option>)}</select></label><label>所属知识库<input required maxLength={60} value={form.collection} onChange={set("collection", true)} /></label></div>
       <label>来源链接<input type="url" maxLength={2000} value={form.sourceUrl} onChange={set("sourceUrl", true)} placeholder="https:// 官方发布页" /></label>
       <label>版本说明<input maxLength={100} value={form.edition} onChange={set("edition", true)} placeholder="如：2026 修订版、第二版" /></label>
       <label>资料状态<select aria-label="资料状态" value={form.enabled ? "active" : "retired"} onChange={e=>setForm({...form, enabled:e.target.value === "active", allowExternalUse:false})}><option value="active">使用中</option><option value="retired">已停用</option></select></label>

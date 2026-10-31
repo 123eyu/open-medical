@@ -98,6 +98,7 @@ export const KNOWLEDGE_KINDS = [
   "检验",
   "量表",
   "路径",
+  "操作手册",
   "病例",
   "患教",
   "其他",

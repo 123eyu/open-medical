@@ -29,7 +29,7 @@ test("Agent 流程：scripted provider 调用 list_patients 后给出最终回�
     body: {
       sessionId,
       message: "列出所有患者",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

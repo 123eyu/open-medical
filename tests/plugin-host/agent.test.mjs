@@ -46,7 +46,7 @@ test("hello_echo 能被 Agent 调用，且 prompt.md 进入医疗系统提示", 
     body: {
       sessionId,
       message: "用 hello_echo 回显这句话",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });
@@ -138,7 +138,7 @@ test("停用后工具不注册、API 404、待办消失；启用后全部恢复"
     body: {
       sessionId,
       message: "停用后还有什么工具",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });
@@ -170,7 +170,7 @@ test("停用后工具不注册、API 404、待办消失；启用后全部恢复"
     body: {
       sessionId,
       message: "启用后有哪些工具",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

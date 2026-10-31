@@ -50,7 +50,8 @@ test("未连接患者渠道：随访计划和提醒可用，患者消息入口�
   const areas = page.getByRole("navigation", { name: "患者工作内容" });
   await areas.getByRole("button", { name: "沟通与随访" }).click();
   const tabs = page.getByRole("navigation", { name: "患者栏目" });
-  await expect(tabs.getByRole("button", { name: /消息记录/ })).toHaveCount(0);
+  // Chat-file import works without a live channel, so the tab stays visible.
+  await expect(tabs.getByRole("button", { name: /消息记录/ })).toBeVisible();
   await expect(
     tabs.getByRole("button", { name: "随访计划", exact: true }),
   ).toBeVisible();
@@ -59,13 +60,13 @@ test("未连接患者渠道：随访计划和提醒可用，患者消息入口�
   ).toBeVisible();
 
   // The follow-up page is the doctor's reminders and templates only: no
-  // auto follow-up or chat follow-up tabs, no connection empty state.
+  // auto follow-up tab or connection empty state; chat import is available.
   await page.goto("/?view=followups", { waitUntil: "domcontentloaded" });
   const sections = page.getByRole("navigation", { name: "随访工作内容" });
   await expect(sections.getByRole("button", { name: "随访待办", exact: true })).toBeVisible();
   await expect(sections.getByRole("button", { name: "计划与模板", exact: true })).toBeVisible();
   await expect(sections.getByRole("button", { name: "自动随访", exact: true })).toHaveCount(0);
-  await expect(sections.getByRole("button", { name: "聊天随访", exact: true })).toHaveCount(0);
+  await expect(sections.getByRole("button", { name: "聊天随访", exact: true })).toBeVisible();
   await expect(page.getByText(GUIDE)).toHaveCount(0);
 
   // Patient messages still show the connection empty state.
@@ -111,7 +112,8 @@ test("已连接渠道：患者消息/随访 tab 恢复（需 channel-fake）", a
       .getByRole("navigation", { name: "患者工作内容" })
       .getByRole("button", { name: "沟通与随访", exact: true })
       .click();
-    await expect(tabs.getByRole("button", { name: /消息记录/ })).toHaveCount(0);
+    // Chat-file import works without a live channel, so the tab stays visible.
+  await expect(tabs.getByRole("button", { name: /消息记录/ })).toBeVisible();
   } finally {
     await setFollowup(request, headers, true);
   }

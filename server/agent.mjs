@@ -69,6 +69,8 @@ import { JevSettings } from "./core/jev-settings.mjs";
 import { OcrSettings, OCR_MODEL_PROFILE_ID } from "./core/ocr-settings.mjs";
 import { PaddleLocal } from "./core/paddle-local.mjs";
 import { ResearchPython } from "./core/research-python.mjs";
+import { DocumentPython } from "./core/document-python.mjs";
+import { AGENT_BROWSER_HEADER, registerSelfPort } from "./core/browser-tools.mjs";
 import { MaterialPrivacy, PrivacySettings, deidentifyViaService } from "./medical/privacy.mjs";
 import { configureLocalOcrService, imageTextWithFallback, visionTranscriber } from "./core/image-text.mjs";
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -369,6 +371,13 @@ export function createServer(options = {}) {
     new ResearchPython({
       dataDir: databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-research-")) : dirname(databasePath),
     });
+  // 文档生成环境（独立虚拟环境 + 系统沙箱）：安装后生成 PPT/Word/Excel/PDF
+  // 不再需要 Docker。
+  const documentPython =
+    options.documentPython ||
+    new DocumentPython({
+      dataDir: databasePath === ":memory:" ? mkdtempSync(join(tmpdir(), "omw-document-")) : dirname(databasePath),
+    });
   paddleLocal
     .resume({ wantsService: (url) => ocrSettings.service()?.baseUrl === url })
     .catch(() => {});
@@ -518,6 +527,7 @@ export function createServer(options = {}) {
     getOcrModel: ocrModelResolver,
     imageShrink: options.imageShrink || null,
     privacy: materialPrivacy,
+    documentPython,
     domain: createMedicalWorkspaceDomain({
       readKnowledgeEvidence: context => knowledgeRunEvidence(store.db, context),
       knowledgeDigest: () => guidelines.collectionDigest(),
@@ -1038,6 +1048,8 @@ export function createServer(options = {}) {
     );
     try {
       check(!shuttingDown, "SERVER_STOPPING", "服务正在关闭，请稍后重新连接", 503);
+      // The assistant's own browser must never reach this app's API.
+      check(!req.headers[AGENT_BROWSER_HEADER], "AGENT_BROWSER", "助手浏览器不能访问本应用的本机服务", 403);
       const url = new URL(req.url, `http://${req.headers.host}`);
       const path = url.pathname;
       // This single public route authenticates with WeCom signature + encrypted corp ID.
@@ -1094,35 +1106,24 @@ export function createServer(options = {}) {
           ok: true,
           provider: providerConfigured(provider)
             ? provider.provider || "configured"
-            : "local",
+            : null,
+          modelConfigured: providerConfigured(provider),
           model: provider.model,
           engine: "unified-runtime",
           genericWorkspaces: workspaces.domain?.id === "generic",
           modes: [
             {
-              id: "standard",
+              id: "model",
               kind: "model",
               tools: true,
               description: "模型与受控医疗工具",
             },
             {
-              id: "minimal",
-              kind: "model",
-              tools: false,
-              description: "仅模型文本，不提供工具",
-            },
-            {
-              id: "creator",
-              kind: "model",
-              tools: true,
-              description: "模型与医疗工作流工具",
-            },
-            {
               id: "code",
-              kind: "local",
+              kind: "sandbox",
               tools: false,
               sandbox: true,
-              description: "仅在受控沙箱中运行代码",
+              description: "医生手动提交的代码，仅在受控沙箱中运行；不调用模型、不生成回答",
             },
           ],
           version: "0.4.0",
@@ -1160,29 +1161,17 @@ export function createServer(options = {}) {
           engine: "unified-runtime",
           modes: [
             {
-              id: "standard",
+              id: "model",
               kind: "model",
               tools: true,
               description: "模型与受控医疗工具",
             },
             {
-              id: "minimal",
-              kind: "model",
-              tools: false,
-              description: "仅模型文本，不提供工具",
-            },
-            {
-              id: "creator",
-              kind: "model",
-              tools: true,
-              description: "模型与医疗工作流工具",
-            },
-            {
               id: "code",
-              kind: "local",
+              kind: "sandbox",
               tools: false,
               sandbox: true,
-              description: "仅在受控沙箱中运行代码",
+              description: "医生手动提交的代码，仅在受控沙箱中运行；不调用模型、不生成回答",
             },
           ],
           tools: sessionBridge.toolNames(),
@@ -1728,6 +1717,12 @@ export function createServer(options = {}) {
       if (path === "/api/privacy-settings/reprocess" && req.method === "POST")
         return send(res, 202, await sessionBridge.reprocessPrivacy({ onlyMissing: true }));
       // 科研计算环境：状态 / 安装。安装只在用户点击后进行，202 后前端轮询。
+      if (path === "/api/document-env" && req.method === "GET")
+        return send(res, 200, documentPython.status());
+      if (path === "/api/document-env/install" && req.method === "POST") {
+        documentPython.startInstall().catch(() => {});
+        return send(res, 202, documentPython.status());
+      }
       if (path === "/api/research-env" && req.method === "GET")
         return send(res, 200, researchPython.status());
       if (path === "/api/research-env/install" && req.method === "POST") {
@@ -2174,10 +2169,12 @@ export function createServer(options = {}) {
     noServer: true,
     maxPayload: 1024 * 1024,
   });
+  server.on("listening", () => registerSelfPort(server.address()?.port));
   server.on("upgrade", (req, socket, head) => {
     try {
       const url = new URL(req.url, `http://${req.headers.host}`);
       check(url.pathname === "/api/ws", "NOT_FOUND", "网关不存在", 404);
+      check(!req.headers[AGENT_BROWSER_HEADER], "AGENT_BROWSER", "助手浏览器不能访问本应用的本机服务", 403);
       guard(req, true, url);
     } catch {
       socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");

@@ -18,7 +18,7 @@
 
 代码可使用 Python 标准库和 `sources`（本轮所选材料及任务输入原文），将 JSON 兼容值赋给 `result`。每次执行采用临时空工作目录，结束后清理；stdout/stderr 合计最多 64KiB，墙钟 5 秒，CPU 硬限制 3 秒，最多 2 个并发任务。取消和超限终止进程组。内存为每 100ms 采样的 256MiB RSS watchdog，**不是硬内存配额**，不能当作抵抗恶意内存瞬时分配的容器级资源隔离。
 
-入口为界面的“计划任务与沙箱 → 隔离计算”（模型工具 `sandbox_python` 已随旧引擎下线；模型侧计算用 `calculate_python`）。代码、资料版本和运行状态写入事件轨迹，结果留在会话中且明确待复核。不会自动批准产物或修改原始记录。沙箱计算结果只有 JSON 和会话文本，当前不提供生成文件的下载通道。
+入口为界面的“计划任务与沙箱 → 隔离计算”，请求为 `mode: "code"` 加 `sandboxCode`，不调用模型、不生成回答，未配置模型也可使用（模型工具 `sandbox_python` 已随旧引擎下线；模型侧计算用 `calculate_python`）。代码、资料版本和运行状态写入事件轨迹，结果留在会话中且明确待复核。不会自动批准产物或修改原始记录。沙箱计算结果只有 JSON 和会话文本，当前不提供生成文件的下载通道。
 
 科研分析使用另一套独立的科研计算沙箱（同样基于 Seatbelt，带 pandas/statsmodels 等科学计算库，限额更宽），见 [RESEARCH](RESEARCH.md)。
 
@@ -37,7 +37,7 @@
 
 `server/scheduler.mjs` 使用同一 SQLite 的 `scheduled_jobs` 表，关闭浏览器不影响计划，关闭本地 Node 服务则不会执行。当前支持单次和 1 分钟至 1 年的固定分钟间隔。界面时间按浏览器本机时区输入，存储为 UTC 时间戳；每 24 小时是固定时长，不是带夏令时语义的日历 cron。尚无任意 cron 表达式、依赖 DAG、系统唤醒或 OS 守护进程安装。
 
-计划创建时绑定会话、固定任务和所选资料 ID/哈希。模型计划需单独明确授权重复外发，并绑定当前 provider/base URL/model；执行前检查材料和模型身份，变化后暂停。新增资料不自动加入。每次计划以全新模型上下文运行，不带入既往会话及其派生信息。没有网络消息投递功能，所有结果仅写回本地会话。
+计划只能由模型执行：未配置模型时创建返回 503 `MODEL_NOT_CONFIGURED`。计划创建时绑定会话、固定任务和所选资料 ID/哈希。计划需单独明确授权重复外发，并绑定当前 provider/base URL/model；执行前检查材料和模型身份，变化后暂停。新增资料不自动加入。每次计划以全新模型上下文运行，不带入既往会话及其派生信息。没有网络消息投递功能，所有结果仅写回本地会话。
 
 同会话不重叠执行，遵守全局运行上限。领取任务在单数据库 owner 内同步完成，用 `schedule_<id>_<due>` 做请求幂等。错过多个周期只补一次，按原计划节奏计算下个未来时点；失败或取消后暂停，单次成功后 completed。运行中重启的计划暂停并记录 interrupted，避免不确定的外部调用被自动重放。保留最近 50 条计划摘要；完整运行轨迹仍在 session event log 中。创建、暂停、恢复、删除均有本地审计。
 
@@ -46,7 +46,7 @@ API（均需 X-Medical-Token）：
 | 请求                                      | 用途                                                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | GET /api/sessions/:id/schedules           | 列出计划与最近执行摘要                                                                                 |
-| POST /api/sessions/:id/schedules          | 创建，字段 name/message/runAt/intervalMinutes/fileIds/mode/externalConsent/sessionRevision |
+| POST /api/sessions/:id/schedules          | 创建，字段 name/message/runAt/intervalMinutes/fileIds/mode（可省略，只接受 model）/externalConsent/sessionRevision |
 | PATCH /api/sessions/:id/schedules/:jobId  | 按 revision 更新 status 为 active 或 paused                                                            |
 | DELETE /api/sessions/:id/schedules/:jobId | 按 revision 删除非运行中的计划                                                                         |
 | POST /api/chat/:id/cancel                 | 取消当前运行，包括计划发起的运行                                                                       |

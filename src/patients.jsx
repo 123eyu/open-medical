@@ -25,9 +25,10 @@ import {
 import { api, PENDING_REFRESH_EVENT } from "./agent-runtime";
 import { Modal } from "./components";
 import { RiskList } from "./ui";
+import { requestSettingsTab } from "./extension-center";
 import { ClinicalAssistance } from "./clinical-assistance";
 import { PatientIdentityModal } from "./patient-identity";
-import { PatientProposalModal } from "./patient-proposal";
+import { PatientProposalBanner, PatientProposalModal, loadPatientUpdateProposals } from "./patient-proposal";
 import { PatientIntakeModal } from "./patient-intake";
 import { PatientImportModal } from "./patient-import";
 import { LabImportModal } from "./lab-import";
@@ -173,7 +174,9 @@ export function PatientsView({
   const [createProposals, setCreateProposals] = useState([]);
   const [proposalBusy, setProposalBusy] = useState(false);
   const [reviewProposal, setReviewProposal] = useState(null);
+  const [updateProposals, setUpdateProposals] = useState([]);
   const proposalInFlight = useRef(false);
+  const locallyResolved = useRef(new Set());
   const [session, setSession] = useState(null);
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("updated");
@@ -273,11 +276,9 @@ export function PatientsView({
     try {
       // The fixed record must open even when optional plugin routes are gone.
       const core = await loadPatientCore(api, id, { riskEnabled: riskReady });
-      const messagesReady =
-        messaging ||
-        Boolean(config?.plugins?.some((plugin) => plugin.id === "followup" && plugin.active === true && plugin.connected === true));
+      // The messages tab (chat-file import) needs the followup plugin, not a live channel.
       const targetTab =
-        (nextTab === "followups" && !followupReady) || (nextTab === "messages" && !messagesReady)
+        (nextTab === "followups" || nextTab === "messages") && !followupReady
           ? firstCommunicationTab
           : nextTab;
       const work = await api(`/api/sessions/${core.patient.sessionId}`);
@@ -300,6 +301,7 @@ export function PatientsView({
   const resolveProposal = async (proposal, decision) => {
     if (proposalInFlight.current) return;
     proposalInFlight.current = true;
+    locallyResolved.current.add(proposal.id);
     setProposalBusy(true);
     setError("");
     setNotice("");
@@ -332,6 +334,26 @@ export function PatientsView({
       );
     return () => { patientGeneration.current++; };
   }, []);
+  // 本患者待确认的档案更新（检验导入等）。托盘里确认/拒绝后同步横幅，
+  // 并在提案已从列表消失时重新读取档案，避免展示旧版本。
+  const detailId = detail?.id;
+  const detailRevision = detail?.revision;
+  useEffect(() => {
+    if (!detailId) { setUpdateProposals([]); return; }
+    let live = true;
+    let known = null;
+    const load = () => loadPatientUpdateProposals(api, detailId).then((actions) => {
+      if (!live) return;
+      const gone = known && known.some((id) => !locallyResolved.current.has(id) && !actions.some((action) => action.id === id));
+      known = actions.map((action) => action.id);
+      setUpdateProposals(actions);
+      setReviewProposal((current) => current && !actions.some((action) => action.id === current.id) ? null : current);
+      if (gone && !proposalInFlight.current) refreshPatient().catch((err) => setError(err.message));
+    }).catch(() => { if (live) setUpdateProposals([]); });
+    load();
+    window.addEventListener(PENDING_REFRESH_EVENT, load);
+    return () => { live = false; window.removeEventListener(PENDING_REFRESH_EVENT, load); };
+  }, [detailId, detailRevision, optionalVersion]);
   // Optional followup data arrives after the fixed record. Every open/refresh
   // bumps optionalVersion; disabling the plugin clears the data without
   // touching the patient overview.
@@ -714,6 +736,7 @@ export function PatientsView({
               </div></details>
             </div>
           </div>
+          <PatientProposalBanner proposals={updateProposals} busy={proposalBusy} onReview={(proposal) => { setError(""); setReviewProposal(proposal); }} />
           {config?.modelConfigured && activePluginTab?.legacyTab === "messages" && (
             <label className="consent">
               <input
@@ -721,8 +744,7 @@ export function PatientsView({
                 checked={consent}
                 onChange={(e) => setConsent(e.target.checked)}
               />
-              允许把该患者的材料与消息原文发送给所配置的模型服务（评估治疗方案、AI
-              总结均需勾选）。
+              允许把该患者的材料与消息原文发送给所配置的模型服务（AI 总结需勾选）。
             </label>
           )}
           <nav className="tab-row patient-area-tabs" aria-label="患者工作内容">
@@ -770,7 +792,7 @@ export function PatientsView({
           />}
           {!activePluginTab && tab === "appointments" && <AppointmentsPanel key={detail.id} patient={detail} />}
           {!activePluginTab && tab === "labs" && <NewLabsNotice key={`${detail.id}-${detail.revision}`} patientId={detail.id} onOpenLabs={null} />}
-          {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} riskPanel={riskActive ? <RiskList
+          {!activePluginTab && isRecordTab(tab) && <div className="detail-panel"><PatientDashboard key={`${detail.id}-${tab}`} patient={detail} session={session} followups={followups} view={tab === "clinical" ? "diagnoses" : tab} focusFile={sourceFocus} focusLab={labFocus?.patientId === detail.id ? labFocus : null} editRequest={clinicalEditRequest} onEditRequestHandled={() => setClinicalEditRequest(null)} onClinical={openRecordTab} onChanged={refreshPatient} onError={setError} onOpenWorkspace={onOpenWorkspace} onView={onView} modelConfigured={Boolean(config?.modelConfigured)} riskPanel={riskActive ? <RiskList
                 alerts={[...risks].sort(
                   (a, b) =>
                     (a.status === "active" ? 0 : 1) -
@@ -779,6 +801,7 @@ export function PatientsView({
                       { critical: 0, warning: 1, info: 2 }[b.severity],
                 )}
                 busy={busy}
+                draftBlocked={config?.modelConfigured ? "" : "需先连接模型才能生成处理建议草稿"}
                 onDraft={(r) =>
                   onOpenWorkspace(session.id, {
                     draft: `请针对风险「${r.title}」生成处理建议草稿：${r.message} 只使用本病例材料内信息并保留来源，结论待医生复核。`,
@@ -797,7 +820,7 @@ export function PatientsView({
                   await refreshPatient();
                 }}
               /> : null}/></div>}
-          {!activePluginTab && tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} onOpenTask={onOpenWorkspace}/>}
+          {!activePluginTab && tab === "assistance" && <ClinicalAssistance key={detail.id} patient={detail} modelConfigured={Boolean(config?.modelConfigured)} onModelSettings={() => { requestSettingsTab("general"); onView?.("settings"); }} onOpenTask={onOpenWorkspace}/>}
         </>
       )}
       {modal === "new-patient" && <PatientIntakeModal configured={config?.modelConfigured} onClose={() => setModal(null)} onManual={() => setModal("manual-patient")} onOpenWorkspace={(id) => { setModal(null); onOpenWorkspace(id); }} onCreated={async (patient) => { setModal(null); await refresh(); await openPatient(patient.id); }} />}
@@ -813,9 +836,9 @@ export function PatientsView({
           }}
         />
       )}
-      {reviewProposal && detail && <PatientProposalModal patient={detail} proposal={reviewProposal} busy={proposalBusy} error={error} onClose={() => setReviewProposal(null)} onConfirm={() => resolveProposal(reviewProposal, "confirm")} />}
+      {reviewProposal && detail && <PatientProposalModal patient={detail} proposal={reviewProposal} busy={proposalBusy} error={error} onClose={() => setReviewProposal(null)} onConfirm={() => resolveProposal(reviewProposal, "confirm")} onReject={() => resolveProposal(reviewProposal, "reject")} />}
       {modal === "import-patients" && <PatientImportModal onClose={() => setModal(null)} onImported={async (result) => { await refresh(); setModal(null); setNotice(`已导入 ${result.count} 位患者，打开档案即可继续补充病例材料。`); }} onOpenPatient={(id) => { setModal(null); openPatient(id).catch((err) => setError(err.message)); }} />}
-      {modal === "import-labs" && <LabImportModal onClose={() => setModal(null)} onImported={async (result) => { await refresh(); setNotice(`已为 ${result.proposals.length} 位患者生成检验提案，请在患者档案查看本次变更并保存。`); }} />}
+      {modal === "import-labs" && <LabImportModal onClose={() => setModal(null)} onImported={async (result) => { await refresh(); setNotice(`已为 ${result.proposals.length} 位患者生成检验提案。打开患者档案点「核对」确认写入，或在「待确认」中逐条处理。`); }} />}
       {modal === "edit-patient" && detail && <PatientIdentityModal patient={detail} onClose={() => setModal(null)} onSaved={async () => { await refreshPatient(); setModal(null); setNotice("基本信息已保存"); }} />}
       {modal === "group-suggest" && (
         <GroupSuggestModal

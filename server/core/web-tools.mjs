@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { permittedURL } from "./browser-tools.mjs";
+import { fetchableURL } from "./browser-tools.mjs";
 import { check } from "../errors.mjs";
 import {
   htmlToArticle,
@@ -54,11 +54,10 @@ async function readBody(response, byteLimit, code, limitMessage, signal) {
 }
 
 // 正文抓取：最多跟随 MAX_REDIRECTS 次重定向且每一跳都重新校验来源权限
-// （禁止借重定向扩大权限），维持 2MB 响应字节上限；返回分段正文与续读
-// 元数据。旧调用 fetchWeb(url, origins, signal, fetchImpl) 完全兼容。
+// （每一跳都不能指向本应用自己的服务），维持 2MB 响应字节上限；返回分段
+// 正文与续读元数据。
 export async function fetchWeb(
   url,
-  origins,
   signal,
   fetchImpl = fetch,
   options = {},
@@ -95,7 +94,7 @@ export async function fetchWeb(
     ]),
     headers: { accept: "text/html,text/plain,application/json" },
   });
-  let current = permittedURL(url, origins);
+  let current = fetchableURL(url);
   const visited = new Set();
   let redirects = 0;
   let response = null;
@@ -137,8 +136,8 @@ export async function fetchWeb(
       "仅允许 http(s) 重定向",
       502,
     );
-    // 每一跳都重新校验 URL 与来源权限；越权跳转在发起新请求前即被拒绝。
-    current = permittedURL(next.href, origins);
+    // 每一跳都重新校验网址；指向本应用的跳转在发起新请求前即被拒绝。
+    current = fetchableURL(next.href);
     redirects += 1;
     try {
       await response.body?.cancel();
@@ -246,7 +245,9 @@ async function fetchEngine(url, signal, fetchImpl = fetch, headers) {
     const location = response.headers.get("location");
     check(location, "SEARCH_ENGINE", "搜索源重定向缺少 Location");
     // Keep fixed-engine requests (and API credentials) on that engine's origin.
-    current = permittedURL(new URL(location, current).href, [target.origin]);
+    const next = new URL(location, current);
+    check(next.origin === target.origin && !next.username && !next.password, "SEARCH_ENGINE", "搜索源重定向到了其他网站");
+    current = next.href;
     try {
       await response.body?.cancel();
     } catch {}
@@ -532,7 +533,6 @@ export async function searchWeb(
       if (timeRange) url.searchParams.set("time_range", timeRange);
       const result = await fetchWeb(
         url.href,
-        config.origins,
         signal,
         fetchImpl,
       );
@@ -747,7 +747,7 @@ export function registerWebTools(extensions, id, registry, _runId = "manual") {
       },
     },
     (a, c) =>
-      fetchWeb(a.url, extensions.current(id).config.origins, c.signal, fetch, {
+      fetchWeb(a.url, c.signal, fetch, {
         offset: a.offset,
         expectedHash: a.expectedHash,
       }),
@@ -792,14 +792,7 @@ export function registerWebTools(extensions, id, registry, _runId = "manual") {
         fetch,
         config.braveSearch ? extensions.searchKey(id) : null,
         filters,
-      ).then((result) => {
-        // 摘要常不足以核实具体事实；来源白名单生效时提前说明边界，
-        // 避免模型对白名单外 URL 反复重试后才向用户解释。
-        if ((config.origins || []).length)
-          result.hint =
-            "当前工作区启用了网页来源白名单：web_fetch 仅能读取白名单内来源，白名单外的搜索结果请直接使用摘要并说明局限；如需读取正文，请让用户在扩展设置中调整白名单。";
-        return result;
-      });
+      );
     },
     { permission: "tools.execute", required: ["query"] },
   );

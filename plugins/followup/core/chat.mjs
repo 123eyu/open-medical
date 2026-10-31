@@ -382,6 +382,8 @@ export class ChatFollowups {
     check(!this.active.has('wechat'), 'CHAT_BUSY', '微信正在读取或发送，请稍后重试', 409);
     const b = this.binding(input.bindingId);
     check(b.channel === 'wechat' && b.mode !== 'import' && b.calibration, 'CHAT_CHANNEL', '此会话不支持桌面回复', 409);
+    // The verified-send chain (clear, paste, pixel/OCR checks) exists only in the Windows desktop component.
+    check(this.wechat.platform === 'win32', 'CHAT_SEND_UNSUPPORTED', '从工作台回复目前仅支持 Windows 微信；请复制内容后在微信中手动发送', 409);
     const autoLocate = input.autoLocate === true && typeof this.wechat.locate === 'function';
     const row = this.db.prepare('SELECT data FROM chat_messages WHERE channel=? AND account=? AND conversation=? ORDER BY rowid DESC LIMIT 1').get('wechat', this.account(c), b.conversationId);
     const recent = row ? json(row) : null;

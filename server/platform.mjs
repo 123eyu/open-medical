@@ -12,6 +12,8 @@ import {
   PythonSandbox,
 } from "./core/index.mjs";
 import { ModelProfiles } from "./core/model-profiles.mjs";
+import { DocumentPython } from "./core/document-python.mjs";
+import { AGENT_BROWSER_HEADER, registerSelfPort } from "./core/browser-tools.mjs";
 import { ModelSettings } from "./core/model-settings.mjs";
 import { JevSettings } from "./core/jev-settings.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
@@ -34,6 +36,7 @@ export function createWorkspaceServer(options = {}) {
   let provider = models.provider();
   const service = new WorkspaceService(database.db, provider, {
     sandbox: new PythonSandbox(),
+    documentPython: new DocumentPython({ dataDir: dirname(databasePath) }),
     modelProfiles: profiles,
     jev,
     ...options,
@@ -91,6 +94,8 @@ export function createWorkspaceServer(options = {}) {
       "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
     );
     try {
+      // The assistant's own browser must never reach this app's API.
+      check(!req.headers[AGENT_BROWSER_HEADER], "AGENT_BROWSER", "助手浏览器不能访问本应用的本机服务", 403);
       check(
         req.url.startsWith("/") && !req.url.startsWith("//"),
         "HOST",
@@ -167,6 +172,13 @@ export function createWorkspaceServer(options = {}) {
         }
         if (path === "/api/jev-settings/test" && req.method === "POST")
           return send(res, 200, await track(jev.test(await body(req))));
+        // 文档生成环境：状态 / 安装（与 agent.mjs 一致，202 后由客户端轮询）。
+        if (service.documentPython && path === "/api/document-env" && req.method === "GET")
+          return send(res, 200, service.documentPython.status());
+        if (service.documentPython && path === "/api/document-env/install" && req.method === "POST") {
+          service.documentPython.startInstall().catch(() => {});
+          return send(res, 202, service.documentPython.status());
+        }
         if (path === "/api/model-settings") {
           if (req.method === "GET") return send(res, 200, models.public());
           if (req.method === "PUT") {
@@ -279,6 +291,7 @@ export function createWorkspaceServer(options = {}) {
       await closed;
       database.close();
     })());
+  server.on("listening", () => registerSelfPort(server.address()?.port));
   return server;
 }
 

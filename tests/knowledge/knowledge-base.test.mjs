@@ -189,7 +189,7 @@ test("端到端：知识库清单进入系统提示，模型可检索、读取�
   const added = await app.request("/api/knowledge", { method: "POST", body: { title: "糖尿病指南", text: GUIDELINE, collection: "糖尿病" } });
   assert.equal(added.status, 201, added.text);
   const session = await app.request("/api/sessions", { method: "POST", body: { title: "用药问答" } });
-  const result = await app.request("/api/agent/run", { method: "POST", body: { sessionId: session.body.id, mode: "standard", externalConsent: true, message: "肾功能差的糖尿病患者还能用二甲双胍吗？" } });
+  const result = await app.request("/api/agent/run", { method: "POST", body: { sessionId: session.body.id, mode: "model", externalConsent: true, message: "肾功能差的糖尿病患者还能用二甲双胍吗？" } });
   assert.equal(result.status, 200, result.text);
   const system = provider.calls[0].messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
   assert.match(system, /本机知识库/);

@@ -171,24 +171,41 @@ export class LabImporter {
         grouped.get(row.patientId).labs.push(...row.labs);
       }
       const proposals = [];
+      const overLimit = [];
       for (const [patientId, entry] of grouped) {
+        // patient-update replaces the whole labs list, so the proposal carries
+        // the existing results plus the new ones; exact repeats are skipped.
+        const existing = this.patients.row(patientId).labs || [];
+        const key = (lab) => JSON.stringify([lab.item, lab.date || "", lab.value, lab.unit || ""]);
+        const seen = new Set(existing.map(key));
+        const added = entry.labs.filter((lab) => !seen.has(key(lab)) && seen.add(key(lab)));
+        if (!added.length) continue;
+        // A patient record holds at most 500 lab results; one full record
+        // must not roll back the proposals for everyone else in the file.
+        if (existing.length + added.length > 500) {
+          overLimit.push(entry.patientName || patientId);
+          continue;
+        }
         const action = this.pending.propose({
           type: "patient-update",
           patientId,
-          payload: { labs: entry.labs },
-          summary: `导入检验结果 ${entry.labs.length} 项（${[...new Set(entry.labs.map((l) => l.item))].slice(0, 3).join("、")}${entry.labs.length > 3 ? " 等" : ""}）`,
+          payload: { labs: [...existing, ...added] },
+          summary: `导入检验结果 ${added.length} 项（${[...new Set(added.map((l) => l.item))].slice(0, 3).join("、")}${added.length > 3 ? " 等" : ""}）`,
         });
         proposals.push({
           id: action.id,
           patientId,
           patientName: entry.patientName,
-          labs: entry.labs.length,
+          labs: added.length,
         });
       }
       const result = {
         proposals,
         skipped: preview.stats.total - chosen.length,
-        note: "已生成待确认提案；请到患者档案查看本次变更并保存。",
+        ...(overLimit.length ? { overLimit } : {}),
+        note:
+          "已生成待确认提案；请在患者档案顶部点「核对」确认写入，或在「待确认」中处理。" +
+          (overLimit.length ? `以下患者的检验记录将超过 500 条上限，本次未导入：${overLimit.join("、")}。请先整理其历史检验后再导入。` : ""),
       };
       db.prepare("INSERT INTO meta VALUES (?,?)").run(
         key,

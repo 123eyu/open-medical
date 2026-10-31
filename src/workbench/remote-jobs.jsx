@@ -8,6 +8,7 @@ export function RemoteJobs({ current, refresh }) {
     [directory, setDirectory] = useState("."),
     [consent, setConsent] = useState(false),
     [jobs, setJobs] = useState([]),
+    [loaded, setLoaded] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const base = `/api/workspaces/${current.id}/remote-jobs`;
@@ -18,6 +19,7 @@ export function RemoteJobs({ current, refresh }) {
         if (alive) {
           setJobs(d.jobs);
           setUrl(d.url || "");
+          setLoaded(true);
         }
       })
       .catch((e) => {
@@ -44,13 +46,15 @@ export function RemoteJobs({ current, refresh }) {
       setBusy(false);
     }
   }
+  // 远程队列只能用 scripts/remote-worker.mjs 配置；未配置且没有历史任务时不展示。
+  if (!loaded || (!url && !jobs.length)) return null;
   return (
     <details>
       <summary>远程任务</summary>
       <p>
         文件发送到已连接的远程服务处理。结果先回到本地审批，不覆盖当前文件。
       </p>
-      {!url && <p>尚无可用的远程连接，此服务暂未提供快捷授权。任务可以继续在本机运行。</p>}
+      {!url && <p>远程连接配置已失效，只能查看和管理已有任务记录。</p>}
       {url && <p>已有远程连接可用。</p>}
       <label>
         <input

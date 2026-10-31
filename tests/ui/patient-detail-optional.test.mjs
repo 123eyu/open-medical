@@ -77,6 +77,9 @@ test("followup 启用但可选接口 404：详情加载不被拒绝，可选数�
 test("可选接口 404 后概览组件仍渲染患者概览标题", async (t) => {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });

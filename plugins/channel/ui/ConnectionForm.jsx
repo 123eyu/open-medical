@@ -1,14 +1,45 @@
 import { useState } from 'react';
 import { api, refreshPlugins } from '../../../src/agent-runtime';
-import { PluginSetup } from '../../../src/plugin-center';
 const when = value => value ? new Date(value).toLocaleString() : '尚未同步';
-export function SavedConnection({ initial, onSaved, wizard = false }) {
+const isLocal = value => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(value).hostname); } catch { return false; } };
+// 每种协议需要填写的连接信息，与 chat.mjs save() 接受的字段一致。
+// 智能机器人的长连接地址固定，不需要填写；密钥只写入本机加密存储，不回显。
+const FIELDS = {
+  'aibot-ws': { account: '机器人 ID（Bot ID）', token: '机器人 Secret', endpoint: false, hint: '在企业微信管理后台创建智能机器人（API 模式 · 长连接）后获取。' },
+  'wx-cli': { account: '微信账号 ID（wxid）', token: '访问令牌（Bearer token）', endpoint: 'wx-cli 服务地址', hint: '运行 wx-cli server status 查看 current_account.wxid。本机地址未设令牌时可以留空。' },
+  'archive-v1': { account: '企业 ID（CorpID）', token: '采集器访问密钥', endpoint: '采集器地址', hint: '需先自行部署会话存档采集器；远程地址须使用 HTTPS。' },
+};
+function CredentialForm({ saved, onSaved }) {
+  const spec = FIELDS[saved.protocol] || FIELDS['archive-v1'];
+  const [accountId, setAccountId] = useState(saved.accountId || ''), [endpoint, setEndpoint] = useState(saved.endpoint || saved.plugin?.defaultEndpoint || ''), [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const tokenOptional = saved.protocol === 'wx-cli' && isLocal(endpoint);
+  const tokenRequired = !saved.hasToken && !tokenOptional;
+  async function submit(e) {
+    e.preventDefault(); setBusy(true); setError('');
+    try {
+      const value = await api(`/api/chat-followups/connections/${saved.channel}/connect`, 'POST', { accountId: accountId.trim(), ...(spec.endpoint ? { endpoint: endpoint.trim() } : {}), token, revision: saved.revision, intervalMinutes: saved.intervalMinutes || 15 });
+      setToken(''); onSaved(value); await refreshPlugins().catch(() => {});
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+  return <details className="chat-connection-form" open={!saved.hasToken && !saved.accountId}><summary>连接信息{saved.hasToken ? ' · 密钥已保存' : ''}</summary>
+    <form onSubmit={submit}>
+      <p className="muted">{spec.hint}</p>
+      <label>{spec.account}<input required value={accountId} maxLength={200} onChange={e => setAccountId(e.target.value)} /></label>
+      {spec.endpoint && <label>{spec.endpoint}<input required value={endpoint} maxLength={500} onChange={e => setEndpoint(e.target.value)} placeholder={saved.plugin?.defaultEndpoint || 'https://'} /></label>}
+      <label>{spec.token}<input type="password" autoComplete="off" required={tokenRequired} value={token} maxLength={4096} onChange={e => setToken(e.target.value)} placeholder={saved.hasToken ? '已保存，留空则保持不变' : tokenOptional ? '本机地址可留空' : ''} /></label>
+      <p className="muted">密钥只保存在本机，不会再显示。保存后立即检查连接，检查通过才启用。</p>
+      {error && <p role="alert">{error}</p>}
+      <button disabled={busy} type="submit">{busy ? '正在检查…' : '保存并检查连接'}</button>
+    </form>
+  </details>;
+}
+export function SavedConnection({ initial, onSaved }) {
   const [saved, setSaved] = useState(initial), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const accept = value => { setSaved(value); onSaved(value); };
   async function run(fn) { setBusy(true); setError(''); try { await fn(); } catch(e) { setError(e.message); } finally { setBusy(false); } }
   return <section className="chat-setup"><h3>{saved.plugin?.name || '企业微信连接'}</h3>
-    {wizard && <PluginSetup entry={{ manifest: { ...saved.plugin } }} onDone={accept} />}
-    {!wizard && !saved.hasToken && !saved.accountId && <p>此服务暂未提供快捷授权。你可以使用微信历史导入向导，或直接导入聊天文件整理随访。</p>}
+    <CredentialForm key={saved.revision} saved={saved} onSaved={accept} />
     {(saved.hasToken || saved.accountId) && <>
       <p role="status">{saved.status?.message || (saved.enabled ? '已启用' : '已停用')}</p>
       <button disabled={busy} onClick={() => run(async () => { const status = await api(`/api/chat-followups/connections/${saved.channel}/test`, 'POST', {}); setSaved(v => ({ ...v, status })); await refreshPlugins().catch(() => {}); })}>检查已有连接</button>
@@ -21,7 +52,7 @@ export function SavedConnection({ initial, onSaved, wizard = false }) {
 // 企微智能机器人:连接管理之外还有两层授权与群管理。
 // 自动起草(单聊)只进审核队列;群聊自动回复是更进一步的独立授权,逐群开启,
 // 可自动发送(红旗安全话术直发,普通回复须过出站筛查,限频,全程留痕)。
-export function ServiceConnectionForm(props) { return <SavedConnection {...props} wizard={props.initial.plugin?.id === 'wechat-exp'} />; }
+export function ServiceConnectionForm(props) { return <SavedConnection {...props} />; }
 export function AutomaticSettings({initial,onSaved}) {
  const [form,setForm]=useState({...initial}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[automatic,setAutomatic]=useState(Boolean(initial.autoUntil&&Date.parse(initial.autoUntil)>Date.now())),[consent,setConsent]=useState(false);
  const update=(key,value)=>{setForm(v=>({...v,[key]:value}));setNotice('');};

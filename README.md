@@ -64,7 +64,7 @@ npm start
 
 `npm start` 会直接打开桌面应用；`npm run desktop`、`npm run agent` 和 `npm run harness` 使用同一入口。
 
-**首次使用：** 点击“示例体验 → 准备全部示例”浏览现成资料；或新建患者 → 添加资料 → 选择模型 → 发起整理任务。无需配置模型，也能管理患者档案、登记临床资料和随访记录。
+**首次使用：** 点击“示例体验 → 准备全部示例”浏览现成资料；或新建患者 → 添加资料 → 选择模型 → 发起整理任务。无需配置模型，也能管理患者档案、登记临床资料和随访记录；向助手提问和发起任务需要先连接模型，未连接时不会给出替代回答。
 
 ### 构建桌面包
 
@@ -382,7 +382,7 @@ npm run package:win    # Windows：在 Windows 上构建
 <details>
 <summary><strong>浏览器、媒体与分析工具</strong></summary>
 
-在工作面板管理浏览器访问、媒体任务与工具许可，结合对话完成网页和文件操作。终端与部分办公工具需要相应运行环境，容器化分析需要 Docker。
+助手可以像人一样使用浏览器：打开任意网站，按页面元素编号点击、输入、选择、滚动，并把截图交给视觉模型看页面。工作面板实时显示助手浏览器画面，可直接点击；遇到登录或验证码可显示浏览器窗口亲自完成，登录状态保留在本项目内。分析终端与 Office 逐页预览需要 Docker 和预先导入的本地镜像，在项目「连接」面板填写镜像名称后开启。
 
 ![浏览器、媒体与分析工具](docs/assets/features/project-browser.png)
 
@@ -393,7 +393,7 @@ npm run package:win    # Windows：在 Windows 上构建
 <details>
 <summary><strong>Skills、工具服务与自动化规则</strong></summary>
 
-使用内置医疗 Skills，管理个人技能和自动化规则；按项目连接 MCP 或插件服务，并控制其可访问范围。可通过对话提出定制要求，核对提案后应用。
+使用内置医疗 Skills，管理个人技能和自动化规则。MCP 服务与离线插件目前通过本机工作区接口（`POST /api/workspaces/:id/extensions`）添加，添加后可在项目「连接」面板启停并控制其可访问范围。可通过对话提出定制要求，核对提案后应用。
 
 ![Skills、工具服务与自动化规则](docs/assets/features/settings-skills.png)
 

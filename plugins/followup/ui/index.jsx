@@ -14,7 +14,8 @@ export default defineUiPlugin({
         area: "communication",
         legacyTab: "messages",
         replacesBuiltin: true,
-        requiresConnection: true,
+        // Pasting or importing an exported chat file works without a channel;
+        // live sync inside the tab still checks the connection itself.
         component: () => import("./PatientMessagesTab.jsx"),
       },
       {

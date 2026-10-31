@@ -153,7 +153,7 @@ test("医疗会话中 agent 可查数据字典并在沙箱分析患者库，图�
   const session = await app.request("/api/assistant/session", { method: "POST", body: {} });
   const response = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: session.body.id, message: "分析糖尿病患者血糖控制的危险因素", mode: "standard", externalConsent: true },
+    body: { sessionId: session.body.id, message: "分析糖尿病患者血糖控制的危险因素", mode: "model", externalConsent: true },
   });
   assert.equal(response.body.status, "completed", JSON.stringify(response.body));
   const toolNames = provider.calls[0].tools.map((tool) => tool.function.name);

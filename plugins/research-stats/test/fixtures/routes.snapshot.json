@@ -177,8 +177,8 @@
       "deidentifiedColumns": [
         "subject"
       ],
-      "csv": "subject_deid,group,age,sbp,adherent\nSUBJ_1p1hmnr,A,51,138,yes\nSUBJ_1p1hmns,A,62,142,yes\nSUBJ_1p1hmnt,A,57,135,no\nSUBJ_1p1hmnu,A,65,146,yes\nSUBJ_1p1hmnv,A,49,132,yes\nSUBJ_1p1hmnw,A,60,140,no\nSUBJ_1p1hmnx,B,53,148,yes\nSUBJ_1p1hmny,B,64,152,no\nSUBJ_1p1hmnz,B,55,144,yes\nSUBJ_1p1hmol,B,67,156,no\nSUBJ_1p1hmom,B,48,139,yes\nSUBJ_1p1hmon,B,61,150,yes",
-      "note": "确定性伪标识：同一原始值映射到同一编码；编码不可逆向还原，但小基数列仍可能被推断，请谨慎发布。"
+      "csv": "subject_deid,group,age,sbp,adherent\nSUBJ_<code>,A,51,138,yes\nSUBJ_<code>,A,62,142,yes\nSUBJ_<code>,A,57,135,no\nSUBJ_<code>,A,65,146,yes\nSUBJ_<code>,A,49,132,yes\nSUBJ_<code>,A,60,140,no\nSUBJ_<code>,B,53,148,yes\nSUBJ_<code>,B,64,152,no\nSUBJ_<code>,B,55,144,yes\nSUBJ_<code>,B,67,156,no\nSUBJ_<code>,B,48,139,yes\nSUBJ_<code>,B,61,150,yes",
+      "note": "伪标识由本次导出的随机密钥生成，密钥不保存：同一次导出内同一原始值对应同一编码，编码无法还原，不同导出之间编码不同。其余列仍可能间接识别个人，请谨慎发布。"
     }
   }
 }

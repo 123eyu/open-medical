@@ -14,6 +14,16 @@ import "./demo-experience.css";
 export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged, entryHidden, preferenceBusy, onEntryHiddenChange }) {
   const followupActive = usePluginActive("followup");
   const messaging = usePluginConnected("followup");
+  // Plugins that own demo views/tabs (see `plugin` in DEMO_SCENARIOS).
+  const owners = {
+    "care-tasks": usePluginActive("care-tasks"),
+    trials: usePluginActive("trials"),
+    "research-stats": usePluginActive("research-stats"),
+    literature: usePluginActive("literature"),
+    "clinical-ref": usePluginActive("clinical-ref"),
+    drg: usePluginActive("drg"),
+  };
+  const pluginActive = (id) => owners[id] ?? true;
   const [state, setState] = useState(null);
   const [group, setGroup] = useState("临床与患者");
   const [busy, setBusy] = useState("");
@@ -61,7 +71,7 @@ export function DemoExperience({ flows, onView, onPatient, onOpenTask, onChanged
       ...(flow.id === "followup" ? { patient: 1, tab: "followups" } : {}),
       next: "会先打开示例材料与任务要求。核对后发送，可继续追问、调整草稿和查看成果。",
     })) : DEMO_SCENARIOS
-    .filter((scenario) => scenario.group === group && demoScenarioVisible(scenario, followupActive, messaging))
+    .filter((scenario) => scenario.group === group && demoScenarioVisible(scenario, followupActive, messaging, pluginActive))
     .map((scenario) => ({
       ...scenario,
       ...demoScenarioCopy(scenario, followupActive, messaging),

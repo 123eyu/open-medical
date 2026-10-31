@@ -38,6 +38,9 @@ function renderAsync(element) {
 test("没有 similar-cases 插件时 similar_cases artifact 走通用 fallback", async (t) => {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });
@@ -60,6 +63,9 @@ test("没有 similar-cases 插件时 similar_cases artifact 走通用 fallback",
 test("启用 similar-cases 插件时结果卡片渲染插件组件而不是报错", async (t) => {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });

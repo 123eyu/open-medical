@@ -25,11 +25,27 @@ export function isFollowupConnectionRoute(path, method) {
   );
 }
 
+// Importing a chat file the doctor exported is local work: it reads only the
+// selected file and needs no live channel. Preview, match and commit stay
+// open, together with the local records the import produces (the patient's
+// chat list, its review drafts and unlinking). Reading, syncing or sending
+// through a channel stays gated.
+export function isFollowupImportRoute(path, method) {
+  if (method === "POST" && /^\/api\/chat-followups\/imports(?:\/(?:preview|match))?$/.test(path))
+    return true;
+  if (method === "GET" && /^\/api\/chat-followups\/patients\/[^/]+$/.test(path)) return true;
+  if (method === "GET" && /^\/api\/chat-followups\/drafts\/[^/]+\/sources$/.test(path)) return true;
+  if (method === "POST" && /^\/api\/chat-followups\/drafts\/[^/]+\/(?:save|summarize|archive)$/.test(path))
+    return true;
+  return method === "DELETE" && /^\/api\/chat-followups\/bindings\/[^/]+$/.test(path);
+}
+
 // Routes that reach patients or patient chat history. They need a connected
 // WeChat/WeCom channel; follow-up plans, reminders, contact records and
 // manually recorded questionnaire answers do not.
 export function isFollowupMessagingRoute(path, method) {
   if (isFollowupConnectionRoute(path, method)) return false;
+  if (isFollowupImportRoute(path, method)) return false;
   if (/^\/api\/(?:care|chat-followups|chat-autofollow|chat-aibot)\//.test(path)) return true;
   return method === "POST" && /^\/api\/patients\/[^/]+\/followup-surveys\/[^/]+\/send$/.test(path);
 }

@@ -200,26 +200,20 @@ async function verify() {
     const created = await (
       await request("/api/sessions", "POST", { title: "桌面包合成验收" })
     ).json();
-    // 0.9.0 统一内核后 delegations 分诊路径已下线；smoke test 在未配置
-    // 模型的离线环境运行，走 mode:"local" 规则路径（消息含"时间线"确定性
-    // 命中 extract_clinical_timeline），验证 draft 产物收集契约。
-    const response = await request(`/api/chat/${created.id}`, "POST", {
-      message: "合成测试 时间线 2026-01-02 首诊 Hb 98 g/L",
-    });
-    const stream = await response.text();
-    if (!stream.includes('"type":"message.complete"'))
-      throw new Error("Packaged agent execution failed");
-    const saved = await (
-      await request(`/api/sessions/${created.id}`, "GET")
-    ).json();
-    if (
-      saved.artifacts.length < 1 ||
-      saved.artifacts.some((a) => a.status !== "draft")
-    )
-      throw new Error("Packaged agent drafts missing");
+    // 对话只由模型执行。smoke test 在未配置模型的离线环境运行：提交任务
+    // 必须被明确拒绝（503 MODEL_NOT_CONFIGURED），不能返回规则生成的回答。
+    if (!bootstrap.modelConfigured) {
+      const response = await request(`/api/chat/${created.id}`, "POST", {
+        message: "合成测试 时间线 2026-01-02 首诊 Hb 98 g/L",
+      });
+      const rejected = await response.json().catch(() => ({}));
+      if (response.status !== 503 || rejected.code !== "MODEL_NOT_CONFIGURED")
+        throw new Error("Packaged agent accepted a task without a model");
+    }
     if (bootstrap.sandbox.available) {
       const response = await request(`/api/chat/${created.id}`, "POST", {
         message: "合成沙箱验证",
+        mode: "code",
         sandboxCode: "result = 2 + 3",
       });
       if (!(await response.text()).includes('"type":"message.complete"'))
@@ -258,7 +252,7 @@ async function verify() {
           electron: process.versions.electron,
           node: process.versions.node,
           renderer: state,
-          artifacts: saved.artifacts.length,
+          modelRequired: !bootstrap.modelConfigured,
           sandbox: bootstrap.sandbox,
           database: existsSync(join(testDirectory, "medical.sqlite")),
         },
@@ -468,8 +462,14 @@ async function start() {
   });
   // 菜单栏迁入「设置 → 桌面应用」后的窄接口：只暴露固定动作，不传任意路径。
   require('./backup-directory.cjs').registerBackupDirectory({ipcMain,shell,getWindow:()=>window,getOrigin:()=>origin,databasePath:sharedDatabase});
-  ipcMain.handle("omw:open-data-directory", () => shell.openPath(dirname(sharedDatabase)));
-  ipcMain.handle("omw:open-config-directory", () => shell.openPath(dataDirectory));
+  // shell.openPath reports failure as a returned message, not a rejection.
+  const openDirectory = async (path) => {
+    const error = await shell.openPath(path);
+    if (error) throw new Error(error);
+    return { opened: true };
+  };
+  ipcMain.handle("omw:open-data-directory", () => openDirectory(dirname(sharedDatabase)));
+  ipcMain.handle("omw:open-config-directory", () => openDirectory(dataDirectory));
   ipcMain.handle("omw:login-item", () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle("omw:set-login-item", (_event, open) => {
     app.setLoginItemSettings({

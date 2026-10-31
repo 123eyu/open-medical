@@ -1224,8 +1224,13 @@ export function PersonalRegressionSettings() {
   const [state, setState] = useState(null),
     [error, setError] = useState(""),
     [consent, setConsent] = useState(false),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [open, setOpen] = useState(false);
+  const running = state?.run?.status === "running";
+  // Read once on open; keep polling only while the section is open or a run
+  // is still in progress.
   useEffect(() => {
+    if (!open && !running) return undefined;
     let alive = true;
     const load = () =>
       api("/api/learning/regression")
@@ -1241,7 +1246,7 @@ export function PersonalRegressionSettings() {
       alive = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [open, running]);
   const act = async (method) => {
     setBusy(true);
     setError("");
@@ -1256,7 +1261,7 @@ export function PersonalRegressionSettings() {
   };
   const run = state?.run;
   return (
-    <details className="model-jev-section">
+    <details className="model-jev-section" onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>用我的历史档案测一下这个模型</summary>
       <p>
         用最近最多 10

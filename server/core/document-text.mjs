@@ -3,11 +3,17 @@
 // extractor, PPTX by reading slide XML. Data only — never runs macros,
 // formulas, scripts or external links.
 import { extractOfficeText } from "../../shared/office-text.mjs";
+import { AppError } from "../errors.mjs";
+import { createRequire } from "node:module";
+import { dirname, join, sep } from "node:path";
 
 export const DOCUMENT_EXTENSIONS = /\.(pdf|docx|xlsx|pptx)$/i;
 export const IMAGE_EXTENSIONS = /\.(png|jpe?g|webp|gif|bmp|tiff?|heic)$/i;
 export const DOCUMENT_READ_LIMIT = 20 * 1024 * 1024;
 const MAX_CHARS = 400000;
+// Folder paths inside pdfjs-dist (Node's PDF.js reads them from disk).
+const pdfAssets = (name) =>
+  join(dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json")), name) + sep;
 
 const decodeXml = (value) =>
   value
@@ -66,6 +72,8 @@ export async function extractDocumentText(bytes, name) {
       maxChars: MAX_CHARS,
       maxBytes: DOCUMENT_READ_LIMIT,
       allowEmpty: true,
+      // CJK PDFs commonly use CID fonts; PDF.js needs its bundled CMaps.
+      pdfOptions: { cMapUrl: pdfAssets("cmaps"), cMapPacked: true, standardFontDataUrl: pdfAssets("standard_fonts") },
     });
   }
   if (/\.pptx$/i.test(name)) return extractPptxText(data);
@@ -75,4 +83,32 @@ export async function extractDocumentText(bytes, name) {
       maxChars: MAX_CHARS,
     });
   throw new Error("不支持的文档格式");
+}
+
+// PDF/Office files: extracted text, hashed by their bytes so a later binary
+// write can detect that the file changed in between.
+export async function readDocument(files, { path, startLine, endLine }) {
+  const file = files.bytes(path, DOCUMENT_READ_LIMIT);
+  let extracted;
+  try {
+    extracted = await extractDocumentText(file.data, path);
+  } catch (error) {
+    throw new AppError("DOCUMENT_READ", `无法提取文档文字：${error.message}`, 422);
+  }
+  let text = extracted.text;
+  if (startLine !== undefined || endLine !== undefined) {
+    const lines = text.split("\n"),
+      start = startLine ?? 1,
+      end = Math.min(endLine ?? start + 199, start + 999);
+    text = lines.slice(start - 1, end).join("\n");
+  }
+  return {
+    path,
+    text,
+    hash: file.hash,
+    size: file.size,
+    format: extracted.extraction?.type,
+    readOnly: true,
+    note: "二进制文档的提取文字，仅供阅读。修改请生成新文件（document_create 或终端），再用 save_artifact_to_workspace 写回目录。",
+  };
 }

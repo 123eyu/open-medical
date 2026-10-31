@@ -205,8 +205,7 @@ export function TaskCenter({ session, fileIds, config, onSandbox, onChanged }) {
                 {new Date(job.nextRunAt).toLocaleString("zh-CN")} ·{" "}
                 {job.intervalMinutes
                   ? `每 ${job.intervalMinutes} 分钟`
-                  : "单次"}{" "}
-                · {job.mode === "model" ? "模型辅助" : "本地整理"}
+                  : "单次"}
               </small>
               {job.lastError && <p className="task-error">{job.lastError}</p>}
               <div className="task-actions">
@@ -294,7 +293,8 @@ export function TaskCenter({ session, fileIds, config, onSandbox, onChanged }) {
             Python
             标准库，可读取本次选中资料和任务文本。禁止联网、写入文件及创建子进程；5
             秒超时，输出最多 64KB。将计算结果赋给 <code>result</code>
-            ，运行后可在本次任务中查看结果。
+            ，运行后可在本次任务中查看结果。本次将传入 {fileIds.length} 份资料（
+            <code>sources</code>，最后一项是任务文本），合计不超过 500KB。
           </p>
           {!config?.sandbox?.available && (
             <p className="task-error">{config?.sandbox?.reason}</p>

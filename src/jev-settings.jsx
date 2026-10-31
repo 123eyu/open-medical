@@ -22,6 +22,8 @@ export function JevSettings() {
       }
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   }
+  // A typed key counts too: the server merges it before testing or saving.
+  const keyReady = Boolean(form && (form.apiKey.trim() || (form.hasKey && !form.clearKey)));
   return <details className="jev-settings">
     <summary>决策辅助 · Jev（默认关闭）</summary>
     <p>可选后台观察：每个新任务最多判断一次任务类型，记录结果。当前版本不调整主模型、工具、上下文或审批。</p>
@@ -29,9 +31,10 @@ export function JevSettings() {
     {form && <form onSubmit={e => { e.preventDefault(); submit(); }}>
       <fieldset disabled={busy}>
         <label>运行方式<select value={form.enabled ? 'shadow' : 'off'} onChange={e => update({ enabled: e.target.value === 'shadow' })}>
-          <option value="off">关闭</option><option value="shadow" disabled={!form.hasKey}>启用后台观察</option>
+          <option value="off">关闭</option><option value="shadow" disabled={!keyReady}>启用后台观察</option>
         </select></label>
-        {!form.hasKey && <p>尚无可用连接，此服务暂未提供快捷授权。</p>}
+        <label>API Key<input type="password" autoComplete="off" value={form.apiKey} placeholder={form.hasKey ? '已保存，留空不修改' : 'TypeSafe API Key'} onChange={e => update({ apiKey: e.target.value, clearKey: false })}/></label>
+        {!keyReady && <p>填写 TypeSafe 提供的 API Key 后可测试连接或启用。</p>}
         <label>任务文本发送许可<select value={form.consent ? 'yes' : 'no'} onChange={e => update({ consent: e.target.value === 'yes' })}>
           <option value="no">不允许发送任务文本</option><option value="yes">同意向 TypeSafe 发送当前任务文本</option>
         </select></label>
@@ -40,7 +43,7 @@ export function JevSettings() {
         {form.latest && <p>最近判断：{form.latest.status} · {form.latest.choice || form.latest.reason} · {form.latest.model || '—'} · {form.latest.durationMs ?? '—'} 毫秒</p>}
         <footer>
           <button type="button" onClick={() => update({ apiKey: '', hasKey: false, clearKey: true, enabled: false })}>断开连接（保存后生效）</button>
-          <button type="button" disabled={!form.hasKey} onClick={() => submit(true)}>测试 Jev 连接</button>
+          <button type="button" disabled={!keyReady} onClick={() => submit(true)}>测试 Jev 连接</button>
           <button className="model-save" type="submit">保存 Jev 设置</button>
         </footer>
       </fieldset>

@@ -55,7 +55,7 @@ test(`${label}：随访提案确认后，今日待办出现对应随访事项`, 
     body: {
       sessionId: target.sessionId,
       message: "给这位患者创建一个随访提醒",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

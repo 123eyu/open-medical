@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../agent-runtime";
 export function DesktopPanel({ current }) {
   const [state, setState] = useState(null),
@@ -7,6 +7,25 @@ export function DesktopPanel({ current }) {
     [result, setResult] = useState(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const authorized = Boolean(state?.session);
+  // 授权期间定时刷新，助手提出的操作无需手动点击即可出现在下方（提案两分钟后失效）。
+  useEffect(() => {
+    if (!authorized) return;
+    let alive = true;
+    const timer = setInterval(() => {
+      api(`/api/workspaces/${current.id}/desktop`, "POST", { action: "status" })
+        .then((next) => {
+          if (!alive) return;
+          next.apps = [...new Map(next.apps.map((a) => [a.id, a])).values()];
+          setState(next);
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [authorized, current.id]);
   async function run(input) {
     setBusy(true);
     setError("");

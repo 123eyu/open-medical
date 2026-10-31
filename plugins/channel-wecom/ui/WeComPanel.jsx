@@ -38,7 +38,7 @@ export function WeComPanel({ patientId }) {
         <span className="pill">{!state ? '读取中' : !state.configured ? '未接入' : state.linked.length ? `已关联 ${state.linked.length} 位` : '未关联'}</span></div>
       {error && <p role="alert" className="error">{error}</p>}
       {notice && <p role="status" className="muted">{notice}</p>}
-      {state && !state.configured && <p className="muted">如确需接入，请到 设置 → 高级 → 随访连接。注意：微信/企微自动化存在账号风控风险，日常随访用本应用的提醒与随访问卷即可完成，无需接入。</p>}
+      {state && !state.configured && <p className="muted">如确需接入，需由管理员在桌面应用配置目录的 model.env 中填写 MEDICAL_WECOM_CORP_ID 等企业微信参数后重启应用（见 docs/wecom-integration.md）。注意：微信/企微自动化存在账号风控风险，日常随访用本应用的提醒与随访问卷即可完成，无需接入。</p>}
       {state?.configured && <>
       {state.linked.map(b => <article className="wecom-binding" key={b.bindingId} aria-label={`${b.remark || b.name}（${RELATION[b.relationship]}）`}>
         <div className="wecom-heading"><b>{b.remark || b.name} · {RELATION[b.relationship]}</b>

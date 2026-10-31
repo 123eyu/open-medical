@@ -31,7 +31,7 @@ const declare = (backend, names) =>
     .forEach((name) => BUILTIN_BACKENDS.set(name, backend));
 declare(
   "container",
-  `terminal_start terminal_run terminal_check document_read document_create document_render archive_list archive_extract archive_create code_execute plugin_command`,
+  `terminal_start terminal_run terminal_check document_render archive_list archive_extract archive_create code_execute plugin_command`,
 );
 declare(
   "local",
@@ -44,6 +44,11 @@ declare(
   `browser_open browser_snapshot browser_screenshot browser_action`,
 );
 declare("python", "calculate_python");
+// PDF/Office text is extracted in-process, so document_read is always
+// executable (other formats fall back to the container at call time).
+// Generation needs the local document environment or the container runtime.
+declare("local", "document_read");
+declare("document", "document_create");
 declare("desktop", "desktop_control");
 declare("media", "media_generate");
 declare("vision", "inspect_image");
@@ -82,6 +87,21 @@ const executableFile = (path) => {
 // Read only local configuration/status; do not contact providers or read secrets.
 export function serviceCapabilityChecks(service, id, probe) {
   return {
+    document: () => {
+      if (service.documentPython?.ready()) return { available: true };
+      const w = service.store.get(id);
+      const container = w.permissions?.grants?.["process.spawn"] === true && probe.readiness(
+        { capability: { backend: "container" } },
+        probe.environment(id, w.extensions?.image),
+      );
+      return container?.ready
+        ? { available: true }
+        : {
+            available: false,
+            reason: "文档生成环境未安装，容器运行时也不可用",
+            remedy: "在「设置 → 文档生成环境」点击安装（不需要 Docker）",
+          };
+    },
     python: () => service.sandbox?.status(),
     browser: () => service.extensions.browser.status(),
     desktop: () => {

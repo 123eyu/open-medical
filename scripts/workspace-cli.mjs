@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
   WorkspaceDatabase,
@@ -8,6 +8,7 @@ import {
   createProvider,
   PythonSandbox,
 } from "../server/core/index.mjs";
+import { DocumentPython } from "../server/core/document-python.mjs";
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -68,6 +69,7 @@ if (
     database = new WorkspaceDatabase(file);
     service = new WorkspaceService(database.db, createProvider(), {
       sandbox: command === "run" ? new PythonSandbox() : undefined,
+      documentPython: new DocumentPython({ dataDir: dirname(file) }),
     });
     const id = values.workspace;
     let result;

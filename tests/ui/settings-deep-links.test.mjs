@@ -44,6 +44,9 @@ function render(element) {
 test("设置：六个 settingsTab 深链接都渲染对应页签", async (t) => {
   const vite = await createViteServer({
     appType: "custom",
+    // Server-side rendering only: skip browser dependency pre-bundling, which
+    // leaves a temp copy in node_modules/.vite each time the server closes.
+    optimizeDeps: { noDiscovery: true, include: [] },
     logLevel: "silent",
     server: { middlewareMode: true },
   });

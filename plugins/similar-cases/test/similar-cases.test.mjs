@@ -66,7 +66,7 @@ test("停用相似病例插件后工作流返回 409、提示与收尾工具消�
     body: {
       sessionId,
       message: "请查找这位患者的相似病例，仅本地检索",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });
@@ -78,7 +78,7 @@ test("停用相似病例插件后工作流返回 409、提示与收尾工具消�
     body: {
       sessionId,
       message: "请简要回答今天的工作安排",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });
@@ -106,7 +106,7 @@ test("停用相似病例插件后工作流返回 409、提示与收尾工具消�
     body: {
       sessionId,
       message: "请查找这位患者的相似病例，仅本地检索",
-      mode: "standard",
+      mode: "model",
       externalConsent: true,
     },
   });

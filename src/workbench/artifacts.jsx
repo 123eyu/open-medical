@@ -97,11 +97,16 @@ export function Artifacts({ current, onDownload, onOpenFile, refresh }) {
             </button>
           </header>
           {error && <p role="alert">{error}</p>}
-          {/\.(docx|xlsx|pptx)$/i.test(preview.name) && (
-            <button disabled={rendering} onClick={renderOffice}>
-              {rendering ? "正在生成预览…" : "生成 PDF 与逐页预览"}
-            </button>
-          )}
+          {/\.(docx|xlsx|pptx)$/i.test(preview.name) &&
+            (current.permissions?.grants?.["process.spawn"] ? (
+              <button disabled={rendering} onClick={renderOffice}>
+                {rendering ? "正在生成预览…" : "生成 PDF 与逐页预览"}
+              </button>
+            ) : (
+              <p className="muted">
+                逐页预览需要隔离分析环境（Docker 与本地镜像），可在连接面板开启「运行分析工具」；也可直接下载查看。
+              </p>
+            ))}
           {url &&
             (preview.mime.startsWith("audio/") ? (
               <audio controls src={url} aria-label={preview.name} />

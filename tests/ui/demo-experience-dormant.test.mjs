@@ -48,3 +48,17 @@ test("已连接患者渠道：患者消息与随访示例卡片恢复", () => {
   assert.equal(demoScenarioVisible(byId("messages"), true), true);
   assert.equal(demoScenarioVisible(byId("messages"), true, true), true);
 });
+
+test("插件停用：其视图或患者页的示例卡片隐藏，其他卡片不受影响", () => {
+  const off = new Set(["drg", "trials", "research-stats", "literature", "clinical-ref", "care-tasks"]);
+  const active = (id) => !off.has(id);
+  const hidden = DEMO_SCENARIOS.filter((scenario) => !demoScenarioVisible(scenario, true, true, active)).map((scenario) => scenario.id);
+  assert.deepEqual(hidden.sort(), ["drg", "literature", "reference", "statistics", "tracking", "trials"]);
+  // Default keeps every card when the caller does not pass plugin state.
+  assert.equal(DEMO_SCENARIOS.every((scenario) => demoScenarioVisible(scenario, true, true)), true);
+});
+
+test("示例文案：不再引用旧的「工作台定制」，患者消息卡片不声称无需连接", () => {
+  assert.doesNotMatch(byId("customize").next, /工作台定制/);
+  assert.doesNotMatch(byId("messages").detail, /无需连接/);
+});

@@ -15,6 +15,8 @@ import { openKnowledgeSource } from "./knowledge-source-events";
 import { transcriptionSettingsUrl } from "./knowledge-transcription-settings";
 import { KnowledgeTranscriptRecovery } from "./knowledge-transcript-recovery";
 
+const MODEL_SETTINGS_URL = "?view=settings&settingsTab=general";
+
 export function KnowledgeView({
   onOpenTask,
   collection = "",
@@ -135,13 +137,22 @@ export function KnowledgeView({
     });
   // 页面入口只把医生能看懂的请求放进输入框；知识库限定、检索线索和
   // 引用要求作为任务上下文随问题发送（见 src/task-context.jsx）。
-  const createTask = async (title, draft, context) =>
-    perform(async () => {
+  // 知识问答由模型执行：未连接模型时不创建任务会话，直接说明并给出入口。
+  const [modelGate, setModelGate] = useState(false);
+  const createTask = async (title, draft, context) => {
+    if (!data.modelReady) {
+      // 阅读视图里没有页面级提示，错误随阅读器显示。
+      if (reader) setError("需先连接模型：知识问答由模型执行，未连接时不能发送。可在 设置 → 模型与运行 中连接模型。");
+      else setModelGate(true);
+      return;
+    }
+    return perform(async () => {
       const task = await api("/api/sessions", "POST", {
         title: title.slice(0, 100),
       });
       await onOpenTask(task.id, { draft, workflow: "knowledge-answer", context });
     });
+  };
   const prepareSource = (doc, range) =>
     createTask(
       `循证准备：${doc.title}`,
@@ -216,6 +227,12 @@ export function KnowledgeView({
               </>}
             </div>
           ))}
+          {modelGate && !data.modelReady && (
+            <p className="notice" role="status">
+              需先连接模型：知识问答由模型执行，未连接时不能发送；知识库检索与原文阅读不受影响。{" "}
+              <a href={MODEL_SETTINGS_URL}>连接模型</a>
+            </p>
+          )}
           {(error || refreshError) && (
             <p className="form-error" role="alert">
               {error || refreshError}{" "}
@@ -321,6 +338,11 @@ export function KnowledgeView({
             将使用当前聊天模型整理「{organizing.title}
             」的知识点、关系与原文依据，相关文字会发送给该服务。处理进度会保存，生成结果仍需核对。
           </p>
+          {!data.modelReady && (
+            <p role="alert" className="form-error">
+              尚未连接聊天模型。请先在设置中连接聊天模型，再生成知识图谱；资料的全文检索不受影响。
+            </p>
+          )}
           {error && (
             <p role="alert" className="form-error">
               {error}
@@ -336,7 +358,7 @@ export function KnowledgeView({
             </button>
             <button
               className="primary"
-              disabled={busy}
+              disabled={busy || !data.modelReady}
               onClick={() =>
                 perform(async () => {
                   await api(

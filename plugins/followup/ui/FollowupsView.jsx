@@ -35,11 +35,11 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [visibleUpcoming, setVisibleUpcoming] = useState(20);
   const [deleting, setDeleting] = useState(null);
-  // 自动随访 and 聊天随访 reach patients over WeChat/WeCom; without a connected
-  // channel the page is the doctor's own reminders and plan templates.
+  // 自动随访 reaches patients over WeChat/WeCom and needs a connected channel.
+  // 聊天随访 stays visible: importing exported chat files works without one.
   const messaging = usePluginConnected("followup");
   const [requestedSection, setSection] = useState(() => { const tab = new URLSearchParams(window.location.search).get("followupTab"); return { chat: "chats", auto: "auto" }[tab] || "queue"; });
-  const section = !messaging && ["auto", "chats"].includes(requestedSection) ? "queue" : requestedSection;
+  const section = !messaging && requestedSection === "auto" ? "queue" : requestedSection;
   const [plans, setPlans] = useState([]);
   const [patients, setPatients] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -208,7 +208,7 @@ export function FollowupsView({ onOpenPatient, onOpenTask, onSettings }) {
             计划与模板
           </button>
           {messaging && <button className={section === "auto" ? "active" : ""} onClick={() => setSection("auto")}>自动随访</button>}
-          {messaging && <button className={section === "chats" ? "active" : ""} onClick={() => setSection("chats")}>聊天随访</button>}
+          <button className={section === "chats" ? "active" : ""} onClick={() => setSection("chats")}>聊天随访</button>
         </nav>
         {section === "auto" && <section className="followups-section"><p className="muted followup-help">企业微信按计划自动发送并收集回复；个人微信（桌面版）的到期随访在下方：AI 起草、医生确认发送，回复按条目整理后确认归档。命中红旗会置顶提醒，不进入自动流程。</p><CampaignPanel onOpenPatient={onOpenPatient} /><WechatOutreachPanel /></section>}
         {section === "chats" && <ChatFollowupsPanel patients={patients} onSettings={onSettings} />}

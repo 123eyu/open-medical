@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { check } from "../../../server/errors.mjs";
 import {
   asNumber,
@@ -287,12 +288,36 @@ export function fisherExact2x2(table) {
   };
 }
 
+const POSITIVE_VALUES = new Set(["1", "是", "有", "true", "yes", "y", "阳性", "positive", "pos", "+"]);
+const NEGATIVE_VALUES = new Set(["0", "否", "无", "false", "no", "n", "阴性", "negative", "neg", "-"]);
+// The positive level of a two-valued outcome, or null when the outcome is not
+// binary or its positive level cannot be told apart. An explicit level wins.
+export function binaryPositive(values, positive) {
+  if (positive !== undefined && positive !== null && positive !== "") {
+    check(typeof positive === "string", "INVALID_INPUT", "阳性取值须为文本");
+    return values.length === 2 && values.includes(positive) ? positive : null;
+  }
+  if (!values.length || values.length > 2) return null;
+  const norm = (value) => String(value).trim().toLowerCase();
+  if (!values.every((value) => POSITIVE_VALUES.has(norm(value)) || NEGATIVE_VALUES.has(norm(value)))) return null;
+  const positives = values.filter((value) => POSITIVE_VALUES.has(norm(value)));
+  return positives.length === 1 ? positives[0] : null;
+}
+// Cells that a spreadsheet would run as a formula get a leading quote; plain
+// numbers such as -3.5 stay numbers.
+const neutralize = (value) =>
+  /^[=+\-@\t\r]/.test(value) && !/^[+-]?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value) ? `'${value}` : value;
+const csvField = (raw) => {
+  const value = neutralize(raw);
+  return /[",\r\n]|^\s|\s$/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+};
+
 export class ResearchService {
   constructor() {}
   profile({ sources = [], sourceId, columns } = {}) {
     return profileSources({ sources, sourceId, columns });
   }
-  test({ sources = [], sourceId, outcome, group, method = "auto" } = {}) {
+  test({ sources = [], sourceId, outcome, group, method = "auto", positive } = {}) {
     const source = findSource(sources, sourceId);
     check(outcome && typeof outcome === "string", "INVALID_INPUT", "请提供结局变量列名");
     check(group && typeof group === "string", "INVALID_INPUT", "请提供分组变量列名");
@@ -301,15 +326,28 @@ export class ResearchService {
     check(header.includes(group), "INVALID_INPUT", `分组列不存在：${group}`);
     const levels = [...new Set(records.map((r) => r[group]).filter((v) => v !== ""))];
     check(levels.length === 2, "INVALID_INPUT", "分组变量必须恰好有 2 个水平");
-    const outcomeIsBinary = [...new Set(records.map((r) => r[outcome]).filter((v) => v !== ""))].every(
-      (v) => ["0", "1", "是", "否", "有", "无", "true", "false"].includes(String(v).toLowerCase()),
-    );
-    if (method === "auto") method = outcomeIsBinary ? "chi-square" : "welch-t";
+    const outcomeValues = [...new Set(records.map((r) => r[outcome]).filter((v) => v !== ""))];
+    const positiveLevel = binaryPositive(outcomeValues, positive);
+    if (method === "auto") method = positiveLevel !== null ? "chi-square" : "welch-t";
     check(
       ["welch-t", "mann-whitney", "chi-square", "fisher"].includes(method),
       "INVALID_INPUT",
       "检验方法无效",
     );
+    if (method === "chi-square" || method === "fisher") {
+      check(
+        outcomeValues.length === 2,
+        "INVALID_INPUT",
+        `卡方与 Fisher 检验需要结局变量恰好有 2 个取值（当前 ${outcomeValues.length} 个）；数值结局请选择 t 检验或 Mann-Whitney U`,
+      );
+      check(
+        positiveLevel !== null,
+        "INVALID_INPUT",
+        positive
+          ? `阳性取值「${positive}」不在结局列中（现有取值：${outcomeValues.join(" / ")}）`
+          : `无法判断哪一个取值为阳性（${outcomeValues.join(" / ")}），请指定阳性取值`,
+      );
+    }
     let result;
     if (method === "welch-t" || method === "mann-whitney") {
       const groups = levels.map((level) =>
@@ -321,7 +359,9 @@ export class ResearchService {
       check(
         groups.every((values) => values.length >= 2),
         "INVALID_INPUT",
-        "每组至少需要 2 个有效数值",
+        groups.every((values) => !values.length) && outcomeValues.length === 2
+          ? `结局变量不是数值（${outcomeValues.join(" / ")}）：二分类结局请指定阳性取值，并选择卡方或 Fisher 检验`
+          : "每组至少需要 2 个有效数值",
       );
       result = method === "welch-t" ? welchTTest(groups) : mannWhitney(groups);
       // Each group keeps its level name so readers can tell which arm is which.
@@ -337,13 +377,13 @@ export class ResearchService {
     } else {
       const table = levels.map((level) => {
         const subset = records.filter((r) => r[group] === level);
-        const positives = subset.filter((r) =>
-          ["1", "是", "有", "true"].includes(String(r[outcome]).toLowerCase()),
-        ).length;
-        return [positives, subset.length - positives];
+        const answered = subset.filter((r) => r[outcome] !== "");
+        const positives = answered.filter((r) => r[outcome] === positiveLevel).length;
+        return [positives, answered.length - positives];
       });
       result = method === "fisher" ? fisherExact2x2(table) : chiSquare(table);
       result.levels = levels;
+      result.positive = positiveLevel;
     }
     return {
       ...result,
@@ -401,31 +441,29 @@ export class ResearchService {
     );
     for (const column of columns)
       check(header.includes(column), "INVALID_INPUT", `列不存在：${column}`);
-    const pseudonym = (value, column) => {
-      const text = `${column}:${value}`;
-      let hash = 0;
-      for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-      return `${column.slice(0, 4).toUpperCase()}_${hash.toString(36)}`;
-    };
-    const out = [columns.length ? header.map((h) => (columns.includes(h) ? `${h}_deid` : h)).join(",") : header.join(",")];
-    for (const [index, record] of records.entries()) {
+    // A fresh random key per export: codes stay consistent within this file,
+    // and the key is discarded, so codes cannot be recomputed from guesses.
+    const key = randomBytes(32);
+    const pseudonym = (value, column) =>
+      value === ""
+        ? ""
+        : `${column.slice(0, 4).toUpperCase()}_${createHmac("sha256", key).update(`${column}\u0000${value}`).digest("hex").slice(0, 16)}`;
+    const out = [
+      header.map((h) => csvField(columns.includes(h) ? `${h}_deid` : h)).join(","),
+    ];
+    for (const record of records)
       out.push(
         header
-          .map((h) =>
-            columns.includes(h)
-              ? pseudonym(record[h], h, index)
-              : String(record[h] ?? ""),
-          )
+          .map((h) => csvField(columns.includes(h) ? pseudonym(String(record[h] ?? ""), h) : String(record[h] ?? "")))
           .join(","),
       );
-    }
     return {
       sourceId,
       sourceName: source.name,
       rows: records.length,
       deidentifiedColumns: columns,
       csv: out.join("\n"),
-      note: "确定性伪标识：同一原始值映射到同一编码；编码不可逆向还原，但小基数列仍可能被推断，请谨慎发布。",
+      note: "伪标识由本次导出的随机密钥生成，密钥不保存：同一次导出内同一原始值对应同一编码，编码无法还原，不同导出之间编码不同。其余列仍可能间接识别个人，请谨慎发布。",
     };
   }
 }
@@ -450,12 +488,13 @@ export function researchTools(research) {
     {
       definition: definition(
         "stats_test",
-        "对会话中 CSV 资料的两组做统计比较（welch-t / mann-whitney / chi-square / fisher；auto 按结局类型选择）。",
+        "对会话中 CSV 资料的两组做统计比较（welch-t / mann-whitney / chi-square / fisher；auto 按结局类型选择）。二分类结局可用 positive 指定阳性取值。",
         {
           sourceId: textDef,
           outcome: textDef,
           group: textDef,
           method: textDef,
+          positive: textDef,
         },
         ["sourceId", "outcome", "group"],
       ),
@@ -482,7 +521,7 @@ export function researchTools(research) {
     {
       definition: definition(
         "deidentify_csv",
-        "对会话中 CSV 资料的指定列做确定性伪标识脱敏，返回脱敏后的 CSV 文本。",
+        "对会话中 CSV 资料的指定列做伪标识脱敏（每次导出随机密钥，同次导出内编码一致），返回脱敏后的 CSV 文本。",
         { sourceId: textDef, columns: { type: "array", items: textDef } },
         ["sourceId", "columns"],
       ),

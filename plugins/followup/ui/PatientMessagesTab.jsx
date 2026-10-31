@@ -23,7 +23,7 @@ export default function PatientMessagesTab({
   const wecomEnabled = usePluginEnabled("channel-wecom");
   const unprocessed = detail.counts.unprocessedMessages || 0;
   const digestBlocked = !config?.modelConfigured
-    ? "需先配置模型"
+    ? "需先连接模型"
     : !unprocessed
       ? "暂无待整理消息"
       : !consent

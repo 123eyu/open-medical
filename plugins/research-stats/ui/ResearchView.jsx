@@ -23,8 +23,8 @@ function TestResult({ result }) {
     <div className="tool-result" role="status">
       <div className="tool-result-headline">
         <span className="tool-result-value">p {pText(result.p)}</span>
-        <span className="tool-result-label">{METHOD_LABEL[result.method] || result.method} · {result.outcome} 按 {result.group} 分组</span>
-        <span className={`om-chip ${significant ? "is-ok" : ""}`}>{significant ? "p < 0.05" : "p ≥ 0.05"}</span>
+        <span className="tool-result-label">{METHOD_LABEL[result.method] || result.method} · {result.outcome}{result.positive ? `（阳性 = ${result.positive}）` : ""} 按 {result.group} 分组</span>
+        {typeof result.p === "number" ? <span className={`om-chip ${significant ? "is-ok" : ""}`}>{significant ? "p < 0.05" : "p ≥ 0.05"}</span> : <span className="om-chip is-caution">未能计算 p 值</span>}
       </div>
       {groups && (
         <table className="om-table research-groups">
@@ -56,7 +56,7 @@ export function ResearchView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [profile, setProfile] = useState(null);
-  const [test, setTest] = useState({ outcome: "", group: "", method: "auto" });
+  const [test, setTest] = useState({ outcome: "", group: "", method: "auto", positive: "" });
   const [testResult, setTestResult] = useState(null);
   const [size, setSize] = useState({ design: "means", delta: "", sd: "", p1: "", p2: "", alpha: 0.05, power: 0.8 });
   const [sizeResult, setSizeResult] = useState(null);
@@ -105,10 +105,10 @@ export function ResearchView() {
       setSessions(old => [detail, ...old.filter(s => s.id !== detail.id)]);
       setSessionId(detail.id); setFiles(datasets); setSourceId(datasets.find(f => f.name === "示例研究数据.csv")?.id || "");
       setProfile(null); setTestResult(null);
-      setTest({ outcome: "sbp", group: "group", method: "auto" });
+      setTest({ outcome: "sbp", group: "group", method: "auto", positive: "" });
       setSize({ design: "means", delta: "8", sd: "12", p1: "", p2: "", alpha: 0.05, power: 0.8 });
       setDeidColumns("subject");
-      setUploadNotice("已选中 12 行虚构数据。先查看数据概况，再比较 A/B 两组的 sbp；样本量和脱敏字段也已填入示例。可修改后重新计算。");
+      setUploadNotice("已安装示例数据包（同时向患者、病例、知识库等页面加入虚构示例，可在「示例体验」页删除），并选中其中 12 行虚构研究数据。先查看数据概况，再比较 A/B 两组的 sbp；样本量和脱敏字段也已填入示例。可修改后重新计算。");
     } catch (err) { setError(err.message); }
     finally { setUploading(false); }
   };
@@ -131,7 +131,7 @@ export function ResearchView() {
       if (version === selectionGeneration.current) setFilesLoading(false);
     }
   };
-  useEffect(() => { setTestResult(null); }, [test.outcome, test.group, test.method]);
+  useEffect(() => { setTestResult(null); }, [test.outcome, test.group, test.method, test.positive]);
   useEffect(() => { setSizeResult(null); }, [size]);
   const run = async (action) => {
     setBusy(true);
@@ -157,6 +157,7 @@ export function ResearchView() {
         outcome: test.outcome,
         group: test.group,
         method: test.method,
+        ...(test.positive.trim() && !["welch-t", "mann-whitney"].includes(test.method) ? { positive: test.positive.trim() } : {}),
       });
       setTestResult(value);
     });
@@ -213,7 +214,7 @@ export function ResearchView() {
           </div>
           <div className="research-import">
             <button className="primary" disabled={busy || uploading} onClick={() => uploadRef.current?.click()}><Upload size={16}/>{uploading ? "正在导入…" : "上传 CSV 数据"}</button>
-            <button className="secondary" disabled={busy || uploading} onClick={useExample}>使用示例数据</button>
+            <button className="secondary" disabled={busy || uploading} onClick={useExample} title="会安装完整示例数据包：虚构患者、病例、知识库与研究数据">使用示例数据</button>
             <input ref={uploadRef} type="file" accept=".csv" hidden onChange={uploadDataset}/>
           </div>
           {uploadNotice && <p role="status" className="om-meta">{uploadNotice}</p>}
@@ -280,7 +281,7 @@ export function ResearchView() {
           <div className="tool-section-head">
             <div>
               <h2>组间比较</h2>
-              <p>选择结局变量与分组变量；「自动选择」按数据类型选用检验方法。</p>
+              <p>选择结局变量与分组变量；「自动选择」按数据类型选用检验方法。二分类结局（如 是/否、yes/no、阳性/阴性）用卡方或 Fisher，无法识别阳性时请填写阳性取值。</p>
             </div>
           </div>
           <div className="tool-row">
@@ -304,6 +305,13 @@ export function ResearchView() {
               <option value="chi-square">卡方检验</option>
               <option value="fisher">Fisher 精确检验</option>
             </select>
+            {!["welch-t", "mann-whitney"].includes(test.method) && (
+              <input disabled={busy || uploading}
+                value={test.positive}
+                aria-label="阳性取值（可选）" placeholder="阳性取值（可选，如 yes）"
+                onChange={(e) => setTest({ ...test, positive: e.target.value })}
+              />
+            )}
             <button
               className="primary"
               onClick={runTest}
@@ -374,7 +382,7 @@ export function ResearchView() {
             <div className="tool-section-head">
               <div>
                 <h2>数据脱敏导出</h2>
-                <p>把指定列替换为不可逆的伪标识后下载 CSV。</p>
+                <p>把指定列替换为伪标识后下载 CSV。每次导出使用新的随机密钥且不保存，编码无法还原；同一文件内同一原始值编码一致。</p>
               </div>
             </div>
             <div className="tool-row">

@@ -10,7 +10,7 @@ const PRIVACY_NOTE = `本会话已开启患者资料脱敏：资料中的姓名�
 import { GENERIC_CORE_SYSTEM, GenericDomain, defineDomain } from "../core/domain-adapter.mjs";
 
 const SESSION_TOOLING_NOTE = `需要并行阅读或核对多份资料时，用 delegate_tasks 委派只读子任务（子任务能读取本会话材料和当前患者上下文），收齐结果后由你汇总。
-部分工具默认未列出（编程与文件、扩展与技能管理、临床试验、科研统计、DRG），需要时先调用 enable_tools 开启对应组；编程工具只在医生明确要求编程、生成网页或运行脚本时使用；终端只有 exitCode=0 才算成功，生成网页后用 browser_open 打开实际检查再交付。`;
+部分工具默认未列出（编程与文件、浏览器、扩展与技能管理、临床试验、科研统计、DRG），需要时先调用 enable_tools 开启对应组；编程工具只在医生明确要求编程、生成网页或运行脚本时使用；终端只有 exitCode=0 才算成功，生成网页后用 browser_open 打开实际检查再交付。需要上网查看或操作网站时开启浏览器组：先 browser_open，再按元素编号用 browser_action 操作，看不懂页面布局时用 browser_screenshot 提问；遇到登录、验证码请医生在浏览器面板显示窗口亲自完成后再继续。`;
 import { TOOL_DEFINITIONS, runTool, medicalToolAllowed } from "../medical-core.mjs";
 import { check } from "../errors.mjs";
 import { verifyKnowledgeAnswer, finalizeKnowledgeAnswer } from "./knowledge-answer.mjs";
@@ -59,16 +59,22 @@ export const SESSION_TOOL_GROUPS = Object.freeze([
   {
     id: "coding",
     title: "编程与文件",
-    summary: "读写工作目录文件、git、浏览器预览网页",
+    summary: "读写工作目录文件、git、终端",
     names: [
       "list_directory", "read_file", "search_files", "inspect_file", "project_instructions",
       "propose_file_write", "propose_file_edit", "propose_file_delete", "revise_file_proposal",
       "read_file_proposal", "apply_file_proposal", "list_artifacts", "save_artifact_to_workspace",
       "git_status", "git_diff", "git_log", "git_commit",
-      "browser_open", "browser_action", "browser_snapshot", "browser_screenshot",
       "terminal_run", "terminal_check", "terminal_start", "terminal_read", "terminal_write", "terminal_stop", "terminal_wait",
     ],
     when: /代码|编程|脚本|程序|网页|html|终端|命令行|\bgit\b|仓库|文件夹|目录|浏览器|python|javascript|\.(py|js|html?|css|md)\b/i,
+  },
+  {
+    id: "browser",
+    title: "浏览器",
+    summary: "打开任意网站，像人一样点击、输入、选择、滚动和看截图，完成查资料、填表、下载页面信息等网页操作",
+    names: ["browser_open", "browser_snapshot", "browser_action", "browser_screenshot"],
+    when: /网页|网站|网址|官网|浏览器|上网|https?:\/\/|www\.|\.(com|cn|org|net|gov)\b|登录|点击|打开.*(页面|链接)|html/i,
   },
   {
     id: "extensions",

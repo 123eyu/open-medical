@@ -94,26 +94,24 @@ export class MedicalScheduler {
       "每个会话最多保留 30 个计划",
       422,
     );
-    const mode = input.mode || "local";
+    // 计划任务一律由模型执行。
     check(
-      ["local", "model"].includes(mode),
+      input.mode === undefined || input.mode === "model",
       "INVALID_INPUT",
       "计划运行方式无效",
     );
-    if (mode === "model") {
-      check(
-        providerConfigured(this.runtime.provider),
-        "MODEL_NOT_CONFIGURED",
-        "尚未配置模型",
-        503,
-      );
-      check(
-        input.externalConsent === true,
-        "CONSENT_REQUIRED",
-        "模型计划需明确授权按固定材料重复外发",
-        412,
-      );
-    }
+    check(
+      providerConfigured(this.runtime.provider),
+      "MODEL_NOT_CONFIGURED",
+      "尚未连接模型：请先在 设置 → 模型与运行 中连接模型，再创建计划任务。",
+      503,
+    );
+    check(
+      input.externalConsent === true,
+      "CONSENT_REQUIRED",
+      "模型计划需明确授权按固定材料重复外发",
+      412,
+    );
     const nextRunAt = Date.parse(input.runAt);
     check(
       Number.isFinite(nextRunAt) &&
@@ -154,7 +152,6 @@ export class MedicalScheduler {
       sessionId,
       name: string(input.name, "计划名称", 100),
       message: string(input.message, "计划任务", 20000),
-      mode,
       fileIds: [...input.fileIds],
       sourceHashes,
       nextRunAt,
@@ -162,8 +159,8 @@ export class MedicalScheduler {
       status: "active",
       revision: 0,
       createdAt: new Date(this.now()).toISOString(),
-      providerIdentity: mode === "model" ? this.identity() : null,
-      externalConsent: mode === "model",
+      providerIdentity: this.identity(),
+      externalConsent: true,
       history: [],
       lastError: null,
       activeRunId: null,
@@ -173,7 +170,6 @@ export class MedicalScheduler {
       .run(job.id, sessionId, job.status, nextRunAt, JSON.stringify(job));
     this.store.audit(sessionId, "schedule.created", {
       jobId: job.id,
-      mode,
       sourceHashes,
       externalConsent: job.externalConsent,
     });
@@ -238,9 +234,9 @@ export class MedicalScheduler {
       409,
     );
     check(
-      job.mode !== "model" || job.providerIdentity === this.identity(),
+      job.providerIdentity === this.identity(),
       "SCHEDULE_PROVIDER_CHANGED",
-      "模型服务或模型已变化，请重新确认外发并创建计划",
+      "计划绑定的模型与当前连接的模型不一致，请重新确认外发并创建计划",
       412,
     );
   }
@@ -293,7 +289,7 @@ export class MedicalScheduler {
         );
       const handle = this.runtime.prepare(job.sessionId, {
         message: job.message,
-        mode: job.mode,
+        mode: "model",
         fileIds: job.fileIds,
         externalConsent: job.externalConsent,
         requestId,

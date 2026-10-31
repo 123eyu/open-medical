@@ -54,7 +54,7 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
       <header className="directory-heading">
         <div>
           <h1>项目</h1>
-          <p>{purpose ? `选择项目，${{ documents: "在任务中处理文档与表格", browser: "预览网页", terminal: "配置隔离终端", extensions: "管理技能与连接" }[purpose]}。` : ""}项目用于授权本地文件夹，供浏览器、终端等工具任务使用；患者记录与问诊无需项目。</p>
+          <p>{purpose ? `选择项目，${{ documents: "在任务中处理文档与表格", browser: "预览网页", terminal: "配置分析工具（需要 Docker）", extensions: "管理技能与连接" }[purpose]}。` : ""}项目用于授权本地文件夹，供浏览器、终端等工具任务使用；患者记录与问诊无需项目。</p>
         </div>
         <button className="primary" onClick={() => onOpen({ create: true, purpose, returnTo: "projects" })}>
           <Plus size={17} />
@@ -147,7 +147,7 @@ export function ProjectDirectory({ purpose, items, onOpen, onChanged }) {
 
 const catalog = [
   ["browser", "项目浏览器", "在已授权项目中预览网页，保留项目工具上下文。", "项目工具", Globe, "选择项目后使用"],
-  ["terminal", "项目终端", "进入项目终端，按该项目授权范围运行命令。", "项目工具", Terminal, "选择项目后使用"],
+  ["terminal", "项目分析工具", "为项目开启隔离容器，让助手在任务中运行命令和检查。", "项目工具", Terminal, "需要 Docker"],
   [
     "documents",
     "文档与表格",

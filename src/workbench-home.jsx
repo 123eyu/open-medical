@@ -443,6 +443,10 @@ export function WorkbenchHome({
       return;
     }
     if (!prompt.trim()) return;
+    if (!config?.modelConfigured) {
+      setError("需先连接模型：未连接模型时不能发送任务。输入内容已保留。");
+      return;
+    }
     if (prompt.trim().length > 200000) {
       setError("任务超过 20 万字符，请拆成多个任务或上传为资料；输入内容已保留。");
       return;
@@ -544,21 +548,27 @@ export function WorkbenchHome({
       {error && (
         <p className="error-text" role="alert">
           {error}{" "}
-          <button
-            className="text-button"
-            onClick={() => {
-              onReconnect()
-                .then(() => setReloadKey((value) => value + 1))
-                .catch((err) => setError(err.message));
-            }}
-          >
-            刷新连接
-          </button>
+          {error.startsWith("需先连接模型") ? (
+            <button className="text-button" onClick={onModelSettings}>
+              连接模型
+            </button>
+          ) : (
+            <button
+              className="text-button"
+              onClick={() => {
+                onReconnect()
+                  .then(() => setReloadKey((value) => value + 1))
+                  .catch((err) => setError(err.message));
+              }}
+            >
+              刷新连接
+            </button>
+          )}
         </p>
       )}
       {isHome ? (
         <>
-          {!config?.modelConfigured && <div className="agent-setup-note"><span>连接模型后可使用 AI 完成任务；本地资料整理仍可使用。</span><button onClick={onModelSettings}>配置模型</button></div>}
+          {config && !config.modelConfigured && <div className="agent-setup-note" role="status"><span>需先连接模型：未连接时不能发送任务。患者档案、资料导入和随访计划等本地功能不受影响。</span><button type="button" onClick={onModelSettings}>连接模型</button></div>}
           <form className="hub-composer" onSubmit={submit}>
             <div className="hub-composer-caption">
               <h1>{selectedFlow ? selectedFlow.title : "新任务"}</h1>
@@ -770,7 +780,7 @@ export function WorkbenchHome({
                     className="attach-button"
                     title="添加图片、PDF、Word、Excel、TXT、Markdown、CSV 或 JSON，随本次任务一起发送"
                     onClick={() => onAttach(selectedPatient?.sessionId)}
-                    disabled={starting || uploading || !config}
+                    disabled={starting || uploading || !config || !config.modelConfigured}
                   >
                     <Paperclip size={16} />
                     {uploading ? "导入中…" : "添加材料"}
@@ -801,7 +811,7 @@ export function WorkbenchHome({
                 </>
               )}
               <span className="composer-spacer" />
-              <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !prompt.trim() || (Boolean(patientId) && !data))}>
+              <button type="submit" className="agent-send" aria-label={isFollowup ? "进入随访" : "发送任务"} disabled={!config || starting || uploading || (isFollowup ? !selectedPatient : !config.modelConfigured || !prompt.trim() || (Boolean(patientId) && !data))} title={config && !isFollowup && !config.modelConfigured ? "需先连接模型" : undefined}>
                 {starting ? <Loader2 size={17} className="spin"/> : isFollowup ? <ArrowRight size={17}/> : <ArrowUp size={17}/>}
                 {starting ? "正在开始…" : isFollowup ? "进入随访" : "开始任务"}
               </button>

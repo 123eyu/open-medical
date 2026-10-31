@@ -55,7 +55,6 @@ export async function executeRemoteJob(
       action: "configure",
       revision: service.get(workspace.id).revision,
       consent: true,
-      origins: [],
       terminal,
       image: terminal ? image : "",
       browser: false,

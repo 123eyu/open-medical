@@ -466,16 +466,9 @@ export function PatientSwitcher({ patients, currentId, onSwitch, onManage }) {
   );
 }
 
-/* ---------- 模式判定（agent 自动，用户不选档位） ---------- */
-// 有模型就走模型循环；意图（直接回答 vs 整理成草稿）由服务端 policy
-// 引擎判定并写入系统提示词，模型自行决定是否调用文书类工具。
-export function modeToRequest(modelEnabled, base) {
-  if (!modelEnabled) return { ...base, mode: "local" };
-  return { ...base, mode: "model" };
-}
-
 /* ---------- 风险卡列表 ---------- */
-export function RiskList({ alerts, onAck, onResolve, onDraft, busy }) {
+// draftBlocked：草稿依赖模型；未配置时禁用并在提示里说明原因。
+export function RiskList({ alerts, onAck, onResolve, onDraft, draftBlocked = "", busy }) {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const actionPending = useRef(false);
@@ -508,7 +501,7 @@ export function RiskList({ alerts, onAck, onResolve, onDraft, busy }) {
           </div>
           <div className="r-acts">
             {onDraft && r.status === "active" && (
-              <button className="mini-btn" disabled={busy || actionBusy} onClick={() => act(() => onDraft(r))}>
+              <button className="mini-btn" disabled={busy || actionBusy || Boolean(draftBlocked)} title={draftBlocked || undefined} onClick={() => act(() => onDraft(r))}>
                 生成处理建议草稿
               </button>
             )}

@@ -24,7 +24,7 @@ function DiagnosisRecord({ diagnosis, status, onSource, showStatus = true }) {
   </li>;
 }
 
-export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, citedFileName, onSummarize }) {
+export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, citedFileName, onSummarize, summarizeBlocked = "" }) {
   const groups = groupDiagnoses(patient.diagnoses || []);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
@@ -82,7 +82,7 @@ export function PatientHistory({ patient, files, onEdit, onNavigate, onChanged, 
         <button className="text-button" disabled={patient.archived || busy} onClick={editSummary}>{summary?.text ? '编辑摘要' : '补充摘要'}</button>
         {hasRecords && <details className="history-summary-menu"><summary>更多</summary><div>
           {summary?.text && <RecordSource sources={summary.source?[summary.source]:[]} onSource={sourceLink}/>}
-          <button className="text-button" disabled={patient.archived || !onSummarize} onClick={onSummarize}>整理摘要草稿</button>
+          <button className="text-button" disabled={patient.archived || !onSummarize || Boolean(summarizeBlocked)} title={summarizeBlocked || undefined} onClick={onSummarize}>整理摘要草稿</button>
         </div></details>}
       </div>}</header>
       {editor ? <form onSubmit={saveSummary} aria-label="编辑病史摘要"><fieldset disabled={busy}>

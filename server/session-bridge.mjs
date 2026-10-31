@@ -19,7 +19,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { AppError, check, identifier, string } from "./errors.mjs";
 import { medicalPolicy } from "../shared/medical.mjs";
-import { resolveTaskContexts, normalizeTaskContexts, taskContextIntentText, taskContextWorkflow, taskContextSource } from "./medical/task-context.mjs";
+import { resolveTaskContexts, normalizeTaskContexts, taskContextIntentText, taskContextWorkflow } from "./medical/task-context.mjs";
 
 // Classify immediately; the date remains a separate, reviewable suggestion.
 const materialSuggestions = (name, text) => {
@@ -27,8 +27,7 @@ const materialSuggestions = (name, text) => {
   const date = suggestDocumentDate({ name, text });
   return { category, categorySource, categorySuggestion, ...(date ? { dateSuggestion: date } : {}) };
 };
-import { runTool, localWork } from "./medical-core.mjs";
-import { consultationNotice } from "./medical/consultation-notice.mjs";
+import { runTool } from "./medical-core.mjs";
 import { providerConfigured } from "./core/provider-status.mjs";
 import { ToolRegistry } from "./core/tool-registry.mjs";
 import {
@@ -45,22 +44,16 @@ const iso = () => new Date().toISOString();
 const UNREADABLE_MARKER = /不可读|无法辨认|难以辨认|无法识别|缺字|乱码|字迹不清|模糊不清/i;
 const FILE_REF = /([^\s,，、;；:：()（）[\]【】「」《》"'']+\.(?:jpe?g|png|webp|pdf|txt|md|docx|xlsx))/gi;
 const sessionKind = (w) => w?.kind === "session";
-// 与旧引擎一致的运行方式别名（standard/creator→model，minimal/code→local）。
+// 对话与任务一律由模型执行（"model"，未配置模型时返回 MODEL_NOT_CONFIGURED）。
+// "code" 只表示医生手动提交的受控沙箱代码，不产生助手回答。
+const MODEL_NOT_CONFIGURED_MESSAGE = "尚未连接模型：请先在 设置 → 模型与运行 中连接模型，再发送任务。";
 const resolveMode = (mode) => {
-  const requested = mode || "local";
-  check(
-    ["local", "model", "standard", "minimal", "creator", "code"].includes(
-      requested,
-    ),
-    "INVALID_INPUT",
-    "运行方式无效",
-  );
-  return ["standard", "creator", "minimal"].includes(requested)
-    ? "model"
-    : requested === "code"
-      ? "local"
-      : requested;
+  const requested = mode || "model";
+  check(["model", "code"].includes(requested), "INVALID_INPUT", "运行方式无效");
+  return requested;
 };
+const requireModel = (provider) =>
+  check(providerConfigured(provider), "MODEL_NOT_CONFIGURED", MODEL_NOT_CONFIGURED_MESSAGE, 503);
 
 export class SessionBridge {
   // store：医疗存储（审计日志；sessions 表只在迁移时读取）；service：统一内核；
@@ -279,14 +272,12 @@ export class SessionBridge {
             action: "configure",
             revision: this.service.get(w.id).revision,
             consent: true,
-            origins: [],
             terminal: true,
             image,
             // configure 会按 browser/mcp/terminalNetwork 重算 network 并覆写
             // browser.read；这里必须沿用 create 的默认放开值（联网读取对所有
             // 工作区默认可用），传 false 会把新会话的 web_search/web_fetch
-            // 静默掐断。交互式浏览器本来要求显式配置来源（空 origins 时
-            // browser_open 直接 412），放开 browser.read 不绕过来源授权。
+            // 静默掐断。助手浏览器同样依赖 browser.read + network，可访问任意网站。
             browser: true,
             plugins: false,
             mcp: false,
@@ -393,7 +384,10 @@ export class SessionBridge {
       "会话正在执行，请先停止",
       409,
     );
-    this.service.extensions.close(id).catch(() => {});
+    this.service.extensions
+      .close(id)
+      .then(() => this.service.extensions.browser.forget(id))
+      .catch(() => {});
     this.service.store.remove(id);
     this.store.audit(id, "session.deleted", { kind: "session-workspace" });
     try {
@@ -1055,22 +1049,13 @@ export class SessionBridge {
       },
     ];
   }
-  localPatientSource(patientId) {
-    const p = this.patientRecord(patientId);
-    const text = [
-      `患者档案（登记资料，修订 ${p.revision || 0}）`,
-      p.birthYear ? `出生年：${p.birthYear}` : '出生年：未记录',
-      `过敏史：${p.allergies?.length ? p.allergies.join('；') : p.allergyStatus === 'none_known' ? '无已知过敏' : '未记录'}`,
-      ...(p.medications || []).map(m => `药物：${m.name}\n剂量：${m.dose || '未记录'}\n频次：${m.frequency || '未记录'}\n途径：${m.route || '未记录'}\n用药状态：${({active:'正在使用',stopped:'已停用',unknown:'未记录'})[m.status] || '未记录'}`),
-      ...(p.labs || []).map(l => `${l.date || '日期未记录'} ${l.item} ${l.value} ${l.unit || ''}`),
-    ].join('\n');
-    return { id: `patient-record:${patientId}`, name: '当前患者已登记档案', text, hash: hashText(text) };
-  }
-  // 返回 {kind:"workspace", handle}；本地规则模式返回 {kind:"local", plan}，
-  // 由 executeSend 同步执行。
+  // 返回 {kind:"workspace", handle}；代码模式（医生手动提交的沙箱代码）
+  // 返回 {kind:"sandbox", plan}，由 executeSend 同步执行。未配置模型时，
+  // 除沙箱代码外的一切提交都以 MODEL_NOT_CONFIGURED 拒绝。
   prepareSend(id, body) {
-    check(!["knowledge-answer", "literature-research"].includes(body.workflow) || resolveMode(body.mode || "local") !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
     const w = this.requireSessionWorkspace(id);
+    const mode = resolveMode(body.mode);
+    if (mode !== "code") requireModel(this.service.provider);
     check(
       !this.service.active.has(id),
       "RUN_ACTIVE",
@@ -1085,15 +1070,12 @@ export class SessionBridge {
       409,
     );
     const message = string(body.message, "任务", 200000);
-    const requestedMode = body.mode || "local";
-    const mode = resolveMode(requestedMode);
     // 页面入口附带的任务上下文（检索限定、模板要求、档案快照等）不进入
     // 医生可见的消息；分类器仍看到入口的任务要求，路由与旧版拼接文本一致。
     const contextOptions = { pluginHost: this.pluginHost };
     const { contexts, inherited } = resolveTaskContexts(body, w, contextOptions);
     const intentText = taskContextIntentText(message, contexts, contextOptions);
     const workflowRequest = body.workflow || taskContextWorkflow(contexts, contextOptions);
-    check(!["knowledge-answer", "literature-research"].includes(workflowRequest) || mode !== "local", "MODEL_REQUIRED", workflowRequest === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
     const policy = medicalPolicy(intentText);
     if (contexts.length) {
       policy.contexts = contexts;
@@ -1108,7 +1090,7 @@ export class SessionBridge {
         "请求已执行，不能重复提交",
         409,
       );
-    if (requestedMode === "code") {
+    if (mode === "code") {
       // 代码模式 = 受控沙箱手动任务，契约与旧引擎一致。
       check(
         body.sandboxCode !== undefined,
@@ -1123,42 +1105,21 @@ export class SessionBridge {
         status?.reason || "沙箱不可用",
         503,
       );
+      // 所选材料（与模型任务同样经脱敏投影）和本轮输入原文作为 sources 传入沙箱。
+      const sandboxFileIds = this.selectMaterials(w, body.fileIds);
       return {
-        kind: "local",
+        kind: "sandbox",
         plan: {
-          type: "sandbox",
           sessionId: id,
           code: body.sandboxCode,
           message,
           policy,
-          fileIds: [],
+          fileIds: sandboxFileIds,
+          sources: this.buildSources(w, message, sandboxFileIds).map(({ id: sourceId, name, text, hash }) => ({ id: sourceId, name, text, hash })),
           requestId: body.requestId || randomUUID(),
         },
       };
     }
-    if (mode === "local")
-      return {
-        kind: "local",
-        plan: {
-          type: "local",
-          sessionId: id,
-          policy,
-          message,
-          sources: [
-            ...this.buildSources(w, message, this.selectMaterials(w, body.fileIds, body.contextMode)),
-            ...(policy.intent === "medication_safety" && w.patientId && this.patientRecord ? [this.localPatientSource(w.patientId)] : []),
-            ...[taskContextSource(contexts, { ...contextOptions, inherited })].filter(Boolean),
-          ],
-          fileIds: this.selectMaterials(w, body.fileIds, body.contextMode),
-          requestId: body.requestId || randomUUID(),
-        },
-      };
-    check(
-      providerConfigured(this.service.provider),
-      "MODEL_NOT_CONFIGURED",
-      "服务端尚未配置模型密钥",
-      503,
-    );
     check(
       body.externalConsent === true,
       "CONSENT_REQUIRED",
@@ -1203,8 +1164,8 @@ export class SessionBridge {
     return { kind: "workspace", handle };
   }
   async executeSend(prepared, notify = () => {}) {
-    if (prepared.kind === "local")
-      return this.executeLocal(prepared.plan, notify);
+    if (prepared.kind === "sandbox")
+      return this.executeSandbox(prepared.plan, notify);
     const workspaceId = prepared.handle.id;
     let seq = 0;
     const emitError = (code, message) => {
@@ -1284,8 +1245,9 @@ export class SessionBridge {
       }));
   }
 
-  // ---------- 本地规则 / 沙箱模式（无模型） ----------
-  async executeLocal(plan, notify = () => {}) {
+  // ---------- 代码模式：医生手动提交的受控沙箱代码（不调用模型） ----------
+  // 只返回沙箱的计算结果，不生成任何助手式回答。
+  async executeSandbox(plan, notify = () => {}) {
     const id = plan.sessionId;
     check(
       !this.service.active.has(id),
@@ -1312,107 +1274,70 @@ export class SessionBridge {
         time: event.time,
       });
     };
-    emit("message.start", { provider: "local" });
-    emit("policy.evaluated", plan.policy);
-    let text;
-    const artifacts = [];
-    if (plan.type === "sandbox") {
-      const started = Date.now();
-      emit("sandbox.started", {});
-      let output;
-      try {
-        output = await this.service.sandbox.run({
-          code: plan.code,
-          sources: [],
-        });
-      } catch (error) {
-        emit("sandbox.failed", { error: error.message });
-        this.persistLocalRun(id, {
-          runId,
-          requestId: plan.requestId,
-          policy: plan.policy,
-          message: plan.message,
-          text: "",
-          artifacts: [],
-          fileIds: [],
-          status: "failed",
-          error: error.message,
-          startedAt: started,
-        });
-        throw error;
-      }
-      emit("sandbox.completed", { durationMs: Date.now() - started });
-      text = `沙箱计算结果（待复核）：\n${JSON.stringify(output.result, null, 2)}`;
-    } else {
-      const work = localWork(plan.policy, plan.sources);
-      let result = null;
-      try {
-        result = await runTool(work.tool, work.args, {
-          sources: plan.sources,
-          skills: this.skills,
-          plugins: this.plugins,
-        });
-      } catch (error) {
-        if (error.code !== "UNKNOWN_TOOL") throw error;
-        result = null;
-      }
-      if (result) {
-        emit("tool.start", { tool: work.tool, call_id: randomUUID() });
-        if (result.id) {
-          result.provenance = "local_rule";
-          artifacts.push(result);
-        }
-        emit("tool.complete", { tool: work.tool, artifact: result });
-      }
-      text = this.localNotice(result, plan.policy);
+    emit("message.start", { provider: "sandbox" });
+    // No model is involved in a sandbox run; its limits are the sandbox's.
+    emit("policy.evaluated", {
+      ...plan.policy,
+      limitations: ["结果由你提交的代码在本机隔离环境中计算，未经模型处理，也未发送到外部；请自行核对代码与结果。"],
+    });
+    const started = Date.now();
+    emit("sandbox.started", { sourceHashes: plan.sources.map((source) => source.hash) });
+    let output;
+    try {
+      output = await this.service.sandbox.run({
+        code: plan.code,
+        sources: plan.sources,
+      });
+    } catch (error) {
+      emit("sandbox.failed", { error: error.message });
+      this.persistSandboxRun(id, {
+        runId,
+        requestId: plan.requestId,
+        policy: plan.policy,
+        message: plan.message,
+        text: "",
+        fileIds: plan.fileIds,
+        status: "failed",
+        error: error.message,
+        startedAt: started,
+      });
+      throw error;
     }
-    this.persistLocalRun(id, {
+    emit("sandbox.completed", { durationMs: Date.now() - started });
+    const text = `沙箱计算结果（待复核）：\n${JSON.stringify(output.result, null, 2)}`;
+    this.persistSandboxRun(id, {
       runId,
       requestId: plan.requestId,
       policy: plan.policy,
       message: plan.message,
       text,
-      artifacts,
-      fileIds: plan.fileIds || [],
+      fileIds: plan.fileIds,
       status: "completed",
     });
     emit("message.delta", { text });
     emit("message.complete", {
       text,
       risk: plan.policy.risk,
-      artifacts,
+      artifacts: [],
       status: "completed",
       usage: { total_tokens: 0, rounds: 1 },
     });
     return { status: "completed", runId, error: undefined };
   }
-  localNotice(result, policy) {
-    return result?.type === "observations"
-      ? `已摘录 ${result.observations.length} 个原文检验数值，保留单位和来源，未进行异常判断。`
-      : result?.type === "clinical_timeline"
-        ? `已从本次材料中识别 ${result.events.length} 条带日期的原文事件。请在产物中逐项核对来源后复核。没有完整日期的内容未被推断。`
-        : result?.type === "medication_review"
-          ? `已生成用药资料核对表，列出 ${result.missing.length} 类待补充信息。这是资料检查，尚未执行药理、剂量或相互作用核查。`
-          : result?.type === "evidence_plan"
-            ? "已创建循证任务的 PICO 草稿和检索步骤。尚未联网检索；请在产物中补充人群、干预、对照和结局。"
-            : policy.intent === "consultation"
-              ? consultationNotice(result)
-              : "已生成可编辑的医疗工作流程草稿。请检查材料范围与人工复核要求。";
-  }
-  persistLocalRun(id, spec) {
+  persistSandboxRun(id, spec) {
     this.service.store.update(id, (current) => {
       current.runs.push({
         id: spec.runId,
         requestId: spec.requestId,
         status: spec.status,
-        mode: "local",
+        mode: "code",
         policy: spec.policy,
         startedAt: spec.startedAt || Date.now(),
         endedAt: Date.now(),
         partial: spec.text,
         error: spec.error,
-        artifacts: spec.artifacts,
-        fileIds: spec.fileIds,
+        artifacts: [],
+        fileIds: spec.fileIds || [],
         usage: { total_tokens: 0, rounds: 1 },
         roundsUsed: 1,
       });
@@ -1702,8 +1627,8 @@ export class SessionBridge {
       prepare(sessionId, body) {
         const w = bridge.requireSessionWorkspace(sessionId);
         const message = string(body.message, "任务", 200000);
-        const mode = resolveMode(body.mode);
-        check(!["knowledge-answer", "literature-research"].includes(body.workflow) || mode !== "local", "MODEL_REQUIRED", body.workflow === "literature-research" ? "文献研究需要模型进行阅读和综合；请配置模型后重试，或使用查找论文。" : "知识来源问答需要模型；请配置模型后重试，或返回知识库检索原文。", 412);
+        check(resolveMode(body.mode) === "model", "INVALID_INPUT", "后台任务只能由模型执行");
+        requireModel(bridge.service.provider);
         // 后台消费方只接受显式上下文，不沿用上一轮。
         const contexts = body.context === undefined ? [] : normalizeTaskContexts(body.context, { pluginHost: bridge.pluginHost });
         const policy = medicalPolicy(taskContextIntentText(message, contexts, { pluginHost: bridge.pluginHost }));
@@ -1711,19 +1636,6 @@ export class SessionBridge {
         if (["patient-intake", "knowledge-answer", "literature-research"].includes(body.workflow)) policy.workflow = body.workflow;
         const fileIds = bridge.selectMaterials(w, body.fileIds || []);
         const sources = bridge.buildSources(w, message, fileIds);
-        if (mode === "local")
-          return {
-            run: { id: `local_${randomUUID()}` },
-            local: {
-              type: "local",
-              sessionId,
-              policy,
-              message,
-              sources,
-              fileIds,
-              requestId: body.requestId || randomUUID(),
-            },
-          };
         const handle = bridge.service.prepare(sessionId, {
           revision: w.revision,
           message,
@@ -1742,8 +1654,7 @@ export class SessionBridge {
         });
         return handle;
       },
-      async execute(handle, notify = () => {}) {
-        if (handle.local) return bridge.executeLocal(handle.local, notify);
+      async execute(handle) {
         bridge.requireSessionWorkspace(handle.id);
         const execution = await bridge.service.execute(handle);
         return {

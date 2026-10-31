@@ -25,7 +25,7 @@ async function setup(t, turns) {
   t.after(() => app.close());
   const session = await app.request("/api/sessions", { method: "POST", body: { title: "知识问答：HCA" } });
   assert.equal(session.status, 201, session.text);
-  const run = (body) => app.request("/api/agent/run", { method: "POST", body: { sessionId: session.body.id, mode: "standard", externalConsent: true, ...body } });
+  const run = (body) => app.request("/api/agent/run", { method: "POST", body: { sessionId: session.body.id, mode: "model", externalConsent: true, ...body } });
   const detail = async () => (await app.request(`/api/sessions/${session.body.id}`)).body;
   return { app, provider, run, detail };
 }
@@ -108,8 +108,8 @@ test("任务上下文：执行要求只由服务端按类型生成，客户端�
   assert.equal(badLiterature.status, 400);
 });
 
-test("任务上下文：插件上下文由插件给出说明，本地规则模式也拿得到资料", async (t) => {
-  const { provider, run, detail } = await setup(t, ["文献结果"]);
+test("任务上下文：插件上下文由插件给出说明，模板上下文仍按原要求路由", async (t) => {
+  const { provider, run, detail } = await setup(t, ["文献结果", "流程图草稿"]);
   const literature = await run({
     message: "居家血压监测 vs 诊室血压",
     context: { kind: "literature-search", label: "查找论文 · PubMed", scope: { mode: "search", source: "PubMed", yearFrom: "2020" } },
@@ -121,17 +121,17 @@ test("任务上下文：插件上下文由插件给出说明，本地规则模�
 
   const visible = "请生成诊疗决策流程图，病种：高血压";
   assert.equal(medicalPolicy(visible).intent, "general_medical_work");
-  const local = await run({
-    mode: "local",
+  const templated = await run({
     message: visible,
     context: { kind: "task-template", label: "模板：诊疗决策流程图", scope: { template: "decision-flow" } },
   });
-  assert.equal(local.status, 200, local.text);
+  assert.equal(templated.status, 200, templated.text);
+  assert.match(systemText(provider.calls[1]), /模板：诊疗决策流程图/);
   const session = await detail();
-  const localRun = session.runs.find((r) => r.id === local.body.runId);
-  assert.equal(localRun.policy.contexts[0].kind, "task-template");
-  assert.equal(localRun.policy.intent, medicalPolicy(TASK_TEMPLATES["decision-flow"].guidance).intent, "分类器仍看到模板原本的要求，路由与旧版一致");
-  assert.equal(localRun.policy.intent, "evidence_planning");
+  const templatedRun = session.runs.find((r) => r.id === templated.body.runId);
+  assert.equal(templatedRun.policy.contexts[0].kind, "task-template");
+  assert.equal(templatedRun.policy.intent, medicalPolicy(TASK_TEMPLATES["decision-flow"].guidance).intent, "分类器仍看到模板原本的要求，路由与旧版一致");
+  assert.equal(templatedRun.policy.intent, "evidence_planning");
 });
 
 test("任务上下文：插件声明的上下文类型必须以插件 id 为前缀且带 guidance", () => {

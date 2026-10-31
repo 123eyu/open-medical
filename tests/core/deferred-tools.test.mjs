@@ -8,7 +8,7 @@ const names = (call) => call.tools.map((tool) => tool.function.name);
 async function run(app, sessionId, message) {
   const response = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId, message, mode: "standard", externalConsent: true },
+    body: { sessionId, message, mode: "model", externalConsent: true },
   });
   assert.equal(response.body.status, "completed", JSON.stringify(response.body));
   return response;

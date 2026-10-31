@@ -99,7 +99,7 @@ export default definePlugin({
         check(["search", "research"].includes(context.scope.mode), "INVALID_INPUT", "文献上下文的 mode 无效");
       },
       guidance: (_ctx, { scope }) =>
-        `${scope.mode === "research" ? "请围绕医生的问题查阅文献，比较研究证据并给出综合结论。" : "请查找医生所述主题的论文。"}${scope.source ? `优先来源：${JSON.stringify(scope.source)}。` : ""}${scope.yearFrom || scope.yearTo ? `发表年份：${scope.yearFrom || "不限"}–${scope.yearTo || "不限"}。` : ""}`,
+        `${scope.mode === "research" ? "请围绕医生的问题查阅文献，比较研究证据并给出综合结论。" : "请查找医生所述主题的论文。"}${scope.source ? `优先来源：${JSON.stringify(scope.source)}。` : ""}${scope.yearFrom || scope.yearTo ? `发表年份：${scope.yearFrom || "不限"}–${scope.yearTo || "不限"}。` : ""}${scope.sort === "date" ? "按发表时间排序，优先近期论文。" : ""}`,
     },
   },
   workflows: {

@@ -108,6 +108,9 @@ function SettingsSubnav({ label, items, section, onSelect }) {
   </nav>;
 }
 
+// Electron wraps IPC rejections as "Error invoking remote method '…': Error: …".
+const ipcMessage = (error) => String(error?.message || error).replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "");
+
 // Native controls stay unavailable in the developer browser preview.
 function DesktopAppPanel({ desktop }) {
   const [autoLogin, setAutoLogin] = useState(null);
@@ -144,9 +147,9 @@ function DesktopAppPanel({ desktop }) {
     </div>
     <details><summary>应用维护</summary>
     <div className="toolbar-actions">
-      {desktop.openDataDirectory && <button className="secondary" onClick={() => desktop.openDataDirectory().catch(error => setNote(`打开失败：${error.message}`))}>打开数据目录</button>}
-      {desktop.openConfigDirectory && <button className="secondary" onClick={() => desktop.openConfigDirectory().catch(error => setNote(`打开失败：${error.message}`))}>打开配置目录</button>}
-      {desktop.relaunchApp && <button className="secondary" onClick={() => desktop.relaunchApp().catch(error => setNote(`重启失败：${error.message}`))}>重启应用</button>}
+      {desktop.openDataDirectory && <button className="secondary" onClick={() => desktop.openDataDirectory().catch(error => setNote(`打开失败：${ipcMessage(error)}`))}>打开数据目录</button>}
+      {desktop.openConfigDirectory && <button className="secondary" onClick={() => desktop.openConfigDirectory().catch(error => setNote(`打开失败：${ipcMessage(error)}`))}>打开配置目录</button>}
+      {desktop.relaunchApp && <button className="secondary" onClick={() => desktop.relaunchApp().catch(error => setNote(`重启失败：${ipcMessage(error)}`))}>重启应用</button>}
     </div>
     </details>
   </section>;

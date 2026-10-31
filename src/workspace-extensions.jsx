@@ -3,7 +3,7 @@ import { api } from "./agent-runtime";
 
 const grants = [
   ["terminal", "process.spawn", "运行分析工具"],
-  ["browser", "browser.read", "浏览网页"],
+  ["browser", "browser.read", "浏览和操作网页（任意网站）"],
   ["plugins", "plugins.execute", "使用已安装插件"],
   ["mcp", "mcp.execute", "使用已连接服务"],
   ["memoryRead", "memory.read", "读取项目记忆"],
@@ -21,6 +21,7 @@ export function WorkspaceExtensionsPanel({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [consent, setConsent] = useState(false),
+    [image, setImage] = useState(""),
     [authorizationUrl, setAuthorizationUrl] = useState("");
   useEffect(() => {
     let alive = true;
@@ -36,6 +37,7 @@ export function WorkspaceExtensionsPanel({
               ]),
             ),
           );
+          setImage("");
         }
       })
       .catch((e) => {
@@ -63,6 +65,18 @@ export function WorkspaceExtensionsPanel({
       setBusy(false);
     }
   }
+  // MCP 服务和插件目前只能通过本机接口添加；没有已配置项时不显示对应许可。
+  const shown = data
+    ? grants.filter(
+        ([name]) =>
+          form[name] ||
+          (name === "plugins"
+            ? data.config.plugins.length > 0
+            : name === "mcp"
+              ? data.config.mcpServers.length > 0
+              : true),
+      )
+    : [];
   return (
     <section
       className="workspace-files extension-panel"
@@ -77,11 +91,14 @@ export function WorkspaceExtensionsPanel({
       {data && (
         <fieldset disabled={disabled || busy}>
           <h4>访问许可</h4>
-          {grants.map(([name, , label]) => (
+          {shown.map(([name, , label]) => (
             <label className="workspace-checkbox" key={name}>
               <input
                 type="checkbox"
                 checked={Boolean(form[name])}
+                disabled={
+                  name === "terminal" && !form[name] && !data.sandbox.available
+                }
                 onChange={(e) => {
                   setForm({ ...form, [name]: e.target.checked });
                   setConsent(false);
@@ -95,19 +112,29 @@ export function WorkspaceExtensionsPanel({
             · {data.browser.available ? "浏览器已就绪" : "浏览器暂不可用"}
             。保存后会结束工具会话并暂停计划。
           </p>
-          {!!data.config.origins?.length && (
-            <p>
-              已授权网站：
-              {data.config.origins
-                .map((o) => {
-                  try {
-                    return new URL(o).hostname;
-                  } catch {
-                    return "已保存的网站";
-                  }
-                })
-                .join("、")}
-            </p>
+          {!data.sandbox.available && data.sandbox.reason && (
+            <p className="muted">分析工具：{data.sandbox.reason}</p>
+          )}
+          {!data.browser.available && data.browser.reason && (
+            <p className="muted">浏览器：{data.browser.reason}</p>
+          )}
+          {form.terminal && (
+            <label>
+              本地镜像
+              <input
+                value={image}
+                placeholder={
+                  data.config.image
+                    ? `已选择 ${data.config.image.replace(/^sha256:/, "").slice(0, 12)}，留空则沿用`
+                    : "例如 open-medical-tools:latest"
+                }
+                onChange={(e) => {
+                  setImage(e.target.value);
+                  setConsent(false);
+                }}
+              />
+              <small>填写已导入 Docker 的镜像名称；不会自动下载。</small>
+            </label>
           )}
           <label className="workspace-checkbox">
             <input
@@ -123,8 +150,7 @@ export function WorkspaceExtensionsPanel({
               await manage({
                 action: "configure",
                 ...form,
-                image: data.config.image || "",
-                origins: data.config.origins,
+                image: image.trim() || data.config.image || "",
                 searchUrl: data.config.searchUrl || "",
                 memory: data.config.memory,
                 terminalNetwork: Boolean(data.config.terminalNetwork),
@@ -135,10 +161,7 @@ export function WorkspaceExtensionsPanel({
           >
             保存许可
           </button>
-          <h4>已连接服务</h4>
-          {!data.config.mcpServers.length && (
-            <p className="muted">暂无已连接服务。内置工具仍可在对话中使用。</p>
-          )}
+          {!!data.config.mcpServers.length && <h4>已连接服务</h4>}
           {data.config.mcpServers.map((server) => (
             <article key={server.id}>
               <strong>{server.name || server.id}</strong>

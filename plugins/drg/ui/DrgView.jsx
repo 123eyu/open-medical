@@ -79,7 +79,12 @@ export function DrgView() {
     if (!file) return;
     run(async () => {
       const text = await file.text();
-      const weights = JSON.parse(text);
+      let weights;
+      try {
+        weights = JSON.parse(text);
+      } catch {
+        throw new Error(`「${file.name}」不是有效的 JSON 文件。导入格式须为 {"DRG码": 权重} 对象，如 {"ER15": 0.62}。`);
+      }
       const value = await api("/api/drg/import", "POST", { weights });
       setSettings(value);
     });
@@ -182,14 +187,14 @@ export function DrgView() {
           <div className="tool-section-head">
             <div>
               <h3>批量分析</h3>
-              <p>粘贴 CSV，列为 principal_dx, secondary_dx, procedures, total_cost；输出每例分组与 CMI。</p>
+              <p>粘贴 CSV，列为 principal_dx, secondary_dx, procedures, total_cost，列之间用英文逗号分隔，同一列内多个编码用 ; 分隔；输出每例分组与 CMI。</p>
             </div>
           </div>
           <textarea aria-label="批量分组 CSV" disabled={busy}
             className="drg-csv"
             rows={4}
             value={csvText}
-            placeholder={"principal_dx,secondary_dx,procedures,total_cost\nJ18.9;I50.9;;\nI20.0;E11.9;36.07;58000"}
+            placeholder={"principal_dx,secondary_dx,procedures,total_cost\nJ18.9,I50.9,,\nI20.0,E11.9;I10,36.07,58000"}
             onChange={(e) => setCsvText(e.target.value)}
           />
           <div className="tool-actions">
@@ -232,7 +237,7 @@ export function DrgView() {
         </section>
 
         <details className="tool-section drg-settings-panel om-disclosure">
-          <summary><Settings2 size={15} /> 方案与费率设置 · 当前 {fmt(settings?.rate)} 元/权重</summary>
+          <summary><Settings2 size={15} /> 方案与费率设置 · 当前 {fmt(settings?.rate)} 元/权重{settings?.overriddenCodes ? ` · 已导入 ${settings.overriddenCodes} 个病组权重` : ""}</summary>
           <div className="drg-settings">
             <label className="tool-field">费率（元/权重）
               <input disabled={busy}

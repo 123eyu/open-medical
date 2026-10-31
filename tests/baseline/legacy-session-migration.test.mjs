@@ -53,7 +53,7 @@ test("旧版 sessions 表会话启动时迁移为会话工作区，保留编号�
   db.close();
 
   const app = await startTestServer({
-    provider: createScriptedProvider([]),
+    provider: createScriptedProvider(["材料：门诊记录.txt"]),
     seedDemoPack: false,
     serverOptions: { database },
   });
@@ -86,7 +86,7 @@ test("旧版 sessions 表会话启动时迁移为会话工作区，保留编号�
   // The migrated session runs on the unified engine like any other session.
   const run = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: "legacy-session-1", message: "列出材料", mode: "local", fileIds: ["file-legacy-1"] },
+    body: { sessionId: "legacy-session-1", message: "列出材料", mode: "model", externalConsent: true, fileIds: ["file-legacy-1"] },
   });
   assert.equal(run.status, 200);
   const search = await app.request("/api/sessions/legacy-session-1/search?q=" + encodeURIComponent("血压"));

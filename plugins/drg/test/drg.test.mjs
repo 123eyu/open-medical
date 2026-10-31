@@ -81,3 +81,13 @@ test("drg：保存费率与导入权重后可读回", async (t) => {
   assert.equal(imported.body.imported, 1);
   assert.equal(imported.body.overriddenCodes, 1);
 });
+
+test("drg：未覆盖诊断不建议导入分组方案（导入仅支持权重）", async (t) => {
+  const app = await startTestServer({ provider: createScriptedProvider([]) });
+  t.after(() => app.close());
+  const response = await app.request("/api/drg/group", { method: "POST", body: { principalDx: "Z99.9" } });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.drgCode, null);
+  assert.doesNotMatch(response.body.ungroupedReason, /导入本地分组方案/);
+  assert.match(response.body.ungroupedReason, /导入权重不会增加分组规则/);
+});

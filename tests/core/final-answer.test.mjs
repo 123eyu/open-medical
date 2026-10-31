@@ -21,7 +21,7 @@ test("最终回答只保留最后一轮，前面的过程说明单独保存", as
   const session = await app.request("/api/assistant/session", { method: "POST", body: {} });
   const response = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: session.body.id, message: "这些患者有什么共同点", mode: "standard", externalConsent: true },
+    body: { sessionId: session.body.id, message: "这些患者有什么共同点", mode: "model", externalConsent: true },
   });
   assert.equal(response.body.status, "completed", JSON.stringify(response.body));
   const detail = await app.request(`/api/sessions/${session.body.id}`);
@@ -40,7 +40,7 @@ test("最后一轮没有文字时保留全部文字", async (t) => {
   const session = await app.request("/api/assistant/session", { method: "POST", body: {} });
   const response = await app.request("/api/agent/run", {
     method: "POST",
-    body: { sessionId: session.body.id, message: "整理一下", mode: "standard", externalConsent: true },
+    body: { sessionId: session.body.id, message: "整理一下", mode: "model", externalConsent: true },
   });
   assert.equal(response.body.status, "completed", JSON.stringify(response.body));
   const detail = await app.request(`/api/sessions/${session.body.id}`);

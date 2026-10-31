@@ -32,9 +32,9 @@ export const RESEARCH_PACKAGES = [
   "matplotlib>=3.7",
 ];
 const MODULES = ["numpy", "pandas", "scipy", "statsmodels", "lifelines", "sklearn", "matplotlib"];
-const VERSION_PROBE = `import json,importlib
+export const versionProbe = (modules) => `import json,importlib
 out={}
-for m in ${JSON.stringify(MODULES)}:
+for m in ${JSON.stringify(modules)}:
     try: out[m]=importlib.import_module(m).__version__
     except Exception as e: out[m]=None
 import sys,platform
@@ -121,9 +121,27 @@ function defaultRunner(spec, options = {}) {
   });
 }
 
+// Shared by the research and document environments (see document-python.mjs):
+// a managed venv installed on user request, run only behind an OS sandbox.
 export class ResearchPython {
-  constructor({ dataDir, python = process.env.MEDICAL_RESEARCH_PYTHON, runner = defaultRunner, timeoutMs = 120000, memoryMb = 2048, maxActive = 1 } = {}) {
-    this.root = dataDir ? join(dataDir, "research-python") : null;
+  constructor({
+    dataDir,
+    python = process.env.MEDICAL_RESEARCH_PYTHON,
+    runner = defaultRunner,
+    timeoutMs = 120000,
+    memoryMb = 2048,
+    maxActive = 1,
+    dirName = "research-python",
+    packages = RESEARCH_PACKAGES,
+    modules = MODULES,
+    label = "科研计算环境",
+    installHint = "约 300MB",
+  } = {}) {
+    this.packages = packages;
+    this.modules = modules;
+    this.label = label;
+    this.installHint = installHint;
+    this.root = dataDir ? join(dataDir, dirName) : null;
     this.override = python || null;
     this.runner = runner;
     this.timeoutMs = timeoutMs;
@@ -165,10 +183,10 @@ export class ResearchPython {
       installing: Boolean(this.install?.promise),
       step: this.install?.step || null,
       error: this.install?.error || manifest?.lastError || null,
-      packages: RESEARCH_PACKAGES,
+      packages: this.packages,
       limits: { timeoutMs: this.timeoutMs, memoryMb: this.memoryMb, network: false, childProcesses: false, writes: "仅本次运行的临时目录" },
       backend: WINDOWS ? "windows-appcontainer" : "macos-seatbelt",
-      ...(this.supported() ? {} : { reason: "科研计算沙箱目前只支持 macOS（Seatbelt）和 Windows（AppContainer）；其他平台不会无沙箱运行" }),
+      ...(this.supported() ? {} : { reason: `${this.label}的沙箱目前只支持 macOS（Seatbelt）和 Windows（AppContainer）；其他平台不会无沙箱运行` }),
     };
   }
 
@@ -177,11 +195,11 @@ export class ResearchPython {
   async probe() {
     const python = this.interpreter();
     check(this.supported(), "RESEARCH_SANDBOX_UNAVAILABLE", this.status().reason, 503);
-    check(python, "RESEARCH_PYTHON_MISSING", "科研计算环境尚未安装：请在「设置 → 科研计算环境」点击安装（约 300MB，需要联网一次）。", 503);
+    check(python, "RESEARCH_PYTHON_MISSING", `${this.label}尚未安装：请在「设置 → ${this.label}」点击安装（${this.installHint}，需要联网一次）。`, 503);
     if (this.env?.interpreter === python) return this.env;
-    const info = JSON.parse(execFileSync(python, ["-I", "-c", VERSION_PROBE], { encoding: "utf8", timeout: 60000, env: {} }));
-    const missing = MODULES.filter((m) => !info.modules[m]);
-    check(!missing.length, "RESEARCH_PYTHON_MISSING", `科研计算环境缺少：${missing.join("、")}。请在设置里重新安装。`, 503);
+    const info = JSON.parse(execFileSync(python, ["-I", "-c", versionProbe(this.modules)], { encoding: "utf8", timeout: 60000, env: {} }));
+    const missing = this.modules.filter((m) => !info.modules[m]);
+    check(!missing.length, "RESEARCH_PYTHON_MISSING", `${this.label}缺少：${missing.join("、")}。请在设置里重新安装。`, 503);
     const real = (path) => {
       try {
         return realpathSync(path);
@@ -236,8 +254,18 @@ ${env.exec.map((p) => `(allow process-exec (literal ${q(p)}))`).join("\n")}
     const files = { wrapper: join(workdir, "wrapper.py"), input: join(workdir, "input.json"), output: join(workdir, "output.json") };
     writeFileSync(files.wrapper, WRAPPER.replace(/__CPU__/g, "0"));
     writeFileSync(files.input, input);
-    const pythonArgs = ["-I", "-B", files.wrapper, files.input, files.output, ...env.site].map(quoteWindowsArg).join(" ");
-    const stdout = await runConfined({
+    await this.launchWindows(env, workdir, [files.wrapper, files.input, files.output], signal);
+    try {
+      return readFileSync(files.output, "utf8");
+    } catch {
+      throw new AppError("SANDBOX_RESULT", "分析没有产出结果（沙箱进程可能被内存或时间限制终止）", 422);
+    }
+  }
+
+  // AppContainer + Job object launch: script argv plus the venv site dirs.
+  async launchWindows(env, workdir, scriptArgs, signal) {
+    const pythonArgs = ["-I", "-B", ...scriptArgs, ...env.site].map(quoteWindowsArg).join(" ");
+    return runConfined({
       command: POWERSHELL,
       args: [
         "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", LAUNCHER,
@@ -261,12 +289,6 @@ ${env.exec.map((p) => `(allow process-exec (literal ${q(p)}))`).join("\n")}
       maxOutput: 4_000_000,
       signal,
     });
-    void stdout;
-    try {
-      return readFileSync(files.output, "utf8");
-    } catch {
-      throw new AppError("SANDBOX_RESULT", "分析没有产出结果（沙箱进程可能被内存或时间限制终止）", 422);
-    }
   }
 
   async run({ code, tables, signal }) {
@@ -310,8 +332,8 @@ ${env.exec.map((p) => `(allow process-exec (literal ${q(p)}))`).join("\n")}
   }
 
   startInstall() {
-    check(this.root, "INVALID_INPUT", "科研计算环境需要数据目录");
-    check(!this.install?.promise, "RESEARCH_PYTHON_BUSY", "科研计算环境正在安装", 409);
+    check(this.root, "INVALID_INPUT", `${this.label}需要数据目录`);
+    check(!this.install?.promise, "RESEARCH_PYTHON_BUSY", `${this.label}正在安装`, 409);
     this.install = { promise: null, step: "准备", error: null };
     const promise = this.runInstall()
       .then((status) => {
@@ -357,14 +379,14 @@ ${env.exec.map((p) => `(allow process-exec (literal ${q(p)}))`).join("\n")}
     }
     let pipError = null;
     for (const mirror of PIP_MIRRORS) {
-      step(`安装科研依赖${mirror.url ? `（${new URL(mirror.url).host}）` : "（官方源）"}`);
+      step(`安装依赖${mirror.url ? `（${new URL(mirror.url).host}）` : "（官方源）"}`);
       try {
         await this.runner(
           {
             cmd: venvPython(this.root),
             args: [
               "-m", "pip", "install", "--disable-pip-version-check", "--timeout", "30", "--retries", "1",
-              ...RESEARCH_PACKAGES,
+              ...this.packages,
               ...(mirror.url ? ["-i", mirror.url] : []),
               ...(mirror.trustedHosts || []).flatMap((host) => ["--trusted-host", host]),
             ],
@@ -382,10 +404,15 @@ ${env.exec.map((p) => `(allow process-exec (literal ${q(p)}))`).join("\n")}
       throw new AppError("RESEARCH_PYTHON_PIP", `依赖安装失败（已试过清华/阿里镜像与官方源）：${tail}。多为网络波动，可稍后重试。`);
     }
     step("验证沙箱");
-    const info = JSON.parse((await this.runner({ cmd: venvPython(this.root), args: ["-I", "-c", VERSION_PROBE] }, { timeoutMs: 120000 })).stdout);
+    const info = JSON.parse((await this.runner({ cmd: venvPython(this.root), args: ["-I", "-c", versionProbe(this.modules)] }, { timeoutMs: 120000 })).stdout);
     writeFileSync(join(this.root, "install.json"), JSON.stringify({ ready: true, installedAt: new Date().toISOString(), python: info.python, modules: info.modules }, null, 2));
     this.env = null;
-    await this.run({ code: "result=int(np.arange(4).sum())", tables: {} });
+    await this.selfTest();
     return this.status();
+  }
+
+  // One real sandboxed run after install proves the boundary works.
+  selfTest() {
+    return this.run({ code: "result=int(np.arange(4).sum())", tables: {} });
   }
 }

@@ -292,7 +292,7 @@ export class LiteratureService {
       hints: evidenceHints(item.pubTypeList?.pubType || []),
       isOpenAccess: item.isOpenAccess === "Y",
       license: item.license || null,
-      note: "摘要与主题词来自 Europe PMC；全文获取仅限开放获取许可范围。",
+      note: "题录、摘要与主题词来自 Europe PMC；导入仅包含题录与摘要，不下载全文。",
     };
     this.cacheSet(key, article);
     return article;

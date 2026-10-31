@@ -224,3 +224,26 @@ test("care 历史提案由插件 legacyProposalTypes 委派，确认后生效且
   assert.equal(confirmed.body.action.status, "applied");
   assert.ok(service.care.publicSettings().redFlags.extra.includes(marker));
 });
+
+test("聊天文件导入与导入产生的本地草稿不要求已连接渠道", async () => {
+  const { isFollowupMessagingRoute } = await import("../api/followup.mjs");
+  for (const [method, path] of [
+    ["POST", "/api/chat-followups/imports/preview"],
+    ["POST", "/api/chat-followups/imports/match"],
+    ["POST", "/api/chat-followups/imports"],
+    ["GET", "/api/chat-followups/patients/p1"],
+    ["GET", "/api/chat-followups/drafts/d1/sources"],
+    ["POST", "/api/chat-followups/drafts/d1/archive"],
+    ["DELETE", "/api/chat-followups/bindings/b1"],
+  ])
+    assert.equal(isFollowupMessagingRoute(path, method), false, `${method} ${path} 应可在未连接时使用`);
+  for (const [method, path] of [
+    ["POST", "/api/chat-followups/preview"],
+    ["POST", "/api/chat-followups/bindings"],
+    ["POST", "/api/chat-followups/bindings/b1/send"],
+    ["POST", "/api/chat-followups/connections/wechat/sync"],
+    ["POST", "/api/chat-followups/assign"],
+    ["GET", "/api/care/overview"],
+  ])
+    assert.equal(isFollowupMessagingRoute(path, method), true, `${method} ${path} 仍需已连接渠道`);
+});

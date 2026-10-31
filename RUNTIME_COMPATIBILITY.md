@@ -40,14 +40,15 @@
 ```json
 {
   "message": "请整理本次材料的时间线",
-  "mode": "local",
+  "mode": "model",
+  "externalConsent": true,
   "fileIds": [],
   "sessionRevision": 0,
   "requestId": "unique-request-id"
 }
 ```
 
-模型模式须 `mode: "model"` 与 `externalConsent: true`；未配置模型返回 503，未确认返回 412。会话版本冲突、重复请求、同会话并发返回 409。上下文预算超限不静默裁剪病历。
+对话与任务一律由模型执行，没有不调用模型的规则回答模式。须 `externalConsent: true`；未配置模型返回 503 `MODEL_NOT_CONFIGURED`，未确认返回 412。旧客户端传入的 `mode: "local"` 按模型处理，同样受这两条约束。唯一例外是 `mode: "code"` 加 `sandboxCode`：医生手动提交的代码只在受控沙箱运行，返回计算结果，不调用模型、不生成回答。会话版本冲突、重复请求、同会话并发返回 409。上下文预算超限不静默裁剪病历。
 
 SSE 每帧为 `event: message`，JSON 含 `seq`、`type`、`session_id`、`run_id`、`payload`、`time`。终态为 `message.complete`、`error`、`run.cancelled`。连接终止但没有终态时，客户端须视为未完成。非增量事件和部分文本会持久化；不提供 `Last-Event-ID` 自动流重放。
 
@@ -63,7 +64,8 @@ SSE 每帧为 `event: message`，JSON 含 `seq`、`type`、`session_id`、`run_i
   "params": {
     "session_id": "existing-session-id",
     "text": "整理病历时间线",
-    "mode": "local",
+    "mode": "model",
+    "externalConsent": true,
     "fileIds": []
   }
 }
@@ -81,4 +83,4 @@ OpenAI 的 [Codex CLI](https://github.com/openai/codex) 是 Apache-2.0 开源项
 
 ## 医疗编排扩展
 
-`/api/sessions/:id/schedules` 持久计划接口保留；本地请求可传 `sandboxCode` 执行隔离计算。旧引擎的 `delegate_medical_task`、`sandbox_python` 模型工具和 `delegations` 字段已随旧引擎移除（计划任务只接受空的 `delegations`）。具体字段、取消语义、资料绑定与平台限制见 [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)。
+`/api/sessions/:id/schedules` 持久计划接口保留；本地请求可传 `mode: "code"` 与 `sandboxCode` 执行隔离计算（不调用模型）；计划任务只能由模型执行，未配置模型时创建返回 503。旧引擎的 `delegate_medical_task`、`sandbox_python` 模型工具和 `delegations` 字段已随旧引擎移除（计划任务只接受空的 `delegations`）。具体字段、取消语义、资料绑定与平台限制见 [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md)。

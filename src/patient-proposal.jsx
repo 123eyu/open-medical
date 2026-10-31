@@ -29,12 +29,29 @@ export function PatientProposalComparison({ patient, proposal }) {
     </section>;
 }
 
-export function PatientProposalModal({ patient, proposal, busy, error, onClose, onConfirm }) {
+// 本患者待确认的档案更新（检验导入、AI 整理等），与「待确认」托盘同源。
+export async function loadPatientUpdateProposals(api, patientId) {
+  const page = await api(`/api/pending-actions?status=pending&type=patient-update&patientId=${encodeURIComponent(patientId)}`);
+  return (page?.actions || []).filter((action) => action.type === "patient-update" && action.patientId === patientId);
+}
+
+export function PatientProposalBanner({ proposals, busy, onReview }) {
+  if (!proposals?.length) return null;
+  return <section className="patient-risk-list" aria-label="待确认的档案变更">
+    <p className="muted">以下档案变更尚未写入，核对后确认或拒绝（也可在「待确认」中处理）：</p>
+    {proposals.map((proposal) => <div className="hub-risk" key={proposal.id}>
+      <div className="hub-risk-main"><b>{proposal.summary || "档案更新"}</b></div>
+      <div className="hub-risk-actions"><button className="text-button" disabled={busy} onClick={() => onReview(proposal)}>核对</button></div>
+    </div>)}
+  </section>;
+}
+
+export function PatientProposalModal({ patient, proposal, busy, error, onClose, onConfirm, onReject }) {
   const stale = patient.revision !== proposal.baseRevision;
   return <Modal title="核对档案变更" wide onClose={() => { if (!busy) onClose(); }}>
       <PatientProposalComparison patient={patient} proposal={proposal} />
-      {stale && <p className="error-text" role="alert">档案在提案后已变化，请关闭并重新生成提案，避免覆盖新记录。</p>}
+      {stale && <p className="error-text" role="alert">档案在提案后已变化，无法直接写入。请拒绝此提案后重新生成，避免覆盖新记录。</p>}
       {error && <p className="error-text" role="alert">{error}</p>}
-      <div className="modal-actions"><button className="secondary" disabled={busy} onClick={onClose}>返回核对</button><button className="primary" disabled={busy || stale} onClick={onConfirm}>{busy ? "写入中…" : "确认这些变更并写入"}</button></div>
+      <div className="modal-actions"><button className="secondary" disabled={busy} onClick={onClose}>返回核对</button>{onReject && <button className="secondary" disabled={busy} onClick={onReject}>拒绝此变更</button>}<button className="primary" disabled={busy || stale} onClick={onConfirm}>{busy ? "写入中…" : "确认这些变更并写入"}</button></div>
   </Modal>;
 }
